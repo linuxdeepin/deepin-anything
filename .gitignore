@@ -1,0 +1,21 @@
+build*/
+bin/
+
+# C++ objects and libs
+
+*.slo
+*.lo
+*.o
+*.o.cmd
+*.ko
+*.ko.cmd
+*.mod
+*.a
+*.la
+*.lai
+*.so
+*.dll
+*.dylib
+*.symvers
+*.order
+*.mod.c
