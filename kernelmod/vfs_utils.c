@@ -37,7 +37,7 @@ char* __init read_file_content(const char* filename, int *real_size)
 
 		loff_t off = 0;
 		char __user* user_buf = (char __user*)buf;
-		*real_size = __vfs_read(filp, user_buf, size, &off);
+		*real_size = kernel_read(filp, user_buf, size, &off);
 		if (*real_size > 0 && *real_size < size) {
 			buf[*real_size] = 0;
 			break;
