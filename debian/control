@@ -1,0 +1,28 @@
+Source: deepin-anything
+Section: admin
+Priority: optional
+Maintainer: Deepin Package Builder <packages@deepin.com>
+Build-Depends: debhelper (>= 9), dkms
+Standards-Version: 3.9.8
+Homepage: http://github.com/linuxdeepin/deepin-anything
+
+Package: deepin-anything-libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: anything library 
+ anything library package
+
+Package: deepin-anything-dev
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+ deepin-anything-libs( =${binary:Version}),
+Description: anything user interface library
+ anything library developer package.
+
+Package: deepin-anything-dkms
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, 
+ linux-headers | linux-headers-generic | linux-headers-amd64 | linux-headers-deepin-amd64
+Description: anything module 
+ anything kernel module package
+
