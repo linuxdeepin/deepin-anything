@@ -86,7 +86,7 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 static void add_partition(const char* dir_name, int major, int minor)
 {
-	krp_partition *part = kmalloc(sizeof(krp_partition) + strlen(dir_name) + 1, GFP_KERNEL);
+	krp_partition *part = kmalloc(sizeof(krp_partition) + strlen(dir_name) + 1, GFP_ATOMIC);
 	if (unlikely(part == 0)) {
 		pr_err("kmalloc failed and thus cant add %s [%d, %d] to partitions\n",
 			dir_name, major, minor);
