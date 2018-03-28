@@ -429,7 +429,7 @@ void vfs_changed(int act, const char* root, const char* src, const char* dst)
 	int extra_bytes = root ? strlen(root) : 0;
 	size_t size = sizeof(vfs_change) + strlen(src) + extra_bytes + 1;
 	if (dst != 0)
-		size += strlen(dst) + extra_bytes;
+		size += strlen(dst) + extra_bytes + 1;
 	char* p = kmalloc(size, GFP_KERNEL);
 	if (unlikely(p == 0)) {
 		pr_info("vfs_changed_1: %s, src: %s, dst: %s, proc: %s[%d]\n",
