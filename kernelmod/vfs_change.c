@@ -230,7 +230,7 @@ static void remove_oldest(void)
 		list_for_each_safe(p, next, &vfs_changes) {
 			vfs_change* vc = list_entry(p, vfs_change, list);
 			if (printk_ratelimit())
-				pr_err("vfs-change discarded[%d]: %lu %s, %s, %s\n",
+				pr_warn("vfs-change discarded[%d]: %lu %s, %s, %s\n",
 					vc->size, vc->ts.tv_sec, action_names[vc->action], vc->src, vc->dst);
 			REMOVE_ENTRY(p, vc);
 			discarded++;
