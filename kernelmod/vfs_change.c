@@ -34,11 +34,23 @@ static LIST_HEAD(vfs_changes);
 static int discarded = 0, total_changes = 0, cur_changes = 0, total_memory = 0;
 static DEFINE_SPINLOCK(sl_changes);
 
+static wait_queue_head_t wq_vfs_changes;
+static atomic_t wait_vfs_changes_count;
+static struct timer_list wait_vfs_changes_timer, wait_vfs_changes_timeout_timer;
+
+static atomic_t vfs_changes_is_open;
+
 static int open_vfs_changes(struct inode* si, struct file* filp)
 {
+	if (atomic_cmpxchg(&vfs_changes_is_open, 0, 1) == 1) {
+		return -EBUSY;
+	}
+
 	struct timeval* tv = kzalloc(sizeof(struct timeval), GFP_KERNEL);
-	if (unlikely(tv == 0))
+	if (unlikely(tv == 0)) {
+		atomic_set(&vfs_changes_is_open, 0);
 		return -ENOMEM;
+	}
 
 	filp->private_data = tv;
 	return 0;
@@ -47,6 +59,11 @@ static int open_vfs_changes(struct inode* si, struct file* filp)
 static int release_vfs_changes(struct inode* si, struct file* filp)
 {
 	kfree(filp->private_data);
+	atomic_set(&vfs_changes_is_open, 0);
+	atomic_set(&wait_vfs_changes_count, -1);;
+	del_timer(&wait_vfs_changes_timer);
+	del_timer(&wait_vfs_changes_timeout_timer);
+
 	return 0;
 }
 
@@ -119,13 +136,21 @@ static ssize_t read_vfs_changes(struct file* filp, char __user* buf, size_t size
 
 static long move_vfs_changes(ioctl_rd_args __user* ira)
 {
+	if (atomic_cmpxchg(&wait_vfs_changes_count, -1, INT_MAX) >= 0) {
+		return -EBUSY;
+	}
+
 	ioctl_rd_args kira;
-	if (copy_from_user(&kira, ira, sizeof(kira)) != 0)
+	if (copy_from_user(&kira, ira, sizeof(kira)) != 0) {
+		atomic_set(&wait_vfs_changes_count, -1);
 		return -EFAULT;
+	}
 
 	char *kbuf = kmalloc(kira.size, GFP_KERNEL);
-	if (kbuf == 0)
+	if (kbuf == 0) {
+		atomic_set(&wait_vfs_changes_count, -1);
 		return -ENOMEM;
+	}
 
 	int total_bytes = 0, total_items = 0;
 
@@ -153,13 +178,19 @@ static long move_vfs_changes(ioctl_rd_args __user* ira)
 
 	if (total_bytes && copy_to_user(kira.data, kbuf, total_bytes)) {
 		kfree(kbuf);
+		atomic_set(&wait_vfs_changes_count, -1);
 		return -EFAULT;
 	}
 	kfree(kbuf);
 
 	kira.size = total_items;
-	if (copy_to_user(ira, &kira, sizeof(kira)) != 0)
+	if (copy_to_user(ira, &kira, sizeof(kira)) != 0) {
+		atomic_set(&wait_vfs_changes_count, -1);
 		return -EFAULT;
+	}
+
+	atomic_set(&wait_vfs_changes_count, -1);
+
 	return 0;
 }
 
@@ -176,6 +207,78 @@ static long read_stats(ioctl_rs_args __user* irsa)
 	return 0;
 }
 
+static void wait_vfs_changes_timer_callback(unsigned long data)
+{
+	atomic_set(&wait_vfs_changes_count, 1);
+	wake_up_interruptible(&wq_vfs_changes);
+}
+
+static void wait_vfs_changes_timeout_timer_callback(unsigned long data)
+{
+	atomic_set(&wait_vfs_changes_count, 0);
+	wake_up_interruptible(&wq_vfs_changes);
+}
+
+static long wait_vfs_changes(ioctl_wd_args __user* ira)
+{
+	if (atomic_cmpxchg(&wait_vfs_changes_count, -1, 0) >= 0)
+		return -EBUSY;
+
+	ioctl_wd_args kira;
+	if (copy_from_user(&kira, ira, sizeof(kira)) != 0)
+		return -EFAULT;
+
+	if (kira.condition_count < 0 || kira.condition_timeout < 0 || (kira.condition_count == 0 && kira.condition_timeout))
+		return -EINVAL;
+
+	if (kira.timeout > 0) {
+		mod_timer(&wait_vfs_changes_timeout_timer, jiffies + HZ * kira.timeout / 1000);
+	}
+
+	int wait_vfs_changes_timer_runing = 0;
+
+	if (kira.condition_count > 0)
+		atomic_set(&wait_vfs_changes_count, kira.condition_count);
+	else
+		atomic_set(&wait_vfs_changes_count, INT_MAX);
+
+	while (cur_changes < atomic_read(&wait_vfs_changes_count)) {
+		if (kira.condition_timeout > 0) {
+			if (wait_vfs_changes_timer_runing == 1) {
+				if (timer_pending(&wait_vfs_changes_timer) == 0)
+					break;
+			} else if (cur_changes > 0) {
+				wait_vfs_changes_timer_runing = 1;
+				mod_timer(&wait_vfs_changes_timer, jiffies + HZ * kira.condition_timeout / 1000);
+			}
+		}
+
+		if (kira.condition_timeout > 0 && wait_vfs_changes_timer_runing == 0) {
+			int old = atomic_read(&wait_vfs_changes_count);
+
+			atomic_set(&wait_vfs_changes_count, 1);
+
+			if (wait_event_interruptible(wq_vfs_changes, cur_changes >= atomic_read(&wait_vfs_changes_count)) != 0)
+				return -EAGAIN;
+
+			atomic_set(&wait_vfs_changes_count, old);
+		} else {
+			if (wait_event_interruptible(wq_vfs_changes, cur_changes >= atomic_read(&wait_vfs_changes_count)) != 0)
+				return -EAGAIN;
+		}
+
+		if (kira.timeout > 0 && timer_pending(&wait_vfs_changes_timeout_timer) == 0) {
+			return -ETIME;
+		}
+	}
+
+	atomic_set(&wait_vfs_changes_count, -1);
+	del_timer(&wait_vfs_changes_timer);
+	del_timer(&wait_vfs_changes_timeout_timer);
+
+	return 0;
+}
+
 static long ioctl_vfs_changes(struct file* filp, unsigned int cmd, unsigned long arg)
 {
 	switch(cmd) {
@@ -183,6 +286,8 @@ static long ioctl_vfs_changes(struct file* filp, unsigned int cmd, unsigned long
 		return move_vfs_changes((ioctl_rd_args*)arg);
 	case VC_IOCTL_READSTAT:
 		return read_stats((ioctl_rs_args*)arg);
+	case VC_IOCTL_WAITDATA:
+		return wait_vfs_changes((ioctl_wd_args*)arg);
 	default:
 		return -EINVAL;
 	}
@@ -205,6 +310,19 @@ int __init init_vfs_changes(void)
 		pr_warn("%s already exists?\n", PROCFS_NAME);
 		return -1;
 	}
+
+	init_waitqueue_head(&wq_vfs_changes);
+	atomic_set(&vfs_changes_is_open, 0);
+	atomic_set(&wait_vfs_changes_count, -1);
+
+	init_timer(&wait_vfs_changes_timer);
+	init_timer(&wait_vfs_changes_timeout_timer);
+
+	wait_vfs_changes_timer.function = &wait_vfs_changes_timer_callback;
+	wait_vfs_changes_timer.data = 0;
+	wait_vfs_changes_timeout_timer.function = &wait_vfs_changes_timeout_timer_callback;
+	wait_vfs_changes_timeout_timer.data = 0;
+
 	return 0;
 }
 
@@ -470,4 +588,10 @@ void vfs_changed(int act, const char* root, const char* src, const char* dst)
 	cur_changes++;
 	total_memory += vc->size;
 	spin_unlock(&sl_changes);
+
+	int wvcc = atomic_read(&wait_vfs_changes_count);
+
+	if (wvcc > 0 && cur_changes >= wvcc) {
+		wake_up_interruptible(&wq_vfs_changes);
+	}
 }
