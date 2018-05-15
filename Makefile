@@ -15,6 +15,7 @@ install:
 	mkdir -p $(DESTDIR)/usr/include/deepin-anything
 	cp -r library/inc/* $(DESTDIR)/usr/include/deepin-anything
 	cp -r kernelmod/vfs_change_uapi.h $(DESTDIR)/usr/include/deepin-anything
+	cp -r kernelmod/vfs_change_consts.h $(DESTDIR)/usr/include/deepin-anything
 
 clean:
 	rm -f debian/deepin-anything-dkms.dkms
