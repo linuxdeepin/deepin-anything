@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+action="$1"
+
+if [ "$action" = configure ]; then
+	# add user "deepin_anything_server"
+	useradd -M deepin_anything_server || (echo "Failed on add user deepin_anything_server" && false)
+fi
+
+#DEBHELPER#

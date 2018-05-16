@@ -1,2 +1,2 @@
-usr/lib/*/lib*.so
-usr/include
+usr/lib/*/libanything.so
+usr/include/deepin-anything

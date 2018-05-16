@@ -2,7 +2,7 @@ Source: deepin-anything
 Section: admin
 Priority: optional
 Maintainer: Deepin Package Builder <packages@deepin.com>
-Build-Depends: debhelper (>= 9), dkms
+Build-Depends: debhelper (>= 9), dkms, dh-systemd, qtbase5-dev, pkg-config
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
 
@@ -25,4 +25,17 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  linux-headers | linux-headers-generic | linux-headers-amd64 | linux-headers-deepin-amd64
 Description: anything module 
  anything kernel module package
+
+Package: deepin-anything-server
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, deepin-anything-dkms
+Description: anything server application and lib 
+ anything server package
+
+Package: deepin-anything-server-dev
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+ deepin-anything-server( =${binary:Version}),
+Description: anything server user interface library
+ anything server library developer package.
 

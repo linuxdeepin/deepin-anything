@@ -4,6 +4,7 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 all:
 	sed 's|@@VERSION@@|$(VERSION)|g' debian/deepin-anything-dkms.dkms.in | tee debian/deepin-anything-dkms.dkms
 	make -C library all
+	cd server && qmake -makefile -nocache QMAKE_STRIP=: PREFIX=/usr LIB_INSTALL_DIR=/usr/lib/$(DEB_HOST_MULTIARCH) deepin-anything-server.pro && make all
 
 install:
 	mkdir -p $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)
@@ -16,6 +17,7 @@ install:
 	cp -r library/inc/* $(DESTDIR)/usr/include/deepin-anything
 	cp -r kernelmod/vfs_change_uapi.h $(DESTDIR)/usr/include/deepin-anything
 	cp -r kernelmod/vfs_change_consts.h $(DESTDIR)/usr/include/deepin-anything
+	make -C server install INSTALL_ROOT=$(DESTDIR)
 
 clean:
 	rm -f debian/deepin-anything-dkms.dkms
