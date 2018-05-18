@@ -28,11 +28,13 @@
 DAS_BEGIN_NAMESPACE
 
 class DASInterface;
+class DASPluginLoader;
 class DASFactory
 {
 public:
     static QStringList keys();
     static DASInterface *create(const QString &key);
+    static DASPluginLoader *loader();
 };
 
 DAS_END_NAMESPACE

@@ -6,6 +6,7 @@ After=systemd-modules-load.service
 User=deepin_anything_server
 Group=deepin_anything_server
 ExecStart=/usr/bin/deepin-anything-server
+Environment=DAS_DEBUG_PLUGINS=1
 
 [Install]
 WantedBy=multi-user.target

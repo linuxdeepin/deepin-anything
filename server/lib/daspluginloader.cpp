@@ -25,6 +25,7 @@
 #include <QJsonArray>
 #include <QPluginLoader>
 #include <QCoreApplication>
+#include <QFileSystemWatcher>
 #include <QDebug>
 
 DAS_BEGIN_NAMESPACE
@@ -32,6 +33,7 @@ DAS_BEGIN_NAMESPACE
 Q_GLOBAL_STATIC(QList<DASPluginLoader *>, qt_factory_loaders)
 
 Q_GLOBAL_STATIC_WITH_ARGS(QMutex, qt_factoryloader_mutex, (QMutex::Recursive))
+Q_GLOBAL_STATIC(QFileSystemWatcher, fileWatcher)
 
 // avoid duplicate QStringLiteral data:
 inline QString iidKeyLiteral() { return QStringLiteral("IID"); }
@@ -41,11 +43,22 @@ inline QString versionKeyLiteral() { return QStringLiteral("version"); }
 inline QString metaDataKeyLiteral() { return QStringLiteral("MetaData"); }
 inline QString keysKeyLiteral() { return QStringLiteral("Keys"); }
 
+/* Internal, for debugging */
+static bool das_debug_component()
+{
+#ifdef QT_DEBUG
+    return true;
+#endif
+
+    static int debug_env = QT_PREPEND_NAMESPACE(qEnvironmentVariableIntValue)("DAS_DEBUG_PLUGINS");
+    return debug_env != 0;
+}
+
 class DASPluginLoaderPrivate
 {
-//    Q_DECLARE_PUBLIC(PluginLoader)
+    Q_DECLARE_PUBLIC(DASPluginLoader)
 public:
-    DASPluginLoaderPrivate();
+    DASPluginLoaderPrivate(DASPluginLoader *qq);
     ~DASPluginLoaderPrivate();
     mutable QMutex mutex;
     QByteArray iid;
@@ -55,13 +68,21 @@ public:
     Qt::CaseSensitivity cs;
     bool rki;
     QStringList loadedPaths;
+    QStringList watchedPaths;
+
+    DASPluginLoader *q_ptr;
 
     static QStringList pluginPaths;
+
+    QStringList getKeys(const QPluginLoader *loader, bool *metaDataOk = 0) const;
+    QPluginLoader *loadPlugin(const QString &fileName);
+    void _q_onDirectoryChanged(const QString &path);
 };
 
 QStringList DASPluginLoaderPrivate::pluginPaths;
 
-DASPluginLoaderPrivate::DASPluginLoaderPrivate()
+DASPluginLoaderPrivate::DASPluginLoaderPrivate(DASPluginLoader *qq)
+    : q_ptr(qq)
 {
     if (pluginPaths.isEmpty()) {
         if (QT_PREPEND_NAMESPACE(qEnvironmentVariableIsEmpty)("DAS_PLUGIN_PATH"))
@@ -69,6 +90,9 @@ DASPluginLoaderPrivate::DASPluginLoaderPrivate()
         else
             pluginPaths = QString::fromLocal8Bit(qgetenv("DAS_PLUGIN_PATH")).split(':');
     }
+
+    if (das_debug_component())
+        qDebug() << "plugin paths:" << pluginPaths;
 }
 
 DASPluginLoaderPrivate::~DASPluginLoaderPrivate()
@@ -77,13 +101,174 @@ DASPluginLoaderPrivate::~DASPluginLoaderPrivate()
         QPluginLoader *loader = pluginLoaderList.at(i);
         loader->unload();
     }
+
+    for (const QString &path : watchedPaths) {
+        fileWatcher->removePath(path);
+    }
+}
+
+QStringList DASPluginLoaderPrivate::getKeys(const QPluginLoader *loader, bool *metaDataOk) const
+{
+    QStringList keys;
+    QString iid = loader->metaData().value(iidKeyLiteral()).toString();
+
+    if (metaDataOk)
+        *metaDataOk = false;
+
+    if (iid == QLatin1String(this->iid.constData(), this->iid.size())) {
+        QJsonObject object = loader->metaData().value(metaDataKeyLiteral()).toObject();
+
+        if (metaDataOk)
+            *metaDataOk = true;
+
+        QJsonArray k = object.value(keysKeyLiteral()).toArray();
+        for (int i = 0; i < k.size(); ++i)
+            keys += cs ? k.at(i).toString() : k.at(i).toString().toLower();
+    }
+
+    return keys;
+}
+
+QPluginLoader *DASPluginLoaderPrivate::loadPlugin(const QString &fileName)
+{
+    QPluginLoader *loader = 0;
+
+#ifdef Q_OS_MAC
+    if (isLoadingDebugAndReleaseCocoa) {
+#ifdef QT_DEBUG
+        if (fileName.contains(QStringLiteral("libqcocoa.dylib")))
+            return 0;    // Skip release plugin in debug mode
+#else
+        if (fileName.contains(QStringLiteral("libqcocoa_debug.dylib")))
+            return 0;    // Skip debug plugin in release mode
+#endif
+    }
+#endif
+    if (das_debug_component()) {
+        qDebug() << "PluginLoader::PluginLoader() looking at" << fileName;
+    }
+    loader = (new QPluginLoader(fileName, q_ptr));
+    if (!loader->load()) {
+        if (das_debug_component()) {
+            qDebug() << loader->errorString();
+        }
+        loader->deleteLater();
+        return 0;
+    }
+
+    bool metaDataOk = false;
+    QStringList keys = getKeys(loader, &metaDataOk);
+
+    if (das_debug_component())
+        qDebug() << "Got keys from plugin meta data" << keys;
+
+    if (!metaDataOk) {
+        loader->deleteLater();
+        return 0;
+    }
+
+    int keyUsageCount = 0;
+    for (int k = 0; k < keys.count(); ++k) {
+        // first come first serve, unless the first
+        // library was built with a future Qt version,
+        // whereas the new one has a Qt version that fits
+        // better
+        const QString &key = keys.at(k);
+
+        if (rki) {
+            keyMap.insertMulti(key, loader);
+            ++keyUsageCount;
+        } else {
+            QPluginLoader *previous = keyMap.value(key);
+            int prev_dfm_version = 0;
+            if (previous) {
+                prev_dfm_version = (int)previous->metaData().value(versionKeyLiteral()).toDouble();
+            }
+            int dfm_version = (int)loader->metaData().value(versionKeyLiteral()).toDouble();
+            if (!previous || (prev_dfm_version > QString(QMAKE_VERSION).toDouble() && dfm_version <= QString(QMAKE_VERSION).toDouble())) {
+                keyMap.insertMulti(key, loader);
+                ++keyUsageCount;
+            }
+        }
+    }
+    if (keyUsageCount || keys.isEmpty()) {
+        pluginLoaderList += loader;
+    } else {
+        loader->deleteLater();
+        loader = 0;
+    }
+
+    return loader;
+}
+
+void DASPluginLoaderPrivate::_q_onDirectoryChanged(const QString &path)
+{
+    if (das_debug_component()) {
+        qDebug() << "directory changed:" << path;
+    }
+
+    if (!watchedPaths.contains(path)) {
+        return;
+    }
+
+    const QStringList &plugins = QDir(path).entryList(QDir::Files);
+    QStringList old_file_list;
+    QStringList new_file_list;
+
+    for (const QPluginLoader *l : pluginLoaderList) {
+        if (QFileInfo(l->fileName()).absolutePath() == path) {
+            old_file_list << l->fileName();
+        }
+    }
+
+    for (int j = 0; j < plugins.count(); ++j) {
+        const QString &fileName = QDir::cleanPath(path + QLatin1Char('/') + plugins.at(j));
+
+        if (!old_file_list.removeOne(fileName))
+            new_file_list << fileName;
+    }
+
+    if (das_debug_component()) {
+        qDebug() << "dirty files:" << old_file_list;
+        qDebug() << "new files:" << new_file_list;
+    }
+
+    QList<QPluginLoader*> dirtyLoaders;
+
+    for (int i = 0; i < pluginLoaderList.count(); ++i) {
+        QPluginLoader *l = pluginLoaderList.at(i);
+
+        if (old_file_list.contains(l->fileName())) {
+            dirtyLoaders.append(l);
+        }
+    }
+
+    for (QPluginLoader *l : dirtyLoaders) {
+        const QStringList &keys = getKeys(l);
+
+        qDebug() << "plugin deleted, keyes:" << keys << "in file:" << l->fileName();
+
+        emit q_ptr->pluginRemoved(l, keys);
+    }
+
+    for (const QString &file : new_file_list) {
+        if (QPluginLoader *l = loadPlugin(file)) {
+            for (const QString &key : getKeys(l)) {
+                if (das_debug_component())
+                    qDebug() << "add plugin, key:" << key << "in file:" << file;
+
+                emit q_ptr->pluginAdded(key);
+            }
+        }
+    }
 }
 
 DASPluginLoader::DASPluginLoader(const char *iid,
-                                   const QString &suffix,
-                                   Qt::CaseSensitivity cs,
-                                   bool repetitiveKeyInsensitive)
-    : d_ptr(new DASPluginLoaderPrivate)
+                                 const QString &suffix,
+                                 Qt::CaseSensitivity cs,
+                                 bool repetitiveKeyInsensitive)
+    : QObject()
+    , d_ptr(new DASPluginLoaderPrivate(this))
 {
     Q_D(DASPluginLoader);
     d->iid = iid;
@@ -91,21 +276,28 @@ DASPluginLoader::DASPluginLoader(const char *iid,
     d->cs = cs;
     d->rki = repetitiveKeyInsensitive;
 
+    connect(fileWatcher, SIGNAL(directoryChanged(const QString &)), this, SLOT(_q_onDirectoryChanged(const QString &)));
+
+    for (int i = 0; i < d->pluginPaths.count(); ++i) {
+        d->pluginPaths[i] = QDir(d->pluginPaths[i]).absolutePath();
+        const QString &path = QDir::cleanPath(d->pluginPaths.at(i) + suffix);
+
+        if (QFile::exists(path)) {
+            if (fileWatcher->addPath(path)) {
+                d->watchedPaths << path;
+
+                if (das_debug_component())
+                    qDebug() << "watch:" << path;
+            } else if (das_debug_component()) {
+                qDebug() << "failed on add watch:" << path;
+            }
+        }
+    }
+
     QMutexLocker locker(qt_factoryloader_mutex());
     Q_UNUSED(locker)
     update();
     qt_factory_loaders()->append(this);
-}
-
-/* Internal, for debugging */
-static bool dfm_debug_component()
-{
-#ifdef QT_DEBUG
-    return true;
-#endif
-
-    static int debug_env = QT_PREPEND_NAMESPACE(qEnvironmentVariableIntValue)("DAS_DEBUG_PLUGINS");
-    return debug_env != 0;
 }
 
 void DASPluginLoader::update()
@@ -123,14 +315,13 @@ void DASPluginLoader::update()
 
         QString path = pluginDir + d->suffix;
 
-        if (dfm_debug_component())
+        if (das_debug_component())
             qDebug() << "PluginLoader::PluginLoader() checking directory path" << path << "...";
 
         if (!QDir(path).exists(QLatin1String(".")))
             continue;
 
         QStringList plugins = QDir(path).entryList(QDir::Files);
-        QPluginLoader *loader = 0;
 
 #ifdef Q_OS_MAC
         // Loading both the debug and release version of the cocoa plugins causes the objective-c runtime
@@ -145,78 +336,7 @@ void DASPluginLoader::update()
         for (int j = 0; j < plugins.count(); ++j) {
             QString fileName = QDir::cleanPath(path + QLatin1Char('/') + plugins.at(j));
 
-#ifdef Q_OS_MAC
-            if (isLoadingDebugAndReleaseCocoa) {
-#ifdef QT_DEBUG
-               if (fileName.contains(QStringLiteral("libqcocoa.dylib")))
-                   continue;    // Skip release plugin in debug mode
-#else
-               if (fileName.contains(QStringLiteral("libqcocoa_debug.dylib")))
-                   continue;    // Skip debug plugin in release mode
-#endif
-            }
-#endif
-            if (dfm_debug_component()) {
-                qDebug() << "PluginLoader::PluginLoader() looking at" << fileName;
-            }
-            loader = (new QPluginLoader(fileName));
-            if (!loader->load()) {
-                if (dfm_debug_component()) {
-                    qDebug() << loader->errorString();
-                }
-                loader->deleteLater();
-                continue;
-            }
-
-            QStringList keys;
-            bool metaDataOk = false;
-
-            QString iid = loader->metaData().value(iidKeyLiteral()).toString();
-            if (iid == QLatin1String(d->iid.constData(), d->iid.size())) {
-                QJsonObject object = loader->metaData().value(metaDataKeyLiteral()).toObject();
-                metaDataOk = true;
-
-                QJsonArray k = object.value(keysKeyLiteral()).toArray();
-                for (int i = 0; i < k.size(); ++i)
-                    keys += d->cs ? k.at(i).toString() : k.at(i).toString().toLower();
-            }
-            if (dfm_debug_component())
-                qDebug() << "Got keys from plugin meta data" << keys;
-
-
-            if (!metaDataOk) {
-                loader->deleteLater();
-                continue;
-            }
-
-            int keyUsageCount = 0;
-            for (int k = 0; k < keys.count(); ++k) {
-                // first come first serve, unless the first
-                // library was built with a future Qt version,
-                // whereas the new one has a Qt version that fits
-                // better
-                const QString &key = keys.at(k);
-
-                if (d->rki) {
-                    d->keyMap.insertMulti(key, loader);
-                    ++keyUsageCount;
-                } else {
-                    QPluginLoader *previous = d->keyMap.value(key);
-                    int prev_dfm_version = 0;
-                    if (previous) {
-                        prev_dfm_version = (int)previous->metaData().value(versionKeyLiteral()).toDouble();
-                    }
-                    int dfm_version = (int)loader->metaData().value(versionKeyLiteral()).toDouble();
-                    if (!previous || (prev_dfm_version > QString(QMAKE_VERSION).toDouble() && dfm_version <= QString(QMAKE_VERSION).toDouble())) {
-                        d->keyMap.insertMulti(key, loader);
-                        ++keyUsageCount;
-                    }
-                }
-            }
-            if (keyUsageCount || keys.isEmpty())
-                d->pluginLoaderList += loader;
-            else
-                loader->deleteLater();
+            d->loadPlugin(fileName);
         }
     }
 #else
@@ -226,6 +346,26 @@ void DASPluginLoader::update()
                  << "since plugins are disabled in static builds";
     }
 #endif
+}
+
+void DASPluginLoader::removeLoader(QPluginLoader *loader)
+{
+    Q_D(DASPluginLoader);
+
+    if (!loader->unload()) {
+        if (das_debug_component())
+            qDebug() << loader->errorString();
+
+        return;
+    }
+
+    d->pluginLoaderList.removeOne(loader);
+
+    if (das_debug_component()) {
+        qDebug() << "plugin is removed:" << loader->fileName();
+    }
+
+    loader->deleteLater();
 }
 
 DASPluginLoader::~DASPluginLoader()
@@ -344,3 +484,5 @@ QList<int> DASPluginLoader::getAllIndexByKey(const QString &needle) const
 }
 
 DAS_END_NAMESPACE
+
+#include "moc_daspluginloader.cpp"

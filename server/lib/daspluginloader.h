@@ -28,14 +28,15 @@
 DAS_BEGIN_NAMESPACE
 
 class DASPluginLoaderPrivate;
-class DASPluginLoader
+class DASPluginLoader : public QObject
 {
+    Q_OBJECT
     Q_DECLARE_PRIVATE(DASPluginLoader)
 public:
     explicit DASPluginLoader(const char *iid,
-                          const QString &suffix = QString(),
-                          Qt::CaseSensitivity = Qt::CaseSensitive,
-                          bool repetitiveKeyInsensitive  = false);
+                             const QString &suffix = QString(),
+                             Qt::CaseSensitivity = Qt::CaseSensitive,
+                             bool repetitiveKeyInsensitive  = false);
     ~DASPluginLoader();
 
     QList<QJsonObject> metaData() const;
@@ -51,15 +52,22 @@ public:
     QList<int> getAllIndexByKey(const QString &needle) const;
 
     void update();
+    void removeLoader(QPluginLoader *loader);
 
     static void refreshAll();
 
+Q_SIGNALS:
+    void pluginAdded(const QString &key);
+    void pluginRemoved(QPluginLoader *loader, const QStringList &keys);
+
 private:
     QScopedPointer<DASPluginLoaderPrivate> d_ptr;
+
+    Q_PRIVATE_SLOT(d_ptr, void _q_onDirectoryChanged(const QString &pah))
 };
 
 template <class PluginInterface, class FactoryInterface>
-    PluginInterface *dLoadPlugin(const DASPluginLoader *loader, const QString &key)
+PluginInterface *dLoadPlugin(const DASPluginLoader *loader, const QString &key)
 {
     const int index = loader->indexOf(key);
     if (index != -1) {
@@ -72,7 +80,7 @@ template <class PluginInterface, class FactoryInterface>
 }
 
 template <class PluginInterface, class FactoryInterface>
-    QList<PluginInterface*> dLoadPluginList(const DASPluginLoader *loader, const QString &key)
+QList<PluginInterface*> dLoadPluginList(const DASPluginLoader *loader, const QString &key)
 {
     QList<PluginInterface*> list;
 
@@ -90,8 +98,8 @@ template <class PluginInterface, class FactoryInterface>
 
 template <class PluginInterface, class FactoryInterface, class Parameter1>
 PluginInterface *dLoadPlugin(const DASPluginLoader *loader,
-                              const QString &key,
-                              const Parameter1 &parameter1)
+                             const QString &key,
+                             const Parameter1 &parameter1)
 {
     const int index = loader->indexOf(key);
     if (index != -1) {

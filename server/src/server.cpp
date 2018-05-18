@@ -43,7 +43,7 @@ Q_LOGGING_CATEGORY(vfs, "vfs", QtInfoMsg)
 Server::Server(QObject *parent)
     : QThread(parent)
 {
-
+    qRegisterMetaType<QList<QPair<QByteArray, QByteArray>>>();
 }
 
 void Server::run()

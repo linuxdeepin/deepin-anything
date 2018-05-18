@@ -26,6 +26,32 @@
 #include "server.h"
 #include "dasfactory.h"
 #include "dasinterface.h"
+#include "daspluginloader.h"
+
+using namespace DAS_NAMESPACE;
+
+static QList<QPair<QString, DASInterface*>> interfaceList;
+
+void addPlugin(const QString &key, Server *server)
+{
+    DASInterface *interface = DASFactory::create(key);
+
+    if (!interface) {
+        qWarning() << "interface is null, key:" << key;
+        return;
+    }
+
+    QThread *t = new QThread(interface);
+
+    interface->moveToThread(t);
+    t->start();
+
+    interfaceList << qMakePair(key, interface);
+
+    QObject::connect(server, &Server::fileCreated, interface, &DASInterface::onFileCreate);
+    QObject::connect(server, &Server::fileDeleted, interface, &DASInterface::onFileDelete);
+    QObject::connect(server, &Server::fileRenamed, interface, &DASInterface::onFileRename);
+}
 
 int main(int argc, char *argv[])
 {
@@ -37,24 +63,41 @@ int main(int argc, char *argv[])
     QLoggingCategory::setFilterRules("vfs.info=false");
 #endif
 
-    DAS_NAMESPACE::Server *server = new DAS_NAMESPACE::Server();
+    Server *server = new Server();
 
     // init plugins
-    for (const QString &key : DAS_NAMESPACE::DASFactory::keys()) {
-        DAS_NAMESPACE::DASInterface *interface = DAS_NAMESPACE::DASFactory::create(key);
-
-        if (!interface)
-            continue;
-
-        QThread *t = new QThread(interface);
-
-        interface->moveToThread(t);
-        t->start();
-
-        QObject::connect(server, &DAS_NAMESPACE::Server::fileCreated, interface, &DAS_NAMESPACE::DASInterface::onFileCreate);
-        QObject::connect(server, &DAS_NAMESPACE::Server::fileDeleted, interface, &DAS_NAMESPACE::DASInterface::onFileDelete);
-        QObject::connect(server, &DAS_NAMESPACE::Server::fileRenamed, interface, &DAS_NAMESPACE::DASInterface::onFileRename);
+    for (const QString &key : DASFactory::keys()) {
+        addPlugin(key, server);
     }
+
+    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginRemoved, [server] (QPluginLoader *loader, const QStringList &keys) {
+        for (int i = 0; i < interfaceList.count(); ++i) {
+            const QPair<QString, DASInterface*> &value = interfaceList.at(i);
+
+            if (!keys.contains(value.first))
+                continue;
+
+            QThread *t = value.second->thread();
+
+            t->quit();
+
+            if (!t->wait()) {
+                qWarning() << "failed on wait thread to quit, key:" << value.first;
+                continue;
+            }
+
+            interfaceList.removeAt(i);
+            --i;
+            server->disconnect(value.second);
+            value.second->deleteLater();
+
+            DASFactory::loader()->removeLoader(loader);
+        }
+    });
+
+    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginAdded, server, [server] (const QString &key) {
+        addPlugin(key, server);
+    });
 
     server->start();
 

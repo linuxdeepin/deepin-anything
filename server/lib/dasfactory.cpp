@@ -27,7 +27,7 @@
 DAS_BEGIN_NAMESPACE
 
 #ifndef QT_NO_LIBRARY
-Q_GLOBAL_STATIC_WITH_ARGS(DASPluginLoader, loader,
+Q_GLOBAL_STATIC_WITH_ARGS(DASPluginLoader, _loader,
     (DASFactoryInterface_iid, QLatin1String("/handlers"), Qt::CaseInsensitive))
 #endif
 
@@ -37,7 +37,7 @@ QStringList DASFactory::keys()
 #ifndef QT_NO_LIBRARY
     typedef QMultiMap<int, QString> PluginKeyMap;
 
-    const PluginKeyMap keyMap = loader()->keyMap();
+    const PluginKeyMap keyMap = _loader()->keyMap();
     const PluginKeyMap::const_iterator cend = keyMap.constEnd();
     for (PluginKeyMap::const_iterator it = keyMap.constBegin(); it != cend; ++it)
         list.append(it.value());
@@ -47,7 +47,12 @@ QStringList DASFactory::keys()
 
 DASInterface *DASFactory::create(const QString &key)
 {
-    return dLoadPlugin<DASInterface, DASPlugin>(loader(), key);
+    return dLoadPlugin<DASInterface, DASPlugin>(_loader(), key);
+}
+
+DASPluginLoader *DASFactory::loader()
+{
+    return _loader;
 }
 
 DAS_END_NAMESPACE

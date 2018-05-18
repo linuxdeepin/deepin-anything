@@ -25,6 +25,9 @@ DEFINES += QMAKE_VERSION=\\\"$$VERSION\\\"
 
 PLUGINDIR = $$LIB_INSTALL_DIR/$${TARGET}/plugins
 
+readme.files += README.txt
+readme.path = $$PLUGINDIR/handlers
+
 CONFIG(debug, release|debug) {
     PLUGINDIR = $$_PRO_FILE_PWD_/../plugins:$$PLUGINDIR
 }
@@ -42,7 +45,7 @@ includes.files += \
     dasinterface.h
 includes.path = $$PREFIX/include/deepin-anything-server
 
-INSTALLS += target includes
+INSTALLS += target includes readme
 
 CONFIG += create_pc create_prl no_install_prl
 
