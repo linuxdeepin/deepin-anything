@@ -1,12 +1,19 @@
-#!/bin/sh
-
-set -e
+#!/bin/bash
 
 action="$1"
 
 if [ "$action" = configure ]; then
-	# add user "deepin_anything_server"
-	useradd -M deepin_anything_server || (echo "Failed on add user deepin_anything_server" && false)
+    # add user "deepin_anything_server"
+    #create user if not exists
+    user=deepin_anything_server
+    id $user >& /dev/null
+    if [ $? = 0 ]
+    then
+        exit 0
+    fi
+
+    set -e
+    useradd -M $user || (echo "Failed on add user deepin_anything_server" && false)
 fi
 
 #DEBHELPER#
