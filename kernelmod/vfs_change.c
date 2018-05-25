@@ -5,6 +5,7 @@
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
 #include <linux/ioctl.h>
+#include <linux/version.h>
 
 #include "vfs_change_consts.h"
 #include "vfs_change_uapi.h"
@@ -36,9 +37,39 @@ static DEFINE_SPINLOCK(sl_changes);
 
 static wait_queue_head_t wq_vfs_changes;
 static atomic_t wait_vfs_changes_count;
-static struct timer_list wait_vfs_changes_timer, wait_vfs_changes_timeout_timer;
-
 static atomic_t vfs_changes_is_open;
+
+static void wait_vfs_changes_timer_callback(
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
+unsigned long data
+#else
+struct timer_list *t
+#endif
+)
+{
+	atomic_set(&wait_vfs_changes_count, 1);
+	wake_up_interruptible(&wq_vfs_changes);
+}
+
+static void wait_vfs_changes_timeout_timer_callback(
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
+unsigned long data
+#else
+struct timer_list *t
+#endif
+)
+{
+	atomic_set(&wait_vfs_changes_count, 0);
+	wake_up_interruptible(&wq_vfs_changes);
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
+static DEFINE_TIMER(wait_vfs_changes_timer, wait_vfs_changes_timer_callback, 0, 0);
+static DEFINE_TIMER(wait_vfs_changes_timeout_timer, wait_vfs_changes_timeout_timer_callback, 0, 0);
+#else
+static DEFINE_TIMER(wait_vfs_changes_timer, wait_vfs_changes_timer_callback);
+static DEFINE_TIMER(wait_vfs_changes_timeout_timer, wait_vfs_changes_timeout_timer_callback);
+#endif
 
 static int open_vfs_changes(struct inode* si, struct file* filp)
 {
@@ -207,18 +238,6 @@ static long read_stats(ioctl_rs_args __user* irsa)
 	return 0;
 }
 
-static void wait_vfs_changes_timer_callback(unsigned long data)
-{
-	atomic_set(&wait_vfs_changes_count, 1);
-	wake_up_interruptible(&wq_vfs_changes);
-}
-
-static void wait_vfs_changes_timeout_timer_callback(unsigned long data)
-{
-	atomic_set(&wait_vfs_changes_count, 0);
-	wake_up_interruptible(&wq_vfs_changes);
-}
-
 static long wait_vfs_changes(ioctl_wd_args __user* ira)
 {
 	if (atomic_cmpxchg(&wait_vfs_changes_count, -1, 0) >= 0)
@@ -314,14 +333,6 @@ int __init init_vfs_changes(void)
 	init_waitqueue_head(&wq_vfs_changes);
 	atomic_set(&vfs_changes_is_open, 0);
 	atomic_set(&wait_vfs_changes_count, -1);
-
-	init_timer(&wait_vfs_changes_timer);
-	init_timer(&wait_vfs_changes_timeout_timer);
-
-	wait_vfs_changes_timer.function = &wait_vfs_changes_timer_callback;
-	wait_vfs_changes_timer.data = 0;
-	wait_vfs_changes_timeout_timer.function = &wait_vfs_changes_timeout_timer_callback;
-	wait_vfs_changes_timeout_timer.data = 0;
 
 	return 0;
 }
