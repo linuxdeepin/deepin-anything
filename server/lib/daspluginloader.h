@@ -50,15 +50,19 @@ public:
     QMultiMap<int, QString> keyMap() const;
     int indexOf(const QString &needle) const;
     QList<int> getAllIndexByKey(const QString &needle) const;
+    QStringList getKeysByLoader(const QPluginLoader *loader, bool *metaDataOk = nullptr) const;
 
     void update();
-    void removeLoader(QPluginLoader *loader);
+    bool removeLoader(QPluginLoader *loader);
+    // reload plugin, return loader list if finished
+    QPluginLoader *reloadLoader(QPluginLoader *loader);
 
     static void refreshAll();
 
 Q_SIGNALS:
     void pluginAdded(const QString &key);
     void pluginRemoved(QPluginLoader *loader, const QStringList &keys);
+    void pluginModified(QPluginLoader *loader, const QStringList &keys);
 
 private:
     QScopedPointer<DASPluginLoaderPrivate> d_ptr;

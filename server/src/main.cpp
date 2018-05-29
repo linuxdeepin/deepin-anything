@@ -53,6 +53,30 @@ void addPlugin(const QString &key, Server *server)
     QObject::connect(server, &Server::fileRenamed, interface, &DASInterface::onFileRename);
 }
 
+void removePlugins(const QStringList &keys, Server *server)
+{
+    for (int i = 0; i < interfaceList.count(); ++i) {
+        const QPair<QString, DASInterface*> &value = interfaceList.at(i);
+
+        if (!keys.contains(value.first))
+            continue;
+
+        QThread *t = value.second->thread();
+
+        t->quit();
+
+        if (!t->wait()) {
+            qWarning() << "failed on wait thread to quit, key:" << value.first;
+            continue;
+        }
+
+        interfaceList.removeAt(i);
+        --i;
+        server->disconnect(value.second);
+        value.second->deleteLater();
+    }
+}
+
 int main(int argc, char *argv[])
 {
     qSetMessagePattern("[%{time yyyy-MM-dd, HH:mm:ss.zzz}] [%{category}-%{type}] [%{function}: %{line}]: %{message}");
@@ -71,27 +95,18 @@ int main(int argc, char *argv[])
     }
 
     QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginRemoved, [server] (QPluginLoader *loader, const QStringList &keys) {
-        for (int i = 0; i < interfaceList.count(); ++i) {
-            const QPair<QString, DASInterface*> &value = interfaceList.at(i);
+        removePlugins(keys, server);
+        DASFactory::loader()->removeLoader(loader);
+    });
 
-            if (!keys.contains(value.first))
-                continue;
+    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginModified, [server] (QPluginLoader *loader, const QStringList &keys) {
+        removePlugins(keys, server);
+        loader = DASFactory::loader()->reloadLoader(loader);
 
-            QThread *t = value.second->thread();
-
-            t->quit();
-
-            if (!t->wait()) {
-                qWarning() << "failed on wait thread to quit, key:" << value.first;
-                continue;
+        if (loader) {
+            for (const QString &key : DASFactory::loader()->getKeysByLoader(loader)) {
+                addPlugin(key, server);
             }
-
-            interfaceList.removeAt(i);
-            --i;
-            server->disconnect(value.second);
-            value.second->deleteLater();
-
-            DASFactory::loader()->removeLoader(loader);
         }
     });
 
