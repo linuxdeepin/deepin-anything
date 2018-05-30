@@ -9,11 +9,13 @@ if [ "$action" = configure ]; then
     id $user >& /dev/null
     if [ $? = 0 ]
     then
+        set -e
+        usermod -s /usr/sbin/nologin $user
         exit 0
     fi
 
     set -e
-    useradd -M $user || (echo "Failed on add user deepin_anything_server" && false)
+    useradd -M -s /usr/sbin/nologin $user || (echo "Failed on add user deepin_anything_server" && false)
 fi
 
 #DEBHELPER#
