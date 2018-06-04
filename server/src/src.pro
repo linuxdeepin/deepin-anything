@@ -27,4 +27,7 @@ target.path = $$PREFIX/bin
 systemd_service.files = ../$${TARGET}.service
 systemd_service.path = /lib/systemd/system
 
-INSTALLS += target systemd_service
+sysusers.files = ../systemd.sysusers.d/$${TARGET}.conf
+sysusers.path = $$PREFIX/lib/sysusers.d
+
+INSTALLS += target systemd_service sysusers

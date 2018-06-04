@@ -3,9 +3,9 @@
 action="$1"
 
 if [ "$action" = configure ]; then
-    # add user "deepin_anything_server"
+    # add user "deepin-anything-server"
     #create user if not exists
-    user=deepin_anything_server
+    user=deepin-anything-server
     id $user >& /dev/null
     if [ $? = 0 ]
     then
@@ -13,7 +13,7 @@ if [ "$action" = configure ]; then
     fi
 
     set -e
-    useradd -M -r -s /sbin/nologin $user || (echo "Failed on add user deepin_anything_server" && false)
+    useradd -M -r -s /sbin/nologin $user || (echo "Failed on add user deepin-anything-server" && false)
 fi
 
 #DEBHELPER#

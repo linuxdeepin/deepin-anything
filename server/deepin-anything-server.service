@@ -3,8 +3,8 @@ Description=Deepin anything service
 After=systemd-modules-load.service
 
 [Service]
-User=deepin_anything_server
-Group=deepin_anything_server
+User=deepin-anything-server
+Group=deepin-anything-server
 ExecStart=/usr/bin/deepin-anything-server
 Environment=DAS_DEBUG_PLUGINS=1
 

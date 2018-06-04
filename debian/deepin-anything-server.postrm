@@ -5,8 +5,8 @@ set -e
 action="$1"
 
 if [ "$action" = remove ]; then
-	# del user "deepin_anything_server"
-	userdel deepin_anything_server || (echo "Failed on delete user deepin_anything_server" && false)
+	# del user "deepin-anything-server"
+	userdel deepin-anything-server || (echo "Failed on delete user deepin-anything-server" && false)
 fi
 
 #DEBHELPER#
