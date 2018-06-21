@@ -139,14 +139,14 @@ static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 	return 0;
 }
 
-typedef struct __sys_umount_args__ {
+typedef struct __ksys_umount_args__ {
 	char dir_name[NAME_MAX];
 	unsigned char major, minor;
-} sys_umount_args;
+} ksys_umount_args;
 
-static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
+static int on_ksys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	sys_umount_args* args = (sys_umount_args*)ri->data;
+	ksys_umount_args* args = (ksys_umount_args*)ri->data;
 	if (!is_mnt_ns_valid()) {
 		args->dir_name[0] = 0;
 		return 1;
@@ -170,11 +170,11 @@ static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs
 		return 1;
 	}
 
-	pr_info("sys_umount: %s, %d, %d\n", args->dir_name, args->major, args->minor);
+	pr_info("ksys_umount: %s, %d, %d\n", args->dir_name, args->major, args->minor);
 	return 0;
 }
 
-static void drop_partition(sys_umount_args* args)
+static void drop_partition(ksys_umount_args* args)
 {
 	struct list_head *p, *next;
 	list_for_each_safe(p, next, &partitions) {
@@ -190,9 +190,9 @@ static void drop_partition(sys_umount_args* args)
 	}
 }
 
-static int on_sys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
+static int on_ksys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	sys_umount_args* args = (sys_umount_args*)ri->data;
+	ksys_umount_args* args = (ksys_umount_args*)ri->data;
 	if (args == 0 || args->dir_name[0] == 0)
 		return 0;
 
@@ -207,7 +207,7 @@ static int on_sys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs
 }
 
 DECL_CMN_KRP(do_mount);
-DECL_CMN_KRP(sys_umount);
+DECL_CMN_KRP(ksys_umount);
 
 typedef struct __vfs_op_args__ {
 	unsigned char major, minor;
@@ -355,7 +355,7 @@ DECL_CMN_KRP(vfs_rename);
 
 static struct kretprobe* vfs_krps[] = {&do_mount_krp, &vfs_create_krp, &vfs_unlink_krp,
 	&vfs_mkdir_krp, &vfs_rmdir_krp, &vfs_symlink_krp, &vfs_link_krp, &vfs_rename_krp,
-	&sys_umount_krp, &security_inode_create_krp
+	&ksys_umount_krp, &security_inode_create_krp
 };
 
 static void __init init_mounts_info(void)
