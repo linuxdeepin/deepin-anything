@@ -8,6 +8,7 @@
 #include <linux/list.h>
 #include <linux/uaccess.h>
 #include <linux/namei.h>
+#include <linux/version.h>
 
 #include "arg_extractor.h"
 #include "vfs_change_consts.h"
@@ -18,13 +19,15 @@ typedef struct __do_mount_args__ {
 	char dir_name[NAME_MAX];
 } do_mount_args;
 
-#define DECL_CMN_KRP(fn) static struct kretprobe fn##_krp = {\
+#define _DECL_CMN_KRP(fn, symbol) static struct kretprobe fn##_krp = {\
 	.entry_handler	= on_##fn##_ent,\
 	.handler		= on_##fn##_ret,\
 	.data_size		= sizeof(fn##_args),\
 	.maxactive		= 64,\
-	.kp.symbol_name = ""#fn"",\
+	.kp.symbol_name = ""#symbol"",\
 };
+
+#define DECL_CMN_KRP(fn) _DECL_CMN_KRP(fn, fn)
 
 static DEFINE_SPINLOCK(sl_parts);
 static LIST_HEAD(partitions);
@@ -207,7 +210,11 @@ static int on_sys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs
 }
 
 DECL_CMN_KRP(do_mount);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
 DECL_CMN_KRP(sys_umount);
+#else
+_DECL_CMN_KRP(sys_umount, ksys_umount);
+#endif
 
 typedef struct __vfs_op_args__ {
 	unsigned char major, minor;
