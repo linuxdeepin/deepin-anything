@@ -21,8 +21,7 @@ Description: anything user interface library
 
 Package: deepin-anything-dkms
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, 
- linux-headers | linux-headers-generic | linux-headers-amd64 | linux-headers-deepin-amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: anything module 
  anything kernel module package
 
