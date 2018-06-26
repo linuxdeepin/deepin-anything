@@ -150,6 +150,8 @@ QPluginLoader *DASPluginLoaderPrivate::loadPlugin(const QString &fileName)
         qDebug() << "PluginLoader::PluginLoader() looking at" << fileName;
     }
     loader = (new QPluginLoader(fileName, q_ptr));
+    loader->setLoadHints(QLibrary::ResolveAllSymbolsHint);
+
     if (!loader->load()) {
         if (das_debug_component()) {
             qDebug() << loader->errorString();
