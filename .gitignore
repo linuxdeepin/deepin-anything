@@ -1,8 +1,33 @@
-build*/
-bin/
+
+# Executables
+*.exe
+*.out
+*.app
+Makefile
+Makefile.*
+*.Debug
+*.Release
+*.rc
+*.zip
+
+debug
+release
+build*
+
+vendor/include/*
+vendor/lib/*
+
+NUL
+
+# Documents
+doc/html/*
+
+#vscode
+.vscode/*
+
 
 # C++ objects and libs
-
+*.obj
 *.slo
 *.lo
 *.o
@@ -37,12 +62,17 @@ Makefile*
 *build-*
 
 # QtCreator
-
 *.autosave
 
 # QtCtreator Qml
 *.qmlproject.user
 *.qmlproject.user.*
+
+#QtCreator QMake
+*.pro.user
+*.pro.user*
+*.qm
+*.autosave
 
 # QtCtreator CMake
 CMakeLists.txt.user*
