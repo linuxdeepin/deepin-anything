@@ -41,7 +41,10 @@ int remove_path(fs_buf* fsbuf, char* path, fs_change* changes, uint32_t* change_
 int rename_path(fs_buf* fsbuf, char* src_path, char* dst_path, fs_change* changes, uint32_t* change_count);
 
 void get_path_range(fs_buf* fsbuf, char* path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off);
-void search_files(fs_buf* fsbuf, uint32_t *start_off, uint32_t end_off, const char* query, uint32_t* results, uint32_t* count);
+
+// do not check null pointer.
+void search_files(fs_buf* fsbuf, uint32_t* start_off, uint32_t end_off, void* param, int (*comparator)(const char*, void*), uint32_t* results, uint32_t* count);
+
 
 // functions below are used internally
 void set_kids_off(fs_buf* fsbuf, uint32_t name_off, uint32_t kids_off);

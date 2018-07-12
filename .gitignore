@@ -9,6 +9,7 @@ Makefile.*
 *.Release
 *.rc
 *.zip
+deepin-anything-server
 
 debug
 release
@@ -38,7 +39,7 @@ doc/html/*
 *.a
 *.la
 *.lai
-*.so
+*.so*
 *.dll
 *.dylib
 *.symvers
@@ -73,6 +74,8 @@ Makefile*
 *.pro.user*
 *.qm
 *.autosave
+*.prl
+*.pc
 
 # QtCtreator CMake
 CMakeLists.txt.user*
