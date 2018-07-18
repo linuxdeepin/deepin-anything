@@ -248,11 +248,23 @@ static char *do_get_path_by_name_off(fs_buf *fsbuf, uint32_t name_off, char *pat
 			continue;
 		}
 
+		//maybe src is NULL pointer.
+		if (src == 0)
+		{
+			break;
+		}
+
 		src++;
 		uint32_t rel_off = get_reloff_by_tag(fsbuf, src - fsbuf->head);
 		// we have reached the root
 		if (rel_off == 0)
 			break;
+
+		//why? @zhanglei
+		if (src - fsbuf->head)
+		{
+			break;
+		}
 
 		src = src - rel_off;
 		dbg_msg("name: %s, offset: %'ld\n", src, src - fsbuf->head);
@@ -808,16 +820,18 @@ __attribute__((visibility("default"))) int rename_path(fs_buf *fsbuf, char *src_
 	return r;
 }
 
-__attribute__((visibility("default"))) void search_files(fs_buf* fsbuf, uint32_t *start_off, uint32_t end_off, void* param, int (*comparator)(const char*, void*), uint32_t* results, uint32_t* count)
+__attribute__((visibility("default"))) void search_files(fs_buf *fsbuf, uint32_t *start_off, uint32_t end_off, void *param, int (*comparator)(const char *, void *), uint32_t *results, uint32_t *count)
 {
 	uint32_t size = *count;
 	*count = 0;
 	pthread_rwlock_rdlock(&fsbuf->lock);
 	uint32_t name_off = *start_off, min_off = fsbuf->tail > end_off ? end_off : fsbuf->tail;
 
-	while (name_off < min_off && *count < size) {
-		char* name = fsbuf->head + name_off;
-		if (*name != 0 && (*comparator)(name, param) != 0) {
+	while (name_off < min_off && *count < size)
+	{
+		char *name = fsbuf->head + name_off;
+		if (*name != 0 && (*comparator)(name, param) != 0)
+		{
 			results[*count] = name_off;
 			*count = *count + 1;
 		}

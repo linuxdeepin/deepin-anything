@@ -119,7 +119,7 @@ static int walkdir(const char* name, fs_buf* fsbuf, uint32_t parent_off, progres
 
 	struct dirent* de = 0;
 	while ((de = readdir(dir)) != 0) {
-		if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+		if (strncmp(de->d_name, ".", 1) == 0 || strncmp(de->d_name, "..", 2) == 0)
 			continue;
 
 		// DT_REG: regular file/hardlinks
