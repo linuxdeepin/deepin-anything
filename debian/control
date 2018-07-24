@@ -9,7 +9,7 @@ Homepage: http://github.com/linuxdeepin/deepin-anything
 Package: deepin-anything-libs
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: anything library 
+Description: anything library
  anything library package
 
 Package: deepin-anything-dev
@@ -21,14 +21,14 @@ Description: anything user interface library
 
 Package: deepin-anything-dkms
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: anything module 
+Depends: ${shlibs:Depends}, ${misc:Depends}, dkms
+Description: anything module
  anything kernel module package
 
 Package: deepin-anything-server
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, deepin-anything-dkms
-Description: anything server application and lib 
+Description: anything server application and lib
  anything server package
 
 Package: deepin-anything-server-dev
