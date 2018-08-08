@@ -238,7 +238,8 @@ static uint32_t get_reloff_by_tag(fs_buf *fsbuf, uint32_t tag_off)
 
 static char *do_get_path_by_name_off(fs_buf *fsbuf, uint32_t name_off, char *path, uint32_t path_size)
 {
-	char *src = fsbuf->head + name_off, *dst = path + path_size - strlen(src);
+	// dst用于存储文件路径，从后往前写入整个文件全路径，-1是为了保证末尾存在'\0'字符
+	char *src = fsbuf->head + name_off, *dst = path + path_size - strlen(src) - 1;
 	strcpy(dst, src);
 	while (1)
 	{
@@ -248,23 +249,11 @@ static char *do_get_path_by_name_off(fs_buf *fsbuf, uint32_t name_off, char *pat
 			continue;
 		}
 
-		//maybe src is NULL pointer.
-		if (src == 0)
-		{
-			break;
-		}
-
 		src++;
 		uint32_t rel_off = get_reloff_by_tag(fsbuf, src - fsbuf->head);
 		// we have reached the root
 		if (rel_off == 0)
 			break;
-
-		//why? @zhanglei
-		if (src - fsbuf->head)
-		{
-			break;
-		}
 
 		src = src - rel_off;
 		dbg_msg("name: %s, offset: %'ld\n", src, src - fsbuf->head);

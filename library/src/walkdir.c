@@ -17,7 +17,7 @@
 #define CANCELLED		2
 
 #ifndef MAX_PARTS
-#define MAX_PARTS		32
+#define MAX_PARTS		256
 #endif
 
 typedef struct __progress_report__ {
@@ -119,7 +119,7 @@ static int walkdir(const char* name, fs_buf* fsbuf, uint32_t parent_off, progres
 
 	struct dirent* de = 0;
 	while ((de = readdir(dir)) != 0) {
-		if (strncmp(de->d_name, ".", 1) == 0 || strncmp(de->d_name, "..", 2) == 0)
+		if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
 			continue;
 
 		// DT_REG: regular file/hardlinks
@@ -183,6 +183,12 @@ __attribute__((visibility("default"))) int build_fstree(fs_buf* fsbuf, int merge
 	};
 
 	get_partitions(&pf.partition_count, parts);
+
+	if (pf.partition_count > MAX_PARTS) {
+		fprintf(stderr, "The number of partitions exceeds the upper limit: %d\n", MAX_PARTS);
+		abort();
+	}
+
 	pf.selected_partition = get_path_partition(root, pf.partition_count, parts);
 
 	return walkdir(root, fsbuf, 0, &pr, &pf) == CANCELLED;

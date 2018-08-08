@@ -20,10 +20,9 @@ int match_str(const char *name, void *query)
 
 int match_regex(const char *name, void *query)
 {
-	regmatch_t subs[1024];
-	memset(subs, 0, sizeof(subs));
+	regmatch_t subs;
 	regex_t *compiled = (regex_t *)query;
-	return (regexec(compiled, name, 1024, subs, 0) == REG_NOERROR) ? 1 : 0;
+	return (regexec(compiled, name, 1, &subs, 0) == REG_NOERROR) ? 1 : 0;
 }
 
 
@@ -32,13 +31,13 @@ static uint32_t search_by_fsbuf(fs_buf *fsbuf, const char *query)
 {
 	uint32_t name_offs[MAX_RESULTS], end_off = get_tail(fsbuf);
 	uint32_t count = MAX_RESULTS, start_off = first_name(fsbuf);
-	regex_t* compiled;
-	int err = regcomp(compiled, query, REG_ICASE | REG_EXTENDED);
+	regex_t compiled;
+	int err = regcomp(&compiled, query, REG_ICASE | REG_EXTENDED);
 
 	if (!err)
 	{
-		search_files(fsbuf, &start_off, end_off, compiled, match_regex, name_offs, &count);
-		char path[PATH_MAX];
+		search_files(fsbuf, &start_off, end_off, &compiled, match_regex, name_offs, &count);
+		char path[PATH_MAX] = {'0'};
 		for (uint32_t i = 0; i < count; i++)
 		{
 			char *p = get_path_by_name_off(fsbuf, name_offs[i], path, sizeof(path));
@@ -47,10 +46,10 @@ static uint32_t search_by_fsbuf(fs_buf *fsbuf, const char *query)
 		uint32_t total = count;
 		while (count == MAX_RESULTS)
 		{
-			search_files(fsbuf, &start_off, end_off, compiled, match_regex, name_offs, &count);
+			search_files(fsbuf, &start_off, end_off, &compiled, match_regex, name_offs, &count);
 			total += count;
 		}
-		regfree(compiled);
+		regfree(&compiled);
 		return total;
 	}
 	else
