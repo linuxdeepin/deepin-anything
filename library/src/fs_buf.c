@@ -795,8 +795,14 @@ __attribute__((visibility("default"))) void get_path_range(fs_buf *fsbuf, char *
 	*path_off = get_path_offset(fsbuf, path);
 	if (*path_off != 0)
 	{
-		*start_off = get_kids_offset(fsbuf, *path_off);
-		*end_off = get_tree_end_offset(fsbuf, *start_off);
+		// 对于此索引数据的根目录没有保存它的目录文件起始信息
+		if (*path_off == DATA_START) {
+			*start_off = first_name(fsbuf);
+			*end_off = get_tail(fsbuf);
+		} else {
+			*start_off = get_kids_offset(fsbuf, *path_off);
+			*end_off = get_tree_end_offset(fsbuf, *start_off);
+		}
 	}
 	pthread_rwlock_unlock(&fsbuf->lock);
 }
