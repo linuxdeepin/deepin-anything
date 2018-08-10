@@ -167,7 +167,6 @@ static int walkdir(const char* name, fs_buf* fsbuf, uint32_t parent_off, progres
 
 __attribute__((visibility("default"))) int build_fstree(fs_buf* fsbuf, int merge_partition, progress_callback_fn pcf, void* param)
 {
-	char* root = get_root_path(fsbuf);
 	partition parts[MAX_PARTS];
 	partition_filter pf = {
 		.selected_partition = -1,
@@ -189,7 +188,16 @@ __attribute__((visibility("default"))) int build_fstree(fs_buf* fsbuf, int merge
 		abort();
 	}
 
+	const char *_root = get_root_path(fsbuf);
+	char *root = malloc(strlen(_root) + 1);
+
+	strcpy(root, _root);
+
 	pf.selected_partition = get_path_partition(root, pf.partition_count, parts);
 
-	return walkdir(root, fsbuf, 0, &pr, &pf) == CANCELLED;
+	int ret = walkdir(root, fsbuf, 0, &pr, &pf) == CANCELLED;
+
+	free(root);
+
+	return ret;
 }

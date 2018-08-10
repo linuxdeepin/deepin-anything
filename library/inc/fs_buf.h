@@ -19,7 +19,7 @@ typedef struct __fs_change__ {
 
 uint32_t get_capacity(fs_buf* fsbuf);
 uint32_t first_name(fs_buf* fsbuf);
-char* get_root_path(fs_buf* fsbuf);
+const char* get_root_path(fs_buf* fsbuf);
 
 uint32_t get_tail(fs_buf* fsbuf);
 // thread-unsafe

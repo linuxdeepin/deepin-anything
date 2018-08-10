@@ -88,7 +88,7 @@ __attribute__((visibility("default"))) uint32_t get_capacity(fs_buf *fsbuf)
 	return fsbuf->capacity;
 }
 
-__attribute__((visibility("default"))) char *get_root_path(fs_buf *fsbuf)
+__attribute__((visibility("default"))) const char *get_root_path(fs_buf *fsbuf)
 {
 	return fsbuf->head + DATA_START;
 }
