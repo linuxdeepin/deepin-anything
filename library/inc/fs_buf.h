@@ -40,7 +40,7 @@ int insert_path(fs_buf* fsbuf, char* path, int is_dir, fs_change* change);
 int remove_path(fs_buf* fsbuf, char* path, fs_change* changes, uint32_t* change_count);
 int rename_path(fs_buf* fsbuf, char* src_path, char* dst_path, fs_change* changes, uint32_t* change_count);
 
-void get_path_range(fs_buf* fsbuf, char* path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off);
+void get_path_range(fs_buf *fsbuf, const char *path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off);
 
 // do not check null pointer.
 void search_files(fs_buf* fsbuf, uint32_t* start_off, uint32_t end_off, void* param, int (*comparator)(const char*, void*), uint32_t* results, uint32_t* count);

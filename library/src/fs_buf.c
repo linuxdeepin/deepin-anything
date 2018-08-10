@@ -375,7 +375,7 @@ static uint32_t get_kids_offset(fs_buf *fsbuf, uint32_t name_off)
 }
 
 // return 0 means not-found, DATA_START means root
-static uint32_t get_path_offset(fs_buf *fsbuf, char *path)
+static uint32_t get_path_offset(fs_buf *fsbuf, const char *path)
 {
 	if (*path == 0 && fsbuf->first_name_off == DATA_START + 2)
 		return DATA_START;
@@ -383,7 +383,7 @@ static uint32_t get_path_offset(fs_buf *fsbuf, char *path)
 	if (strstr(path, fsbuf->head + DATA_START) != path)
 		return 0;
 
-	char *p = path + (fsbuf->first_name_off - DATA_START - 1);
+	const char *p = path + (fsbuf->first_name_off - DATA_START - 1);
 	if (*p == 0)
 		return DATA_START;
 
@@ -789,7 +789,7 @@ static int do_rename_path(fs_buf *fsbuf, char *src_path, char *dst_path, fs_chan
 	return 0;
 }
 
-__attribute__((visibility("default"))) void get_path_range(fs_buf *fsbuf, char *path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off)
+__attribute__((visibility("default"))) void get_path_range(fs_buf *fsbuf, const char *path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off)
 {
 	pthread_rwlock_rdlock(&fsbuf->lock);
 	*path_off = get_path_offset(fsbuf, path);
@@ -805,6 +805,23 @@ __attribute__((visibility("default"))) void get_path_range(fs_buf *fsbuf, char *
 		}
 	}
 	pthread_rwlock_unlock(&fsbuf->lock);
+
+	if (*path_off == 0) {
+		int path_leng = strlen(path);
+		char new_path[path_leng + 2];
+
+		strcpy(new_path, path);
+
+		// fallback
+		if (path[path_leng - 1] == '/') {
+			new_path[path_leng - 1] = 0;
+		} else {
+			new_path[path_leng] = '/';
+			new_path[path_leng + 1] = 0;
+		}
+
+		return get_path_range(fsbuf, new_path, path_off, start_off, end_off);
+	}
 }
 
 __attribute__((visibility("default"))) int rename_path(fs_buf *fsbuf, char *src_path, char *dst_path, fs_change *changes, uint32_t *change_count)
