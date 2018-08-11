@@ -789,7 +789,7 @@ static int do_rename_path(fs_buf *fsbuf, char *src_path, char *dst_path, fs_chan
 	return 0;
 }
 
-__attribute__((visibility("default"))) void get_path_range(fs_buf *fsbuf, const char *path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off)
+static void do_get_path_range(fs_buf *fsbuf, const char *path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off)
 {
 	pthread_rwlock_rdlock(&fsbuf->lock);
 	*path_off = get_path_offset(fsbuf, path);
@@ -805,6 +805,11 @@ __attribute__((visibility("default"))) void get_path_range(fs_buf *fsbuf, const 
 		}
 	}
 	pthread_rwlock_unlock(&fsbuf->lock);
+}
+
+__attribute__((visibility("default"))) void get_path_range(fs_buf *fsbuf, const char *path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off)
+{
+	do_get_path_range(fsbuf, path, path_off, start_off, end_off);
 
 	if (*path_off == 0) {
 		int path_leng = strlen(path);
@@ -820,7 +825,7 @@ __attribute__((visibility("default"))) void get_path_range(fs_buf *fsbuf, const 
 			new_path[path_leng + 1] = 0;
 		}
 
-		return get_path_range(fsbuf, new_path, path_off, start_off, end_off);
+		return do_get_path_range(fsbuf, new_path, path_off, start_off, end_off);
 	}
 }
 
