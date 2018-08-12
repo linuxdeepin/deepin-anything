@@ -1,3 +1,19 @@
+<a name="0.0.3"></a>
+## 0.0.3 (2018-08-12)
+
+
+#### Bug Fixes
+
+*   configure the "deepin-anything-server" package failed on debian ([6807829f](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/6807829f4af6f074ad377f990a3b7177a0d60629))
+*   the "get_path_range" function may fall into an infinite loop ([00157be2](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/00157be24206a710faf03139ccac83e5115d9c26))
+*   can not get the root path range if it is not end with '/' ([7fcc7c2a](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/7fcc7c2aa2a29ef4ae2cfc4417904ee01c3b3838))
+*   crash at walkdir when the fsbuf realloc ([49107c6e](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/49107c6e5c18526918fb3c74af9ff8a942efec7a))
+*   can not get the root path pange info ([147fa733](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/147fa733b172c26801c24255b8629af1817835ae))
+*   crash in build_fstree(the "parts" array out of bounds) ([e4265c1b](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/e4265c1b677b6855dc5afbb005c1297264ae8f89))
+*   segment faults when invoke strlen, now change it to strncmp. ([a26c2634](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/a26c2634f523fdb5d5f0acd621605c668a86d800))
+
+
+
 <a name="0.0.2"></a>
 ## 0.0.2 (2018-07-26)
 
