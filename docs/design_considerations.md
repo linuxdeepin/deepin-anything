@@ -224,7 +224,7 @@ static int walkdir(const char* name, fs_buf* fsbuf, uint32_t parent_off)
 	uint32_t end = get_tail(fsbuf);
 	append_parent(fsbuf, parent_off);
 
-	// loop thru siblings
+	// loop through siblings
 	uint32_t off = start;
 	while (off < end) {
 		if (is_file(fsbuf, off)) {
