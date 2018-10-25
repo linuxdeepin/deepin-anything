@@ -1,3 +1,13 @@
+<a name="0.0.4"></a>
+## 0.0.4 (2018-10-25)
+
+
+#### Bug Fixes
+
+*   build failure due to missing include ([33afa678](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/33afa678a15ac34593bafd7b837a421c4c66b9a1))
+
+
+
 <a name="0.0.3"></a>
 ## 0.0.3 (2018-08-12)
 
