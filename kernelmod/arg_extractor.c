@@ -37,6 +37,15 @@ unsigned long get_arg(struct pt_regs* regs, int n)
 		case 3: return regs->r18;
 		case 4: return regs->r19;
 
+#elif defined(CONFIG_ARM64)
+
+		case 1: return regs->x0;
+		case 2: return regs->x1;
+		case 3: return regs->x2;
+		case 4: return regs->x3;
+		case 5: return regs->x4;
+		case 6: return regs->x5;
+
 #endif // CONFIG_X86_64
 		default:
 			return 0;
