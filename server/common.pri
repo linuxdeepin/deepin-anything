@@ -1,1 +1,1 @@
-VERSION = 0.0.1
+isEmpty(VERSION): VERSION = 0.0.1

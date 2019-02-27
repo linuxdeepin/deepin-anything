@@ -2,7 +2,7 @@ TEMPLATE = lib
 TARGET = deepin-anything-server-lib
 QT -= gui
 
-include(../common.pri)
+include(../../common.pri)
 
 SOURCES += \
     dasplugin.cpp \

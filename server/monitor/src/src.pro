@@ -3,13 +3,13 @@ TEMPLATE = app
 CONFIG += c++11
 QT -= gui
 
-include(../common.pri)
+include(../../common.pri)
 
 SOURCES += \
     main.cpp \
     server.cpp
 
-INCLUDEPATH += ../../kernelmod ../lib
+INCLUDEPATH += ../../../kernelmod ../lib
 LIBS += -L$$OUT_PWD/../lib -ldeepin-anything-server-lib
 
 CONFIG(debug, debug|release) {
