@@ -22,8 +22,12 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QTimer>
+#include <QCommandLineOption>
+#include <QCommandLineParser>
+#include <QDBusConnection>
 
 #include "lftmanager.h"
+#include "anything_adaptor.h"
 
 int main(int argc, char *argv[])
 {
@@ -31,20 +35,36 @@ int main(int argc, char *argv[])
 
     app.setOrganizationName("deepin");
 
-    QObject::connect(LFTManager::instance(), &LFTManager::addPathFinished, [] (const QString &path, bool ok) {
-        qDebug() << path << ok;
-    });
+    QCommandLineOption option_dbus("dbus", "Start on DBus mode.");
+    QCommandLineParser parser;
 
-//    qDebug() << LFTManager::instance()->hasLFT("/media/deepin/test");
-//    qDebug() << LFTManager::instance()->search("/media/deepin/7abe0e5f-55d8-4a16-95b6-049910a7f00a", "dee");
-//    qDebug() << LFTManager::instance()->search("/media/deepin/test", "dee");
-//    qDebug() << LFTManager::instance()->addPath("/media/deepin/7abe0e5f-55d8-4a16-95b6-049910a7f00a");
-//    if (!LFTManager::instance()->hasLFT("/tmp"))
-//        qDebug() << LFTManager::instance()->addPath("/tmp");
-//    else
-//        qDebug() << LFTManager::instance()->search("/tmp", "deepin", false);
+    parser.addOption(option_dbus);
+    parser.addHelpOption();
+    parser.addVersionOption();
+    parser.process(app);
 
-    QTimer::singleShot(1000, &app, &QCoreApplication::quit);
+    if (parser.isSet(option_dbus)) {
+        if (!QDBusConnection::sessionBus().isConnected()) {
+            qWarning("Cannot connect to the D-Bus session bus.\n"
+                     "Please check your system settings and try again.\n");
+            return 1;
+        }
+
+        // add our D-Bus interface and connect to D-Bus
+        if (!QDBusConnection::sessionBus().registerService("com.deepin.anything")) {
+            qWarning("Cannot register the \"com.deepin.anything\" service.\n");
+            return 2;
+        }
+
+        Q_UNUSED(new AnythingAdaptor(LFTManager::instance()));
+
+        if (!QDBusConnection::sessionBus().registerObject("/com/deepin/anything", LFTManager::instance())) {
+            qWarning("Cannot register to the D-Bus object: \"/com/deepin/anything\"\n");
+            return 3;
+        }
+    } else {
+        return 0;
+    }
 
     return app.exec();
 }

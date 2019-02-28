@@ -18,6 +18,18 @@ CONFIG(debug, debug|release) {
 
 isEmpty(PREFIX): PREFIX = /usr
 
+dbus.files = $$PWD/com.deepin.anything.xml
+dbus.header_flags += -l LFTManager -i $$PWD/../lib/lftmanager.h
+dbus.source_flags += -l LFTManager
+
+DBUS_ADAPTORS += dbus
+
+dbus_xmls.path = /usr/share/dbus-1/interfaces
+dbus_xmls.files = $$dbus.files
+
+dbus_service.path = /usr/share/dbus-1/services
+dbus_service.files = $$PWD/com.deepin.anything.service
+
 target.path = $$PREFIX/bin
 
-INSTALLS += target
+INSTALLS += target dbus_xmls dbus_service

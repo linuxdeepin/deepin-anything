@@ -36,6 +36,8 @@ public:
     bool hasLFT(QString path) const;
     bool lftBuinding(QString path) const;
 
+    QStringList allPath() const;
+
     QStringList refresh(const QByteArray &serialUriFilter = QByteArray());
     QStringList sync(const QString &mountPoint = QString());
 

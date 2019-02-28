@@ -1,0 +1,45 @@
+<interface name='com.deepin.anything'>
+    <method name='allPath'>
+        <arg type='as' name='pathList' direction='out'/>
+    </method>
+    <method name='addPath'>
+        <arg type='s' name='path' direction='in'/>
+        <arg type='b' name='success' direction='out'/>
+    </method>
+    <method name='hasLFT'>
+        <arg type='s' name='path' direction='in'/>
+        <arg type='b' name='success' direction='out'/>
+    </method>
+    <method name='lftBuinding'>
+        <arg type='s' name='path' direction='in'/>
+        <arg type='b' name='success' direction='out'/>
+    </method>
+    <method name='refresh'>
+        <arg type='ay' name='serialUriFilter' direction='in'/>
+        <arg type='as' name='rootPathList' direction='out'/>
+    </method>
+    <method name='sync'>
+        <arg type='s' name='mountPoint' direction='in'/>
+        <arg type='as' name='rootPathList' direction='out'/>
+    </method>
+    <method name='search'>
+        <arg type='s' name='path' direction='in'/>
+        <arg type='s' name='keyword' direction='in'/>
+        <arg type='b' name='useRegExp' direction='in'/>
+        <arg type='as' name='results' direction='out'/>
+    </method>
+    <method name='insertFileToLFTBuf'>
+        <arg type='s' name='filePath' direction='in'/>
+    </method>
+    <method name='removeFileFromLFTBuf'>
+        <arg type='s' name='filePath' direction='in'/>
+    </method>
+    <method name='renameFileOfLFTBuf'>
+        <arg type='s' name='fromFilePath' direction='in'/>
+        <arg type='s' name='toFilePath' direction='in'/>
+    </method>
+    <signal name="addPathFinished">
+      <arg type="s" name="path"/>
+      <arg type="b" name="success"/>
+    </signal>
+</interface>

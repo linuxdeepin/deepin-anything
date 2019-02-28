@@ -155,7 +155,7 @@ bool LFTManager::addPath(QString path)
     return true;
 }
 
-// 返回path对应的fa_buf对象，且将path转成为相对于fs_buf root_path的路径
+// 返回path对应的fs_buf对象，且将path转成为相对于fs_buf root_path的路径
 static fs_buf *getFsBufByPath(QString &path, fs_buf *default_value = nullptr)
 {
     if (!_global_fsBufMap.exists())
@@ -169,30 +169,38 @@ static fs_buf *getFsBufByPath(QString &path, fs_buf *default_value = nullptr)
     if (!storage_info.isValid())
         return default_value;
 
+    QString result_path = path;
+
     do {
-        fs_buf *buf = _global_fsBufMap->value(path, (fs_buf*)0x01);
+        fs_buf *buf = _global_fsBufMap->value(result_path, (fs_buf*)0x01);
 
         if (buf != (fs_buf*)0x01) {
+            path = path.mid(result_path.size());
+
+            if (!path.isEmpty())
+                path.chop(1);
             // fs_buf中的root_path以/结尾，所以此处多移除一个字符
-            path = path.mid(storage_info.rootPath().size() + 1);
             path = QString::fromLocal8Bit(get_root_path(buf)) + path;
+
+            if (path.endsWith('/'))
+                path.chop(1);
 
             return buf;
         }
 
-        if (path == "/")
+        if (result_path == "/")
             return default_value;
 
-        int last_dir_split_pos = path.lastIndexOf('/');
+        int last_dir_split_pos = result_path.lastIndexOf('/');
 
         if (last_dir_split_pos < 0)
             return default_value;
 
-        path = path.left(last_dir_split_pos);
+        result_path = result_path.left(last_dir_split_pos);
 
-        if (path.isEmpty())
-            path = "/";
-    } while (path != storage_info.rootPath());
+        if (result_path.isEmpty())
+            result_path = "/";
+    } while (result_path != storage_info.rootPath());
 
     return default_value;
 }
@@ -206,6 +214,14 @@ bool LFTManager::lftBuinding(QString path) const
 {
     // 对应fs_buf存在且为nullptr认为正在构建
     return getFsBufByPath(path, (fs_buf*)0x01);
+}
+
+QStringList LFTManager::allPath() const
+{
+    if (!_global_fsBufMap.exists())
+        return QStringList();
+
+    return _global_fsBufMap->keys();
 }
 
 // 重新从磁盘加载lft文件
