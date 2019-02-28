@@ -109,7 +109,7 @@ static QString getLFTFileByPath(const QString &path)
     return cache_path + "/" + lft_file_name.toUtf8().toPercentEncoding(":", "/");
 }
 
-bool LFTManager::addPath(const QString &path)
+bool LFTManager::addPath(QString path)
 {
     if (!path.startsWith("/"))
         return false;
@@ -117,23 +117,33 @@ bool LFTManager::addPath(const QString &path)
     if (_global_fsBufMap->contains(path))
         return false;
 
-    const QString &lft_file = LFTDiskTool::pathToSerialUri(path);
+    const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(path);
 
-    if (lft_file.isEmpty())
+    if (serial_uri.isEmpty())
         return false;
 
     QFutureWatcher<fs_buf*> *watcher = new QFutureWatcher<fs_buf*>(this);
+    // 此路径对应的设备可能被挂载到多个位置
+    const QStringList &path_list = LFTDiskTool::fromSerialUri(serial_uri);
 
-    (*_global_fsBufMap)[path] = nullptr;
+    // 将路径改为相对于第一个挂载点的路径，vfs_monitor中所有文件的改动都是以设备第一个挂载点通知的
+    path = path_list.first();
 
-    connect(watcher, &QFutureWatcher<fs_buf*>::finished, this, [this, path, watcher] {
-        if (watcher->result()) {
-            (*_global_fsBufMap)[path] = watcher->result();
-        } else {
-            _global_fsBufMap->remove(path);
+    for (const QString &path : path_list)
+        (*_global_fsBufMap)[path] = nullptr;
+
+    connect(watcher, &QFutureWatcher<fs_buf*>::finished, this, [this, path_list, watcher] {
+        fs_buf *buf = watcher->result();
+
+        for (const QString &path : path_list) {
+            if (buf) {
+                (*_global_fsBufMap)[path] = buf;
+            } else {
+                _global_fsBufMap->remove(path);
+            }
+
+            Q_EMIT addPathFinished(path, buf);
         }
-
-        Q_EMIT addPathFinished(path, watcher->result());
 
         watcher->deleteLater();
     });
@@ -342,6 +352,62 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
     } while (count == MAX_RESULT_COUNT);
 
     return list;
+}
+
+static bool markLFTFileToDirty(fs_buf *buf)
+{
+    const char *root = get_root_path(buf);
+
+    const QString &lft_file = getLFTFileByPath(QString::fromLocal8Bit(root));
+
+    return QFile::remove(lft_file);
+}
+
+void LFTManager::insertFileToLFTBuf(QString file)
+{
+    fs_buf *buf = getFsBufByPath(file);
+
+    if (!buf)
+        return;
+
+    QFileInfo info(file);
+
+    fs_change change;
+    insert_path(buf, file.toLocal8Bit().constData(), info.isDir(), &change);
+
+    // buf内容已改动，删除对应的lft文件
+    markLFTFileToDirty(buf);
+}
+
+void LFTManager::removeFileFromLFTBuf(QString file)
+{
+    fs_buf *buf = getFsBufByPath(file);
+
+    if (!buf)
+        return;
+
+    fs_change change;
+    uint32_t count;
+    remove_path(buf, file.toLocal8Bit().constData(), &change, &count);
+
+    // buf内容已改动，删除对应的lft文件
+    markLFTFileToDirty(buf);
+}
+
+void LFTManager::renameFileOfLFTBuf(QString oldFile, const QString &newFile)
+{
+    // 此处期望oldFile是fs_buf的子文件（未处理同一设备不同挂载点的问题）
+    fs_buf *buf = getFsBufByPath(oldFile);
+
+    if (!buf)
+        return;
+
+    fs_change change;
+    uint32_t change_count;
+    rename_path(buf, oldFile.toLocal8Bit().constData(), newFile.toLocal8Bit().constData(), &change, &change_count);
+
+    // buf内容已改动，删除对应的lft文件
+    markLFTFileToDirty(buf);
 }
 
 static void cleanLFTManager()

@@ -36,9 +36,9 @@ char* get_path_by_name_off(fs_buf* fsbuf, uint32_t name_off, char *path, uint32_
 int save_fs_buf(fs_buf* fsbuf, const char* filename);
 int load_fs_buf(fs_buf** pfsbuf, const char* filename);
 
-int insert_path(fs_buf* fsbuf, char* path, int is_dir, fs_change* change);
-int remove_path(fs_buf* fsbuf, char* path, fs_change* changes, uint32_t* change_count);
-int rename_path(fs_buf* fsbuf, char* src_path, char* dst_path, fs_change* changes, uint32_t* change_count);
+int insert_path(fs_buf* fsbuf, const char *path, int is_dir, fs_change* change);
+int remove_path(fs_buf* fsbuf, const char *path, fs_change* changes, uint32_t* change_count);
+int rename_path(fs_buf* fsbuf, const char* src_path, const char* dst_path, fs_change* changes, uint32_t* change_count);
 
 void get_path_range(fs_buf *fsbuf, const char *path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off);
 

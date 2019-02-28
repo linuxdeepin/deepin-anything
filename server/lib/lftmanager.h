@@ -32,7 +32,7 @@ public:
 
     static LFTManager *instance();
 
-    bool addPath(const QString &path);
+    bool addPath(QString path);
     bool hasLFT(QString path) const;
     bool lftBuinding(QString path) const;
 
@@ -40,6 +40,10 @@ public:
     QStringList sync(const QString &mountPoint = QString());
 
     QStringList search(const QString &path, const QString keyword, bool useRegExp = false) const;
+
+    void insertFileToLFTBuf(QString file);
+    void removeFileFromLFTBuf(QString file);
+    void renameFileOfLFTBuf(QString oldFile, const QString &newFIle);
 
 Q_SIGNALS:
     void addPathFinished(const QString &path, bool success);

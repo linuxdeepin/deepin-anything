@@ -557,7 +557,7 @@ static void update_offsets(fs_buf *fsbuf, uint32_t start_off, int delta, int upd
 	}
 }
 
-static int do_insert_path(fs_buf *fsbuf, char *path, int is_dir, fs_change *change)
+static int do_insert_path(fs_buf *fsbuf, const char *path, int is_dir, fs_change *change)
 {
 	char *last_slash = strrchr(path, '/');
 	if (last_slash == 0 || strlen(last_slash) == 1)
@@ -609,7 +609,7 @@ static int do_insert_path(fs_buf *fsbuf, char *path, int is_dir, fs_change *chan
 	return 0;
 }
 
-__attribute__((visibility("default"))) int insert_path(fs_buf *fsbuf, char *path, int is_dir, fs_change *change)
+__attribute__((visibility("default"))) int insert_path(fs_buf *fsbuf, const char *path, int is_dir, fs_change *change)
 {
 	pthread_rwlock_wrlock(&fsbuf->lock);
 	int r = do_insert_path(fsbuf, path, is_dir, change);
@@ -630,7 +630,7 @@ __attribute__((visibility("default"))) int insert_path(fs_buf *fsbuf, char *path
 		}                                                                      \
 	} while (0);
 
-static int do_remove_path(fs_buf *fsbuf, char *path, fs_change *changes, uint32_t *change_count, char **kids_tree, uint32_t *kids_tree_size)
+static int do_remove_path(fs_buf *fsbuf, const char *path, fs_change *changes, uint32_t *change_count, char **kids_tree, uint32_t *kids_tree_size)
 {
 	uint32_t name_off = get_path_offset(fsbuf, path);
 	if (name_off == 0)
@@ -703,7 +703,7 @@ static int do_remove_path(fs_buf *fsbuf, char *path, fs_change *changes, uint32_
 	return 0;
 }
 
-__attribute__((visibility("default"))) int remove_path(fs_buf *fsbuf, char *path, fs_change *changes, uint32_t *change_count)
+__attribute__((visibility("default"))) int remove_path(fs_buf *fsbuf, const char *path, fs_change *changes, uint32_t *change_count)
 {
 	pthread_rwlock_wrlock(&fsbuf->lock);
 	int r = do_remove_path(fsbuf, path, changes, change_count, 0, 0);
@@ -713,7 +713,7 @@ __attribute__((visibility("default"))) int remove_path(fs_buf *fsbuf, char *path
 
 // NOTE: Linux rename syscall for folder can only succeed if dst_path doesnt exist or is empty
 // so dst_path (if a folder) MUST be empty here
-static int do_rename_path(fs_buf *fsbuf, char *src_path, char *dst_path, fs_change *changes, uint32_t *change_count)
+static int do_rename_path(fs_buf *fsbuf, const char *src_path, const char *dst_path, fs_change *changes, uint32_t *change_count)
 {
 	if (strstr(dst_path, src_path) == dst_path)
 		return ERR_NESTED;
@@ -829,7 +829,7 @@ __attribute__((visibility("default"))) void get_path_range(fs_buf *fsbuf, const 
 	}
 }
 
-__attribute__((visibility("default"))) int rename_path(fs_buf *fsbuf, char *src_path, char *dst_path, fs_change *changes, uint32_t *change_count)
+__attribute__((visibility("default"))) int rename_path(fs_buf *fsbuf, const char *src_path, const char *dst_path, fs_change *changes, uint32_t *change_count)
 {
 	pthread_rwlock_wrlock(&fsbuf->lock);
 	int r = do_rename_path(fsbuf, src_path, dst_path, changes, change_count);
