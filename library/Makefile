@@ -8,6 +8,7 @@ release: bin/release/libanything.so
 
 bin/release/libanything.so: src/*.c src/index/*.c
 	mkdir -p bin/release
+	rm bin/release/*.so*||true
 	$(CC) $(CFLAGS) -O3 -Wl,-soname,$(shell basename $@).1.0.0 $^ -o $@.1.0.0 $(LDFLAG)
 	ln -s $(shell basename $@).1.0.0 $@.1.0
 	ln -s $(shell basename $@).1.0.0 $@.1
@@ -17,6 +18,7 @@ debug: bin/debug/libanything.so
 
 bin/debug/libanything.so: src/*.c src/index/*.c
 	mkdir -p bin/debug
+	rm bin/debug/*.so*||true
 	$(CC) $(CFLAGS) -g -DIDX_DEBUG -Wl,-soname,$(shell basename $@).1.0.0 $^ -o $@.1.0.0 $(LDFLAG)
 	ln -s $(shell basename $@).1.0.0 $@.1.0
 	ln -s $(shell basename $@).1.0.0 $@.1

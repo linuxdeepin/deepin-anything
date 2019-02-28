@@ -1,4 +1,4 @@
-TARGET = deepin-anything-server
+TARGET = deepin-anything-monitor
 TEMPLATE = app
 CONFIG += c++11
 QT -= gui
@@ -9,12 +9,12 @@ SOURCES += \
     main.cpp \
     server.cpp
 
-INCLUDEPATH += ../../../kernelmod ../lib
-LIBS += -L$$OUT_PWD/../lib -ldeepin-anything-server-lib
+INCLUDEPATH += ../../../kernelmod ../../lib
+LIBS += -L$$OUT_PWD/../../lib -ldeepin-anything-server-lib
 
 CONFIG(debug, debug|release) {
-    DEPENDPATH += $$OUT_PWD/../lib
-    unix:QMAKE_RPATHDIR += $$OUT_PWD/../lib
+    DEPENDPATH += $$OUT_PWD/../../lib
+    unix:QMAKE_RPATHDIR += $$OUT_PWD/../../lib
 }
 
 HEADERS += \

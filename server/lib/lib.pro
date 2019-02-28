@@ -1,21 +1,38 @@
 TEMPLATE = lib
 TARGET = deepin-anything-server-lib
+QT += dbus concurrent
 QT -= gui
+CONFIG += link_pkgconfig
+PKGCONFIG += udisks2-qt5
 
-include(../../common.pri)
+include(../common.pri)
 
 SOURCES += \
     dasplugin.cpp \
     dasfactory.cpp \
     dasinterface.cpp \
-    daspluginloader.cpp
+    daspluginloader.cpp \
+    lftmanager.cpp \
+    lftdisktool.cpp
 
 HEADERS += \
     dasdefine.h \
     dasplugin.h \
     dasfactory.h \
     dasinterface.h \
-    daspluginloader.h
+    daspluginloader.h \
+    lftmanager.h \
+    lftdisktool.h
+
+INCLUDEPATH += ../../library/inc
+
+CONFIG(debug, debug|release) {
+    LIBS += -L$$PWD/../../library/bin/debug -lanything
+    DEPENDPATH += $$OUT_PWD/../../library/bin/debug
+    unix:QMAKE_RPATHDIR += $$OUT_PWD/../../library/bin/debug
+} else {
+    LIBS += -L$$PWD/../../library/bin/release -lanything
+}
 
 isEmpty(LIB_INSTALL_DIR) {
     LIB_INSTALL_DIR = $$[QT_INSTALL_LIBS]
@@ -42,7 +59,9 @@ includes.files += \
     dasdefine.h \
     dasfactory.h \
     dasplugin.h \
-    dasinterface.h
+    dasinterface.h \
+    lftmanager.h
+
 includes.path = $$PREFIX/include/deepin-anything-server
 
 INSTALLS += target includes readme
@@ -53,5 +72,5 @@ QMAKE_PKGCONFIG_LIBDIR = $$target.path
 QMAKE_PKGCONFIG_VERSION = $$VERSION
 QMAKE_PKGCONFIG_DESTDIR = pkgconfig
 QMAKE_PKGCONFIG_NAME = $$TARGET
-QMAKE_PKGCONFIG_DESCRIPTION = Deepin anything server
+QMAKE_PKGCONFIG_DESCRIPTION = Deepin anything server library
 QMAKE_PKGCONFIG_INCDIR = $$includes.path
