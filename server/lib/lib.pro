@@ -27,11 +27,11 @@ HEADERS += \
 INCLUDEPATH += ../../library/inc
 
 CONFIG(debug, debug|release) {
-    LIBS += -L$$PWD/../../library/bin/debug -lanything
-    DEPENDPATH += $$OUT_PWD/../../library/bin/debug
-    unix:QMAKE_RPATHDIR += $$OUT_PWD/../../library/bin/debug
+    LIBS += -L$$_PRO_FILE_PWD_/../../library/bin/debug -lanything
+    DEPENDPATH += $$_PRO_FILE_PWD_/../../library/bin/debug
+    unix:QMAKE_RPATHDIR += $$_PRO_FILE_PWD_/../../library/bin/debug
 } else {
-    LIBS += -L$$PWD/../../library/bin/release -lanything
+    LIBS += -L$$_PRO_FILE_PWD_/../../library/bin/release -lanything
 }
 
 isEmpty(LIB_INSTALL_DIR) {

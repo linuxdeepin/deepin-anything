@@ -9,6 +9,12 @@ SOURCES += \
     main.cpp \
     server.cpp
 
+CONFIG(debug, debug|release) {
+    QMAKE_RPATHLINKDIR += $$_PRO_FILE_PWD_/../../../library/bin/debug
+} else {
+    QMAKE_RPATHLINKDIR += $$_PRO_FILE_PWD_/../../../library/bin/release
+}
+
 INCLUDEPATH += ../../../kernelmod ../../lib
 LIBS += -L$$OUT_PWD/../../lib -ldeepin-anything-server-lib
 
