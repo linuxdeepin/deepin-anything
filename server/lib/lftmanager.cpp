@@ -92,6 +92,19 @@ static fs_buf *buildFSBuf(const QString &path)
     return buf;
 }
 
+static QString getCacheDir()
+{
+    const QString cachePath = QString("/var/cache/%2/%3").arg(qApp->organizationName()).arg(qApp->applicationName());
+
+    if (getuid() == 0)
+        return cachePath;
+
+    if (QFileInfo(cachePath).isWritable())
+        return cachePath;
+
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+}
+
 static QString getLFTFileByPath(const QString &path)
 {
     QString lft_file_name = LFTDiskTool::pathToSerialUri(path);
@@ -101,7 +114,7 @@ static QString getLFTFileByPath(const QString &path)
 
     lft_file_name += ".lft";
 
-    const QString &cache_path = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    const QString &cache_path = getCacheDir();
 
     if (cache_path.isEmpty())
         return QString();
@@ -244,7 +257,7 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 {
     clearFsBufMap();
 
-    const QString &cache_path = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    const QString &cache_path = getCacheDir();
     QDirIterator dir_iterator(cache_path, {"*.lft"});
     QStringList path_list;
 
@@ -276,7 +289,7 @@ QStringList LFTManager::sync(const QString &mountPoint)
 {
     QStringList path_list;
 
-    if (!QDir::home().mkpath(QStandardPaths::writableLocation(QStandardPaths::CacheLocation))) {
+    if (!QDir::home().mkpath(getCacheDir())) {
         return path_list;
     }
 

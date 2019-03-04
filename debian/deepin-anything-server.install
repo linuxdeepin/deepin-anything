@@ -4,3 +4,4 @@ usr/bin/deepin-anything-monitor
 usr/bin/deepin-anything-tool
 usr/share/dbus-1/interfaces
 usr/share/dbus-1/services
+etc/dbus-1/system.d

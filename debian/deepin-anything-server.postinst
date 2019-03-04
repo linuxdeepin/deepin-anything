@@ -7,13 +7,16 @@ if [ "$action" = configure ]; then
     #create user if not exists
     user=deepin-anything-server
     id $user >& /dev/null
-    if [ $? = 0 ]
+    if [ $? -ne 0 ]
     then
-        exit 0
+        set -e
+        useradd -M -r -s /sbin/nologin $user || (echo "Failed on add user deepin-anything-server" && false)
     fi
 
-    set -e
-    useradd -M -r -s /sbin/nologin $user || (echo "Failed on add user deepin-anything-server" && false)
+    if [ ! -d "/var/cache/deepin/deepin-anything" ]; then
+        mkdir /var/cache/deepin/deepin-anything
+        chown deepin-anything-server:deepin-anything-server /var/cache/deepin/deepin-anything
+    fi
 fi
 
 #DEBHELPER#

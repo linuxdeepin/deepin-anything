@@ -44,21 +44,21 @@ int main(int argc, char *argv[])
     parser.process(app);
 
     if (parser.isSet(option_dbus)) {
-        if (!QDBusConnection::sessionBus().isConnected()) {
+        if (!QDBusConnection::systemBus().isConnected()) {
             qWarning("Cannot connect to the D-Bus session bus.\n"
                      "Please check your system settings and try again.\n");
             return 1;
         }
 
         // add our D-Bus interface and connect to D-Bus
-        if (!QDBusConnection::sessionBus().registerService("com.deepin.anything")) {
+        if (!QDBusConnection::systemBus().registerService("com.deepin.anything")) {
             qWarning("Cannot register the \"com.deepin.anything\" service.\n");
             return 2;
         }
 
         Q_UNUSED(new AnythingAdaptor(LFTManager::instance()));
 
-        if (!QDBusConnection::sessionBus().registerObject("/com/deepin/anything", LFTManager::instance())) {
+        if (!QDBusConnection::systemBus().registerObject("/com/deepin/anything", LFTManager::instance())) {
             qWarning("Cannot register to the D-Bus object: \"/com/deepin/anything\"\n");
             return 3;
         }

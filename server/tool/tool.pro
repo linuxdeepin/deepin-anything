@@ -36,6 +36,9 @@ dbus_xmls.files = $$dbus.files
 dbus_service.path = /usr/share/dbus-1/services
 dbus_service.files = $$PWD/com.deepin.anything.service
 
+dbus_config.path = /etc/dbus-1/system.d
+dbus_config.files = $$PWD/com.deepin.anything.conf
+
 target.path = $$PREFIX/bin
 
-INSTALLS += target dbus_xmls dbus_service
+INSTALLS += target dbus_xmls dbus_service dbus_config
