@@ -6,6 +6,10 @@
         <arg type='s' name='path' direction='in'/>
         <arg type='b' name='success' direction='out'/>
     </method>
+    <method name='rebuildPath'>
+        <arg type='s' name='path' direction='in'/>
+        <arg type='b' name='success' direction='out'/>
+    </method>
     <method name='hasLFT'>
         <arg type='s' name='path' direction='in'/>
         <arg type='b' name='success' direction='out'/>
@@ -41,6 +45,8 @@
     <method name='renameFileOfLFTBuf'>
         <arg type='ay' name='fromFilePath' direction='in'/>
         <arg type='ay' name='toFilePath' direction='in'/>
+    </method>
+    <method name='quit'>
     </method>
     <signal name="addPathFinished">
       <arg type="s" name="path"/>

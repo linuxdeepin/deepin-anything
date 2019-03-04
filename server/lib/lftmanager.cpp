@@ -33,9 +33,9 @@ extern "C" {
 #include <QFutureWatcher>
 #include <QStandardPaths>
 #include <QRegularExpression>
+#include <QTimer>
 
 #include <unistd.h>
-#include <pwd.h>
 
 class _LFTManager : public LFTManager {};
 Q_GLOBAL_STATIC(_LFTManager, _global_lftmanager)
@@ -186,6 +186,25 @@ bool LFTManager::addPath(QString path)
     return true;
 }
 
+static bool markLFTFileToDirty(fs_buf *buf)
+{
+    const char *root = get_root_path(buf);
+
+    const QString &lft_file = getLFTFileByPath(QString::fromLocal8Bit(root));
+
+    return QFile::remove(lft_file);
+}
+
+bool LFTManager::rebuildPath(const QString &path)
+{
+    if (fs_buf *buf = _global_fsBufMap->take(path)) {
+        markLFTFileToDirty(buf);
+        free_fs_buf(buf);
+    }
+
+    return addPath(path);
+}
+
 // 返回path对应的fs_buf对象，且将path转成为相对于fs_buf root_path的路径
 static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path)
 {
@@ -277,7 +296,7 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
     while (dir_iterator.hasNext()) {
         const QString &lft_file = dir_iterator.next();
 
-        // 根据设备过滤
+        // 根据地址过滤，只加载此挂载路径或其子路径对应的索引文件
         if (!serialUriFilter.isEmpty() && !dir_iterator.fileName().startsWith(serialUriFilter))
             continue;
 
@@ -292,6 +311,10 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
             path.chop(4);// 去除 .lft 后缀
             path_list << path;
             (*_global_fsBufMap)[path] = buf;
+        }
+
+        if (pathList.isEmpty()) {
+            free_fs_buf(buf);
         }
     }
 
@@ -336,7 +359,9 @@ QStringList LFTManager::sync(const QString &mountPoint)
 
         if (save_fs_buf(buf, lft_file.toLocal8Bit().constData()) == 0) {
             saved_buf_list.append(buf);
-            path_list << lft_file;
+            path_list << buf_begin.key();
+        } else {
+            path_list << QString("Failed: \"%1\"->\"%2\"").arg(buf_begin.key()).arg(lft_file);
         }
     }
 
@@ -372,7 +397,7 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
     // fs_buf中的root_path以/结尾，所以此处多移除一个字符
     new_path = QString::fromLocal8Bit(get_root_path(buf)) + new_path;
 
-    if (new_path.endsWith('/'))
+    if (new_path.endsWith('/') && new_path != "/")
         new_path.chop(1);
 
     uint32_t path_offset, start_offset, end_offset;
@@ -424,15 +449,6 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
     } while (count == MAX_RESULT_COUNT);
 
     return list;
-}
-
-static bool markLFTFileToDirty(fs_buf *buf)
-{
-    const char *root = get_root_path(buf);
-
-    const QString &lft_file = getLFTFileByPath(QString::fromLocal8Bit(root));
-
-    return QFile::remove(lft_file);
 }
 
 void LFTManager::insertFileToLFTBuf(const QByteArray &file)
@@ -531,6 +547,11 @@ void LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray 
     }
 }
 
+void LFTManager::quit()
+{
+    qApp->quit();
+}
+
 static void cleanLFTManager()
 {
     LFTManager::instance()->sync();
@@ -547,6 +568,19 @@ LFTManager::LFTManager(QObject *parent)
             this, &LFTManager::onMountAdded);
     connect(LFTDiskTool::diskManager(), &DFMDiskManager::mountRemoved,
             this, &LFTManager::onMountRemoved);
+
+    QTimer *sync_timer = new QTimer(this);
+
+    connect(sync_timer, &QTimer::timeout, this, &LFTManager::_syncAll);
+
+    // 每30分钟将fs_buf回写到硬盘一次
+    sync_timer->setInterval(30 * 60 * 1000);
+    sync_timer->start();
+}
+
+void LFTManager::_syncAll()
+{
+    sync();
 }
 
 void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint)
@@ -556,23 +590,8 @@ void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &
     const QString &mount_root = QString::fromLocal8Bit(mountPoint);
     const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(mount_root);
 
-    const QStringList &list = refresh(serial_uri.toPercentEncoding(":", "/"));
-
-    if (list.contains(mount_root))
-        return;
-
-    auto pw = getpwuid(geteuid());
-
-    if (!pw)
-        return;
-
-    if (!mount_root.startsWith(QString("/media/%1/").arg(pw->pw_name))) {
-        return;
-
-    }
-
-    // 自动为挂载到 /media/$USER 目录下的目录生成索引
-    addPath(mountPoint);
+    // 尝试加载此挂载点下的lft文件
+    refresh(serial_uri.toPercentEncoding(":", "/"));
 }
 
 void LFTManager::onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint)

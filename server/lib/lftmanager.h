@@ -34,6 +34,7 @@ public:
     static LFTManager *instance();
 
     bool addPath(QString path);
+    bool rebuildPath(const QString &path);
     bool hasLFT(const QString &path) const;
     bool lftBuinding(const QString &path) const;
 
@@ -49,6 +50,8 @@ public:
     void removeFileFromLFTBuf(const QByteArray &file);
     void renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFIle);
 
+    void quit();
+
 Q_SIGNALS:
     void addPathFinished(const QString &path, bool success);
 
@@ -56,6 +59,7 @@ protected:
     explicit LFTManager(QObject *parent = nullptr);
 
 private:
+    void _syncAll();
     void onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint);
     void onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint);
 };
