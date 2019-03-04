@@ -33,7 +33,7 @@ DBUS_ADAPTORS += dbus
 dbus_xmls.path = /usr/share/dbus-1/interfaces
 dbus_xmls.files = $$dbus.files
 
-dbus_service.path = /usr/share/dbus-1/services
+dbus_service.path = /usr/share/dbus-1/system-services
 dbus_service.files = $$PWD/com.deepin.anything.service
 
 dbus_config.path = /etc/dbus-1/system.d
