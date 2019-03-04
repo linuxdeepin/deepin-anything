@@ -14,7 +14,7 @@ if [ "$action" = configure ]; then
     fi
 
     if [ ! -d "/var/cache/deepin/deepin-anything" ]; then
-        mkdir /var/cache/deepin/deepin-anything
+        mkdir -p /var/cache/deepin/deepin-anything
         chown deepin-anything-server:deepin-anything-server /var/cache/deepin/deepin-anything
     fi
 fi
