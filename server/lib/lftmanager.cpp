@@ -435,14 +435,14 @@ static bool markLFTFileToDirty(fs_buf *buf)
     return QFile::remove(lft_file);
 }
 
-void LFTManager::insertFileToLFTBuf(const QString &file)
+void LFTManager::insertFileToLFTBuf(const QByteArray &file)
 {
-    auto list = getFsBufByPath(file);
+    auto list = getFsBufByPath(QString::fromLocal8Bit(file));
 
     if (list.isEmpty())
         return;
 
-    QFileInfo info(file);
+    QFileInfo info(QString::fromLocal8Bit(file));
     bool is_dir = info.isDir();
 
     for (auto i : list) {
@@ -461,16 +461,16 @@ void LFTManager::insertFileToLFTBuf(const QString &file)
         }
 
         fs_change change;
-        insert_path(buf, file.toLocal8Bit().constData(), is_dir, &change);
+        insert_path(buf, file.constData(), is_dir, &change);
 
         // buf内容已改动，删除对应的lft文件
         markLFTFileToDirty(buf);
     }
 }
 
-void LFTManager::removeFileFromLFTBuf(const QString &file)
+void LFTManager::removeFileFromLFTBuf(const QByteArray &file)
 {
-    auto list = getFsBufByPath(file);
+    auto list = getFsBufByPath(QString::fromLocal8Bit(file));
 
     if (list.isEmpty())
         return;
@@ -492,17 +492,17 @@ void LFTManager::removeFileFromLFTBuf(const QString &file)
 
         fs_change change;
         uint32_t count;
-        remove_path(buf, file.toLocal8Bit().constData(), &change, &count);
+        remove_path(buf, file.constData(), &change, &count);
 
         // buf内容已改动，删除对应的lft文件
         markLFTFileToDirty(buf);
     }
 }
 
-void LFTManager::renameFileOfLFTBuf(const QString &oldFile, const QString &newFile)
+void LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFile)
 {
     // 此处期望oldFile是fs_buf的子文件（未处理同一设备不同挂载点的问题）
-    auto list = getFsBufByPath(oldFile);
+    auto list = getFsBufByPath(QString::fromLocal8Bit(oldFile));
 
     if (list.isEmpty())
         return;
@@ -524,7 +524,7 @@ void LFTManager::renameFileOfLFTBuf(const QString &oldFile, const QString &newFi
 
         fs_change change;
         uint32_t change_count;
-        rename_path(buf, oldFile.toLocal8Bit().constData(), newFile.toLocal8Bit().constData(), &change, &change_count);
+        rename_path(buf, oldFile.constData(), newFile.constData(), &change, &change_count);
 
         // buf内容已改动，删除对应的lft文件
         markLFTFileToDirty(buf);

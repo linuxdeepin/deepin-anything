@@ -33,14 +33,14 @@
         <arg type='as' name='results' direction='out'/>
     </method>
     <method name='insertFileToLFTBuf'>
-        <arg type='s' name='filePath' direction='in'/>
+        <arg type='ay' name='filePath' direction='in'/>
     </method>
     <method name='removeFileFromLFTBuf'>
-        <arg type='s' name='filePath' direction='in'/>
+        <arg type='ay' name='filePath' direction='in'/>
     </method>
     <method name='renameFileOfLFTBuf'>
-        <arg type='s' name='fromFilePath' direction='in'/>
-        <arg type='s' name='toFilePath' direction='in'/>
+        <arg type='ay' name='fromFilePath' direction='in'/>
+        <arg type='ay' name='toFilePath' direction='in'/>
     </method>
     <signal name="addPathFinished">
       <arg type="s" name="path"/>

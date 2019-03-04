@@ -45,9 +45,9 @@ public:
 
     QStringList search(const QString &path, const QString keyword, bool useRegExp = false) const;
 
-    void insertFileToLFTBuf(const QString &file);
-    void removeFileFromLFTBuf(const QString &file);
-    void renameFileOfLFTBuf(const QString &oldFile, const QString &newFIle);
+    void insertFileToLFTBuf(const QByteArray &file);
+    void removeFileFromLFTBuf(const QByteArray &file);
+    void renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFIle);
 
 Q_SIGNALS:
     void addPathFinished(const QString &path, bool success);

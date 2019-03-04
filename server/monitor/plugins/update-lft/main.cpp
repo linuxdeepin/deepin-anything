@@ -24,35 +24,53 @@
 
 #include <QDebug>
 #include <QCoreApplication>
+#include <QDBusInterface>
+#include <QDBusConnection>
 
 DAS_BEGIN_NAMESPACE
 
 class UpdateLFTInterface : public DASInterface
 {
 public:
+    UpdateLFTInterface(QObject *parent = nullptr)
+        : DASInterface(parent)
+        , interface("com.deepin.anything", "/com/deepin/anything",
+                    "com.deepin.anything", QDBusConnection::systemBus())
+    {
+        // 如果更新的目标正在构建索引，将导致dbus调用阻塞，因此需要更长的超时时间
+        // 此处设置为1个小时
+        interface.setTimeout(60000 * 60);
+    }
+
     void onFileCreate(const QByteArrayList &files) override
     {
-       for (const QByteArray &f : files)
-           qDebug() << __FUNCTION__ << thread() << qApp->thread() << QString::fromLocal8Bit(f);
+        for (const QByteArray &f : files) {
+            interface.call(QDBus::Block, "insertFileToLFTBuf", f);
+        }
     }
 
     void onFileDelete(const QByteArrayList &files) override
     {
-        for (const QByteArray &f : files)
-            qDebug() << __FUNCTION__ << thread() << qApp->thread() << QString::fromLocal8Bit(f);
+        for (const QByteArray &f : files) {
+            interface.call(QDBus::Block, "removeFileFromLFTBuf", f);
+        }
     }
 
     void onFileRename(const QList<QPair<QByteArray, QByteArray>> &files) override
     {
-        for (const QPair<QByteArray, QByteArray> &f : files)
-            qDebug() << __FUNCTION__ << thread() << qApp->thread() << QString::fromLocal8Bit(f.first) << QString::fromLocal8Bit(f.second);
+        for (const QPair<QByteArray, QByteArray> &f : files) {
+            interface.call(QDBus::Block, "renameFileOfLFTBuf", f.first, f.second);
+        }
     }
+
+private:
+    QDBusInterface interface;
 };
 
 class UpdateLFTPlugin : public DASPlugin
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID DASFactoryInterface_iid FILE "test.json")
+    Q_PLUGIN_METADATA(IID DASFactoryInterface_iid FILE "update-lft.json")
 public:
     DASInterface *create(const QString &key) override
     {
