@@ -10,6 +10,10 @@
         <arg type='s' name='path' direction='in'/>
         <arg type='b' name='success' direction='out'/>
     </method>
+    <method name='hasLFTSubdirectories'>
+        <arg type='s' name='path' direction='in'/>
+        <arg type='as' name='directories' direction='out'/>
+    </method>
     <method name='lftBuinding'>
         <arg type='s' name='path' direction='in'/>
         <arg type='b' name='success' direction='out'/>

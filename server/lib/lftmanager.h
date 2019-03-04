@@ -37,6 +37,7 @@ public:
     bool lftBuinding(QString path) const;
 
     QStringList allPath() const;
+    QStringList hasLFTSubdirectories(QString path) const;
 
     QStringList refresh(const QByteArray &serialUriFilter = QByteArray());
     QStringList sync(const QString &mountPoint = QString());

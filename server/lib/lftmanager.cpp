@@ -224,6 +224,21 @@ QStringList LFTManager::allPath() const
     return _global_fsBufMap->keys();
 }
 
+QStringList LFTManager::hasLFTSubdirectories(QString path) const
+{
+    if (!path.endsWith("/"))
+        path.append('/');
+
+    QStringList list;
+
+    for (auto i = _global_fsBufMap->constBegin(); i != _global_fsBufMap->constEnd(); ++i) {
+        if ((i.key() + "/").startsWith(path))
+            list << i.key();
+    }
+
+    return list;
+}
+
 // 重新从磁盘加载lft文件
 QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 {
