@@ -22,8 +22,9 @@
 #define LFTMANAGER_H
 
 #include <QObject>
+#include <QDBusContext>
 
-class LFTManager : public QObject
+class LFTManager : public QObject, protected QDBusContext
 {
     Q_OBJECT
 
@@ -33,8 +34,8 @@ public:
     static LFTManager *instance();
 
     bool addPath(QString path);
-    bool hasLFT(QString path) const;
-    bool lftBuinding(QString path) const;
+    bool hasLFT(const QString &path) const;
+    bool lftBuinding(const QString &path) const;
 
     QStringList allPath() const;
     QStringList hasLFTSubdirectories(QString path) const;
@@ -44,9 +45,9 @@ public:
 
     QStringList search(const QString &path, const QString keyword, bool useRegExp = false) const;
 
-    void insertFileToLFTBuf(QString file);
-    void removeFileFromLFTBuf(QString file);
-    void renameFileOfLFTBuf(QString oldFile, const QString &newFIle);
+    void insertFileToLFTBuf(const QString &file);
+    void removeFileFromLFTBuf(const QString &file);
+    void renameFileOfLFTBuf(const QString &oldFile, const QString &newFIle);
 
 Q_SIGNALS:
     void addPathFinished(const QString &path, bool success);
