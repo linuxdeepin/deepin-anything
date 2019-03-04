@@ -5,3 +5,4 @@ usr/bin/deepin-anything-tool
 usr/share/dbus-1/interfaces
 usr/share/dbus-1/system-services
 etc/dbus-1/system.d
+lib/systemd/system
