@@ -110,6 +110,8 @@ static fs_buf *buildFSBuf(const QString &path)
     if (build_fstree(buf, false, nullptr, nullptr) != 0) {
         free_fs_buf(buf);
 
+        qWarning() << "Failed on build fs buffer of path: " << path;
+
         return nullptr;
     }
 
@@ -272,7 +274,7 @@ bool LFTManager::lftBuinding(const QString &path) const
     // 对应fs_buf存在且为nullptr认为正在构建
     auto list = getFsBufByPath(path);
 
-    return !list.isEmpty() && list.first().second;
+    return !list.isEmpty() && !list.first().second;
 }
 
 QStringList LFTManager::allPath() const
