@@ -140,13 +140,18 @@ bool LFTManager::addPath(QString path)
     }
 
     if (_global_fsBufMap->contains(path)) {
+        sendErrorReply(QDBusError::InternalError, "Index data already exists for this path");
+
         return false;
     }
 
     const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(path);
 
-    if (serial_uri.isEmpty())
+    if (serial_uri.isEmpty()) {
+        sendErrorReply(QDBusError::InvalidArgs, "Unable to convert to serial uri");
+
         return false;
+    }
 
     QFutureWatcher<fs_buf*> *watcher = new QFutureWatcher<fs_buf*>(this);
     // 此路径对应的设备可能被挂载到多个位置
@@ -189,20 +194,23 @@ bool LFTManager::addPath(QString path)
 static bool markLFTFileToDirty(fs_buf *buf)
 {
     const char *root = get_root_path(buf);
-
     const QString &lft_file = getLFTFileByPath(QString::fromLocal8Bit(root));
 
     return QFile::remove(lft_file);
 }
 
-bool LFTManager::rebuildPath(const QString &path)
+bool LFTManager::removePath(const QString &path)
 {
     if (fs_buf *buf = _global_fsBufMap->take(path)) {
         markLFTFileToDirty(buf);
         free_fs_buf(buf);
+
+        return true;
     }
 
-    return addPath(path);
+    sendErrorReply(QDBusError::InvalidArgs, "Not found the index data");
+
+    return false;
 }
 
 // 返回path对应的fs_buf对象，且将path转成为相对于fs_buf root_path的路径
@@ -222,26 +230,26 @@ static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path)
     QString result_path = path;
     QList<QPair<QString, fs_buf*>> buf_list;
 
-    do {
+    Q_FOREVER {
         fs_buf *buf = _global_fsBufMap->value(result_path, (fs_buf*)0x01);
 
         if (buf != (fs_buf*)0x01) {
             buf_list << qMakePair(result_path, buf);
         }
 
-        if (result_path == "/")
-            return buf_list;
+        if (result_path == "/" || result_path == storage_info.rootPath())
+            break;
 
         int last_dir_split_pos = result_path.lastIndexOf('/');
 
         if (last_dir_split_pos < 0)
-            return buf_list;
+            break;
 
         result_path = result_path.left(last_dir_split_pos);
 
         if (result_path.isEmpty())
             result_path = "/";
-    } while (result_path != storage_info.rootPath());
+    };
 
     return buf_list;
 }
@@ -382,23 +390,23 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
 {
     auto buf_list = getFsBufByPath(path);
 
-    if (buf_list.isEmpty())
+    if (buf_list.isEmpty()) {
+        sendErrorReply(QDBusError::InvalidArgs, "Not found the index data");
+
         return QStringList();
+    }
 
     fs_buf *buf = buf_list.first().second;
 
-    if (!buf)
+    if (!buf) {
+        sendErrorReply(QDBusError::InternalError, "Index is being generated");
+
         return QStringList();
+    }
 
     QString new_path = path.mid(buf_list.first().first.size());
-
-    if (!new_path.isEmpty())
-        new_path.chop(1);
-    // fs_buf中的root_path以/结尾，所以此处多移除一个字符
-    new_path = QString::fromLocal8Bit(get_root_path(buf)) + new_path;
-
-    if (new_path.endsWith('/') && new_path != "/")
-        new_path.chop(1);
+    // fs_buf中的root_path以/结尾，所以此处直接拼接
+    new_path.prepend(QString::fromLocal8Bit(get_root_path(buf)));
 
     uint32_t path_offset, start_offset, end_offset;
     get_path_range(buf, new_path.toLocal8Bit().constData(), &path_offset, &start_offset, &end_offset);
@@ -413,8 +421,11 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
     int (*compare)(const char *, void *) = nullptr;
 
     if (useRegExp) {
-        if (!re.isValid())
+        if (!re.isValid()) {
+            sendErrorReply(QDBusError::InvalidArgs, "Invalid regular expression: " + re.errorString());
+
             return QStringList();
+        }
 
         compare_param = &re;
         compare = compareStringRegExp;

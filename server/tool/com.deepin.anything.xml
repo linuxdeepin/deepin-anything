@@ -6,7 +6,7 @@
         <arg type='s' name='path' direction='in'/>
         <arg type='b' name='success' direction='out'/>
     </method>
-    <method name='rebuildPath'>
+    <method name='removePath'>
         <arg type='s' name='path' direction='in'/>
         <arg type='b' name='success' direction='out'/>
     </method>

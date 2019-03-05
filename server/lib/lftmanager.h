@@ -34,7 +34,7 @@ public:
     static LFTManager *instance();
 
     bool addPath(QString path);
-    bool rebuildPath(const QString &path);
+    bool removePath(const QString &path);
     bool hasLFT(const QString &path) const;
     bool lftBuinding(const QString &path) const;
 
