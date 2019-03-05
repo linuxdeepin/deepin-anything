@@ -3,7 +3,7 @@ TARGET = deepin-anything-server-lib
 QT += dbus concurrent
 QT -= gui
 CONFIG += link_pkgconfig
-PKGCONFIG += udisks2-qt5
+PKGCONFIG += udisks2-qt5 mount
 
 include(../common.pri)
 

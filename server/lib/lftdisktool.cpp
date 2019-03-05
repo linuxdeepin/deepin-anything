@@ -27,6 +27,10 @@
 #include <QScopedPointer>
 #include <QDebug>
 
+extern "C" {
+#include <libmount.h>
+}
+
 namespace LFTDiskTool {
 Q_GLOBAL_STATIC(DFMDiskManager, _global_diskManager)
 
@@ -63,30 +67,40 @@ QByteArray pathToSerialUri(const QString &path)
 
     const QString &absolute_path = dir.absolutePath();
     const QString &root_path = storage_info.rootPath();
+    const auto mount_info_map = getMountPointsInfos({root_path.toLocal8Bit()});
+    QByteArray mount_root_path;
+
+    if (!mount_info_map.isEmpty()) {
+        mount_root_path = mount_info_map.first().sourcePath;
+    }
+
+    if (mount_root_path.isEmpty())
+        mount_root_path = "/";
+
     int right_length = absolute_path.length() - root_path.length();
 
     const QByteArray &uri = QByteArrayLiteral("serial:") + block_id.toLocal8Bit()
-                            + "/" + absolute_path.right(right_length).toLocal8Bit();
+                            + mount_root_path + absolute_path.right(right_length).toLocal8Bit();
 
     return uri;
 }
 
-QStringList fromSerialUri(const QByteArray &uri)
+QByteArrayList fromSerialUri(const QByteArray &uri)
 {
     if (!uri.startsWith("serial:"))
-        return QStringList();
+        return QByteArrayList();
 
     int path_start_pos = uri.indexOf('/', 7);
 
     if (path_start_pos < 0)
-        return QStringList();
+        return QByteArrayList();
 
     const QString block_id = QString::fromLocal8Bit(uri.mid(7, path_start_pos - 7));
 
     if (block_id.isEmpty())
-        return QStringList();
+        return QByteArrayList();
 
-    QString path = QString::fromLocal8Bit(uri.mid(path_start_pos));
+    const QByteArray path = uri.mid(path_start_pos);
 
     for (const QString &block : _global_diskManager->blockDevices()) {
         QScopedPointer<DFMBlockDevice> block_obj(_global_diskManager->createBlockPartition(block));
@@ -94,19 +108,32 @@ QStringList fromSerialUri(const QByteArray &uri)
 
         if (_block_id == block_id) {
             const QByteArrayList &mount_points = block_obj->mountPoints();
-            QStringList pathList;
+            const auto mount_point_infos = getMountPointsInfos(mount_points);
+            QByteArrayList pathList;
 
-            path = path.mid(1);
+            for (QByteArray mount_point : mount_points) {
+                const MountPointInfo info = mount_point_infos.value(mount_point);
+                QByteArray new_path = path;
 
-            for (const QByteArray &mount_point : mount_points) {
-                pathList << QString::fromLocal8Bit(mount_point) + path;
+                // 因为挂载点是以 '\0' 结尾的, 所以此处必须要把结尾的一个字符排除;
+                mount_point.chop(1);
+
+                if (!info.sourcePath.isEmpty()) {
+                    if (!path.startsWith(info.sourcePath))
+                        continue;
+
+                    new_path = path.mid(info.sourcePath.size());
+                }
+
+                // 因为挂载点是以 '\0' 结尾的, 所以此处必须要分开转成QString;
+                pathList << mount_point.append(new_path);
             }
 
             return pathList;
         }
     }
 
-    return QStringList();
+    return QByteArrayList();
 }
 
 DFMDiskManager *diskManager()
@@ -114,4 +141,78 @@ DFMDiskManager *diskManager()
     return _global_diskManager;
 }
 
+/* error callback */
+static int parser_errcb(libmnt_table *tb, const char *filename, int line)
+{
+    Q_UNUSED(tb)
+
+    qWarning("%s: parse error at line %d -- ignored", filename, line);
+
+    return 1;
+}
+
+struct SPMntTableDeleter
+{
+    static inline void cleanup(libmnt_table *pointer)
+    {
+        mnt_free_table(pointer);
+    }
+};
+
+struct SPMntIterDeleter
+{
+    static inline void cleanup(libmnt_table *pointer)
+    {
+        mnt_free_table(pointer);
+    }
+};
+
+QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mountPointList)
+{
+    QMap<QByteArray, MountPointInfo> map;
+
+    mnt_init_debug(0);
+
+    QScopedPointer<libmnt_table, SPMntTableDeleter> tb(mnt_new_table());
+
+    if (!tb) {
+        return map;
+    }
+
+    mnt_table_set_parser_errcb(tb.data(), parser_errcb);
+
+    int rc = mnt_table_parse_mtab(tb.data(), "/proc/self/mountinfo");
+
+    if (rc) {
+        qWarning("can't read /proc/self/mountinfo");
+
+        return map;
+    }
+
+    for (const QByteArray &mount_point : mountPointList) {
+        libmnt_fs *fs = mnt_table_find_mountpoint(tb.data(), mount_point.constData(), MNT_ITER_BACKWARD);
+
+        if (fs) {
+            MountPointInfo info;
+
+            info.sourceDevice = QByteArray(mnt_fs_get_source(fs));
+            info.sourcePath = QByteArray(mnt_fs_get_root(fs));
+
+            map[mount_point] = info;
+        } else {
+            qWarning("can't find mountpoint \"%s\"", mount_point.constData());
+        }
+    }
+
+    return map;
+}
+
+}
+
+
+QDebug &operator <<(QDebug &deg, const LFTDiskTool::MountPointInfo &info)
+{
+    deg << "device:" << info.sourceDevice << ", path:" << info.sourcePath;
+
+    return deg;
 }

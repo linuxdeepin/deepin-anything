@@ -118,7 +118,7 @@ static fs_buf *buildFSBuf(const QString &path)
 
 static QString getLFTFileByPath(const QString &path)
 {
-    QString lft_file_name = LFTDiskTool::pathToSerialUri(path);
+    QByteArray lft_file_name = LFTDiskTool::pathToSerialUri(path);
 
     if (lft_file_name.isEmpty())
         return QString();
@@ -130,7 +130,7 @@ static QString getLFTFileByPath(const QString &path)
     if (cache_path.isEmpty())
         return QString();
 
-    return cache_path + "/" + lft_file_name.toUtf8().toPercentEncoding(":", "/");
+    return cache_path + "/" + QString::fromLocal8Bit(lft_file_name.toPercentEncoding(":", "/"));
 }
 
 bool LFTManager::addPath(QString path)
@@ -157,13 +157,15 @@ bool LFTManager::addPath(QString path)
 
     QFutureWatcher<fs_buf*> *watcher = new QFutureWatcher<fs_buf*>(this);
     // 此路径对应的设备可能被挂载到多个位置
-    const QStringList &path_list = LFTDiskTool::fromSerialUri(serial_uri);
+    const QByteArrayList &path_list = LFTDiskTool::fromSerialUri(serial_uri);
 
     // 将路径改为相对于第一个挂载点的路径，vfs_monitor中所有文件的改动都是以设备第一个挂载点通知的
     path = path_list.first();
 
     // 保存信息，用于判断索引是否正在构建
-    for (const QString &path : path_list) {
+    for (const QByteArray &path_raw : path_list) {
+        const QString &path = QString::fromLocal8Bit(path_raw);
+
         (*_global_fsBufMap)[path] = nullptr;
         (*_global_fsWatcherMap)[path] = watcher;
     }
@@ -171,7 +173,9 @@ bool LFTManager::addPath(QString path)
     connect(watcher, &QFutureWatcher<fs_buf*>::finished, this, [this, path_list, watcher] {
         fs_buf *buf = watcher->result();
 
-        for (const QString &path : path_list) {
+        for (const QByteArray &path_raw : path_list) {
+            const QString &path = QString::fromLocal8Bit(path_raw);
+
             if (buf) {
                 (*_global_fsBufMap)[path] = buf;
             } else {
@@ -323,14 +327,17 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
         if (load_fs_buf(&buf, lft_file.toLocal8Bit().constData()) != 0)
             continue;
 
-        const  QStringList pathList = LFTDiskTool::fromSerialUri(QByteArray::fromPercentEncoding(dir_iterator.fileName().toLocal8Bit()));
+        const QByteArrayList pathList = LFTDiskTool::fromSerialUri(QByteArray::fromPercentEncoding(dir_iterator.fileName().toLocal8Bit()));
 
-        for (QString path : pathList) {
+        for (const QByteArray &path_raw : pathList) {
+            QString path = QString::fromLocal8Bit(path_raw);
+
             path.chop(4);// 去除 .lft 后缀
             path_list << path;
             (*_global_fsBufMap)[path] = buf;
         }
 
+        // buf未使用时应该销毁
         if (pathList.isEmpty()) {
             free_fs_buf(buf);
         }

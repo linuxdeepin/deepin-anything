@@ -22,14 +22,24 @@
 #define LFTDISKTOOL_H
 
 #include <QString>
+#include <QByteArrayList>
 
 class DFMDiskManager;
 namespace LFTDiskTool
 {
-    QByteArray pathToSerialUri(const QString &path);
-    QStringList fromSerialUri(const QByteArray &uri);
+struct MountPointInfo {
+    QByteArray sourceDevice;
+    QByteArray sourcePath;
+};
 
-    DFMDiskManager *diskManager();
+QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mountPointList);
+
+QByteArray pathToSerialUri(const QString &path);
+QByteArrayList fromSerialUri(const QByteArray &uri);
+
+DFMDiskManager *diskManager();
 }
+
+QDebug &operator <<(QDebug &deg, const LFTDiskTool::MountPointInfo &info);
 
 #endif // LFTDISKTOOL_H
