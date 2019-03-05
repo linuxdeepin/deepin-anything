@@ -28,6 +28,7 @@ extern "C" {
 
 #include <dfmdiskmanager.h>
 #include <dfmblockpartition.h>
+#include <dfmdiskdevice.h>
 
 #include <QtConcurrent>
 #include <QFutureWatcher>
@@ -37,12 +38,33 @@ extern "C" {
 
 #include <unistd.h>
 
+static QString _getCacheDir()
+{
+    const QString cachePath = QString("/var/cache/%2/deepin-anything").arg(qApp->organizationName());
+
+    if (getuid() == 0)
+        return cachePath;
+
+    if (QFileInfo(cachePath).isWritable())
+        return cachePath;
+
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+}
+
+static QString getCacheDir()
+{
+    static QString dir = _getCacheDir();
+
+    return dir;
+}
+
 class _LFTManager : public LFTManager {};
 Q_GLOBAL_STATIC(_LFTManager, _global_lftmanager)
 typedef QMap<QString, fs_buf*> FSBufMap;
 Q_GLOBAL_STATIC(FSBufMap, _global_fsBufMap)
 typedef QMap<QString, QFutureWatcher<fs_buf*>*> FSJobWatcherMap;
 Q_GLOBAL_STATIC(FSJobWatcherMap, _global_fsWatcherMap)
+Q_GLOBAL_STATIC_WITH_ARGS(QSettings, _global_settings, (getCacheDir() + "/config.ini", QSettings::IniFormat))
 
 static QSet<fs_buf*> fsBufList()
 {
@@ -92,26 +114,6 @@ static fs_buf *buildFSBuf(const QString &path)
     }
 
     return buf;
-}
-
-static QString _getCacheDir()
-{
-    const QString cachePath = QString("/var/cache/%2/deepin-anything").arg(qApp->organizationName());
-
-    if (getuid() == 0)
-        return cachePath;
-
-    if (QFileInfo(cachePath).isWritable())
-        return cachePath;
-
-    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-}
-
-static QString getCacheDir()
-{
-    static QString dir = _getCacheDir();
-
-    return dir;
 }
 
 static QString getLFTFileByPath(const QString &path)
@@ -571,6 +573,34 @@ void LFTManager::quit()
     qApp->quit();
 }
 
+bool LFTManager::autoIndexExternal() const
+{
+    return _global_settings->value("autoIndexExternal", false).toBool();
+}
+
+bool LFTManager::autoIndexInternal() const
+{
+    return _global_settings->value("autoIndexInternal", true).toBool();
+}
+
+void LFTManager::setAutoIndexExternal(bool autoIndexExternal)
+{
+    if (this->autoIndexExternal() == autoIndexExternal)
+        return;
+
+    _global_settings->setValue("autoIndexExternal", autoIndexExternal);
+    emit autoIndexExternalChanged(autoIndexExternal);
+}
+
+void LFTManager::setAutoIndexInternal(bool autoIndexInternal)
+{
+    if (this->autoIndexInternal() == autoIndexInternal)
+        return;
+
+    _global_settings->setValue("autoIndexInternal", autoIndexInternal);
+    emit autoIndexInternalChanged(autoIndexInternal);
+}
+
 static void cleanLFTManager()
 {
     LFTManager::instance()->sync();
@@ -582,6 +612,23 @@ LFTManager::LFTManager(QObject *parent)
 {
     qAddPostRoutine(cleanLFTManager);
     refresh();
+
+    // 遍历已挂载分区, 看是否需要为其建立索引数据
+    for (const QString &block : LFTDiskTool::diskManager()->blockDevices()) {
+        if (!DFMBlockDevice::hasFileSystem(block))
+            continue;
+
+        DFMBlockDevice *device = DFMDiskManager::createBlockDevice(block);
+
+        if (device->isLoopDevice())
+            continue;
+
+        if (device->mountPoints().isEmpty())
+            continue;
+
+        if (!hasLFT(QString::fromLocal8Bit(device->mountPoints().first())))
+            _addPathByPartition(device);
+    }
 
     connect(LFTDiskTool::diskManager(), &DFMDiskManager::mountAdded,
             this, &LFTManager::onMountAdded);
@@ -597,9 +644,41 @@ LFTManager::LFTManager(QObject *parent)
     sync_timer->start();
 }
 
+void LFTManager::sendErrorReply(QDBusError::ErrorType type, const QString &msg) const
+{
+    if (calledFromDBus()) {
+        QDBusContext::sendErrorReply(type, msg);
+    } else {
+        qWarning() << type << msg;
+    }
+}
+
+bool LFTManager::_autoIndexPartition() const
+{
+    return autoIndexExternal() || autoIndexInternal();
+}
+
 void LFTManager::_syncAll()
 {
     sync();
+}
+
+void LFTManager::_addPathByPartition(const DFMBlockDevice *block)
+{
+    if (DFMDiskDevice *device = LFTDiskTool::diskManager()->createDiskDevice(block->drive())) {
+        bool index = false;
+
+        if (device->removable()) {
+            index = autoIndexExternal();
+        } else {
+            index = autoIndexInternal();
+        }
+
+        if (index) // 建立索引时一切以第一个挂载点为准
+            addPath(QString::fromLocal8Bit(block->mountPoints().first()));
+
+        device->deleteLater();
+    }
 }
 
 void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint)
@@ -609,8 +688,23 @@ void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &
     const QString &mount_root = QString::fromLocal8Bit(mountPoint);
     const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(mount_root);
 
+    if (!_autoIndexPartition())
+        return;
+
     // 尝试加载此挂载点下的lft文件
-    refresh(serial_uri.toPercentEncoding(":", "/"));
+    const QStringList &list = refresh(serial_uri.toPercentEncoding(":", "/"));
+
+    if (list.contains(QString::fromLocal8Bit(mountPoint))) {
+        return;
+    }
+
+    if (DFMBlockDevice *block = LFTDiskTool::diskManager()->createBlockPartitionByMountPoint(mountPoint)) {
+        if (!block->isLoopDevice()) {
+            _addPathByPartition(block);
+        }
+
+        block->deleteLater();
+    }
 }
 
 void LFTManager::onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint)

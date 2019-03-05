@@ -24,9 +24,12 @@
 #include <QObject>
 #include <QDBusContext>
 
+class DFMBlockDevice;
 class LFTManager : public QObject, protected QDBusContext
 {
     Q_OBJECT
+    Q_PROPERTY(bool autoIndexInternal READ autoIndexInternal WRITE setAutoIndexInternal NOTIFY autoIndexInternalChanged)
+    Q_PROPERTY(bool autoIndexExternal READ autoIndexExternal WRITE setAutoIndexExternal NOTIFY autoIndexExternalChanged)
 
 public:
     ~LFTManager();
@@ -52,14 +55,28 @@ public:
 
     void quit();
 
+    bool autoIndexExternal() const;
+    bool autoIndexInternal() const;
+
+public Q_SLOTS:
+    void setAutoIndexExternal(bool autoIndexExternal);
+    void setAutoIndexInternal(bool autoIndexInternal);
+
 Q_SIGNALS:
     void addPathFinished(const QString &path, bool success);
+    void autoIndexExternalChanged(bool autoIndexExternal);
+    void autoIndexInternalChanged(bool autoIndexInternal);
 
 protected:
     explicit LFTManager(QObject *parent = nullptr);
 
+    void sendErrorReply(QDBusError::ErrorType type, const QString &msg = QString()) const;
+
 private:
+    bool _autoIndexPartition() const;
+
     void _syncAll();
+    void _addPathByPartition(const DFMBlockDevice *block);
     void onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint);
     void onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint);
 };

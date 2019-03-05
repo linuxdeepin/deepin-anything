@@ -45,26 +45,30 @@ QByteArray pathToSerialUri(const QString &path)
     if (!device.startsWith("/dev/"))
         return QByteArray();
 
+    if (device.startsWith("/dev/loop"))
+        return QByteArray();
+
     if (device == QByteArrayLiteral("/dev/fuse\0"))
         return QByteArray();
 
-    for (const QString &block : _global_diskManager->blockDevices()) {
-        QScopedPointer<DFMBlockPartition> block_obj(_global_diskManager->createBlockPartition(block));
+    QScopedPointer<DFMBlockDevice> block_obj(_global_diskManager->createBlockDeviceByDevicePath(device));
 
-        if (block_obj->device() == device) {
-            const QString block_id = block_obj->id();
-            const QString &absolute_path = dir.absolutePath();
-            const QString &root_path = storage_info.rootPath();
-            int right_length = absolute_path.length() - root_path.length();
+    if (!block_obj || block_obj->isLoopDevice())
+        return QByteArray();
 
-            const QByteArray &uri = QByteArrayLiteral("serial:") + block_id.toLocal8Bit()
-                                    + "/" + absolute_path.right(right_length).toLocal8Bit();
+    const QString block_id = block_obj->id();
 
-            return uri;
-        }
-    }
+    if (block_id.isEmpty())
+        return QByteArray();
 
-    return QByteArray();
+    const QString &absolute_path = dir.absolutePath();
+    const QString &root_path = storage_info.rootPath();
+    int right_length = absolute_path.length() - root_path.length();
+
+    const QByteArray &uri = QByteArrayLiteral("serial:") + block_id.toLocal8Bit()
+                            + "/" + absolute_path.right(right_length).toLocal8Bit();
+
+    return uri;
 }
 
 QStringList fromSerialUri(const QByteArray &uri)
@@ -85,7 +89,7 @@ QStringList fromSerialUri(const QByteArray &uri)
     QString path = QString::fromLocal8Bit(uri.mid(path_start_pos));
 
     for (const QString &block : _global_diskManager->blockDevices()) {
-        QScopedPointer<DFMBlockPartition> block_obj(_global_diskManager->createBlockPartition(block));
+        QScopedPointer<DFMBlockDevice> block_obj(_global_diskManager->createBlockPartition(block));
         const QString _block_id = block_obj->id();
 
         if (_block_id == block_id) {

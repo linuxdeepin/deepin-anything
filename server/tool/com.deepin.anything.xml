@@ -1,4 +1,6 @@
 <interface name='com.deepin.anything'>
+    <property name='autoIndexInternal' type='b' access="readwrite"/>
+    <property name='autoIndexExternal' type='b' access="readwrite"/>
     <method name='allPath'>
         <arg type='as' name='pathList' direction='out'/>
     </method>
