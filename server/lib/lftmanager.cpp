@@ -293,7 +293,7 @@ QStringList LFTManager::hasLFTSubdirectories(QString path) const
     QStringList list;
 
     for (auto i = _global_fsBufMap->constBegin(); i != _global_fsBufMap->constEnd(); ++i) {
-        if ((i.key() + "/").startsWith(path))
+        if (i.value() && (i.key() + "/").startsWith(path))
             list << i.key();
     }
 
