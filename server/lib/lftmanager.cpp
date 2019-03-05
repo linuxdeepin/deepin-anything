@@ -274,7 +274,15 @@ QStringList LFTManager::allPath() const
     if (!_global_fsBufMap.exists())
         return QStringList();
 
-    return _global_fsBufMap->keys();
+    QStringList list;
+
+    for (auto i = _global_fsBufMap->constBegin(); i != _global_fsBufMap->constEnd(); ++i) {
+        if (i.value()) { // 排除正在构建的目录
+            list << i.key();
+        }
+    }
+
+    return list;
 }
 
 QStringList LFTManager::hasLFTSubdirectories(QString path) const
