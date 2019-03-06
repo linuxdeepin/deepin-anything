@@ -740,8 +740,9 @@ __attribute__((visibility("default"))) int remove_path(fs_buf *fsbuf, const char
 // so dst_path (if a folder) MUST be empty here
 static int do_rename_path(fs_buf *fsbuf, const char *src_path, const char *dst_path, fs_change *changes, uint32_t *change_count)
 {
-	if (strstr(dst_path, src_path) == dst_path)
-		return ERR_NESTED;
+	// /a.txt rename to /a.txts
+//	if (strstr(dst_path, src_path) == dst_path)
+//		return ERR_NESTED;
 
 	uint32_t src_off = get_path_offset(fsbuf, src_path);
 	if (src_off == 0)

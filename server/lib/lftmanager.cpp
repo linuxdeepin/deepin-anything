@@ -66,6 +66,8 @@ typedef QMap<fs_buf*, QString> FSBufToFileMap;
 Q_GLOBAL_STATIC(FSBufToFileMap, _global_fsBufToFileMap)
 typedef QMap<QString, QFutureWatcher<fs_buf*>*> FSJobWatcherMap;
 Q_GLOBAL_STATIC(FSJobWatcherMap, _global_fsWatcherMap)
+typedef QSet<fs_buf*> FSBufList;
+Q_GLOBAL_STATIC(FSBufList, _global_fsBufDirtyList)
 Q_GLOBAL_STATIC_WITH_ARGS(QSettings, _global_settings, (getCacheDir() + "/config.ini", QSettings::IniFormat))
 
 static QSet<fs_buf*> fsBufList()
@@ -84,10 +86,38 @@ static void clearFsBufMap()
     _global_fsBufToFileMap->clear();
 }
 
+// 标记为脏文件, 定时清理(对象销毁时也会清理)
+static void markLFTFileToDirty(fs_buf *buf)
+{
+    _global_fsBufDirtyList->insert(buf);
+}
+
+// 删除脏文件
+static bool doLFTFileToDirty(fs_buf *buf)
+{
+    const QString &lft_file = _global_fsBufToFileMap->value(buf);
+
+    if (lft_file.isEmpty())
+        return false;
+
+    return QFile::remove(lft_file);
+}
+
+static void cleanDirtyLFTFiles()
+{
+    for (fs_buf *buf : _global_fsBufDirtyList.operator *()) {
+        doLFTFileToDirty(buf);
+    }
+
+    _global_fsBufDirtyList->clear();
+}
+
 LFTManager::~LFTManager()
 {
     sync();
     clearFsBufMap();
+    // 删除剩余脏文件(可能是sync失败)
+    cleanDirtyLFTFiles();
 }
 
 LFTManager *LFTManager::instance()
@@ -242,24 +272,16 @@ bool LFTManager::addPath(QString path, bool autoIndex)
     return true;
 }
 
-static bool markLFTFileToDirty(fs_buf *buf)
-{
-    const QString &lft_file = _global_fsBufToFileMap->value(buf);
-
-    if (lft_file.isEmpty())
-        return false;
-
-    return QFile::remove(lft_file);
-}
-
-static void removeBuf(fs_buf *buf)
+static void removeBuf(fs_buf *buf, bool removeLFTFile = true)
 {
     for (const QString &other_key : _global_fsBufMap->keys(buf)) {
         _global_fsBufMap->remove(other_key);
     }
 
-    markLFTFileToDirty(buf);
+    if (removeLFTFile)
+        doLFTFileToDirty(buf);
 
+    _global_fsBufDirtyList->remove(buf);
     _global_fsBufToFileMap->remove(buf);
     free_fs_buf(buf);
 }
@@ -401,8 +423,6 @@ QStringList LFTManager::hasLFTSubdirectories(QString path) const
 // 重新从磁盘加载lft文件
 QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 {
-    clearFsBufMap();
-
     const QString &cache_path = getCacheDir();
     QDirIterator dir_iterator(cache_path, {"*.lft"});
     QStringList path_list;
@@ -435,6 +455,12 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 
             path.chop(4);// 去除 .lft 后缀
             path_list << path;
+
+            // 清理旧的buf
+            if (fs_buf *buf = _global_fsBufMap->value(path)) {
+                removeBuf(buf, false);
+            }
+
             (*_global_fsBufMap)[path] = buf;
         }
 
@@ -487,6 +513,8 @@ QStringList LFTManager::sync(const QString &mountPoint)
         if (save_fs_buf(buf, lft_file.toLocal8Bit().constData()) == 0) {
             saved_buf_list.append(buf);
             path_list << buf_begin.key();
+            // 从脏列表中移除
+            _global_fsBufDirtyList->remove(buf);
         } else {
             path_list << QString("Failed: \"%1\"->\"%2\"").arg(buf_begin.key()).arg(lft_file);
         }
@@ -614,7 +642,7 @@ void LFTManager::insertFileToLFTBuf(const QByteArray &file)
         int r = insert_path(buf, i.first.toLocal8Bit().constData(), is_dir, &change);
 
         if (r == 0) {
-            // buf内容已改动，删除对应的lft文件
+            // buf内容已改动，标记删除对应的lft文件
             markLFTFileToDirty(buf);
         }
     }
@@ -647,7 +675,7 @@ void LFTManager::removeFileFromLFTBuf(const QByteArray &file)
         int r = remove_path(buf, i.first.toLocal8Bit().constData(), changes, &count);
 
         if (r == 0) {
-            // buf内容已改动，删除对应的lft文件
+            // buf内容已改动，标记删除对应的lft文件
             markLFTFileToDirty(buf);
         }
     }
@@ -688,7 +716,7 @@ void LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray 
         int r = rename_path(buf, old_file_new_path.constData(), new_file_new_path.constData(), changes, &change_count);
 
         if (r == 0) {
-            // buf内容已改动，删除对应的lft文件
+            // buf内容已改动，标记删除对应的lft文件
             markLFTFileToDirty(buf);
         }
     }
@@ -745,6 +773,7 @@ static void cleanLFTManager()
 {
     LFTManager::instance()->sync();
     clearFsBufMap();
+    cleanDirtyLFTFiles();
 }
 
 LFTManager::LFTManager(QObject *parent)
@@ -767,8 +796,8 @@ LFTManager::LFTManager(QObject *parent)
 
     connect(sync_timer, &QTimer::timeout, this, &LFTManager::_syncAll);
 
-    // 每30分钟将fs_buf回写到硬盘一次
-    sync_timer->setInterval(30 * 60 * 1000);
+    // 每10分钟将fs_buf回写到硬盘一次
+    sync_timer->setInterval(10 * 60 * 1000);
     sync_timer->start();
 }
 
@@ -789,6 +818,8 @@ bool LFTManager::_isAutoIndexPartition() const
 void LFTManager::_syncAll()
 {
     sync();
+    // 清理sync失败的脏文件
+    cleanDirtyLFTFiles();
 }
 
 void LFTManager::_indexAll()
