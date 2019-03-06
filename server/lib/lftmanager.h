@@ -81,6 +81,8 @@ private:
     void _addPathByPartition(const DFMBlockDevice *block);
     void onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint);
     void onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint);
+    void onFSAdded(const QString &blockDevicePath);
+    void onFSRemoved(const QString &blockDevicePath);
 };
 
 #endif // LFTMANAGER_H

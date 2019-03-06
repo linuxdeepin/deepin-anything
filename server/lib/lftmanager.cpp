@@ -424,7 +424,7 @@ QStringList LFTManager::hasLFTSubdirectories(QString path) const
 QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 {
     const QString &cache_path = getCacheDir();
-    QDirIterator dir_iterator(cache_path, {"*.lft"});
+    QDirIterator dir_iterator(cache_path, {"*.lft", "*.LFT"});
     QStringList path_list;
 
     while (dir_iterator.hasNext()) {
@@ -769,16 +769,57 @@ void LFTManager::setAutoIndexInternal(bool autoIndexInternal)
     emit autoIndexInternalChanged(autoIndexInternal);
 }
 
+inline static QString getAppRungingFile()
+{
+    return getCacheDir() + "/app.runing";
+}
+
 static void cleanLFTManager()
 {
     LFTManager::instance()->sync();
     clearFsBufMap();
     cleanDirtyLFTFiles();
+
+    QFile::remove(getAppRungingFile());
+}
+
+static QStringList removeLFTFiles(const QByteArray &serialUriFilter = QByteArray())
+{
+    const QString &cache_path = getCacheDir();
+    //只处理自动生成的索引文件
+    QDirIterator dir_iterator(cache_path, {"*.LFT"});
+    QStringList path_list;
+
+    while (dir_iterator.hasNext()) {
+        const QString &lft_file = dir_iterator.next();
+
+        // 根据地址过滤，只加载此挂载路径或其子路径对应的索引文件
+        if (!serialUriFilter.isEmpty() && !dir_iterator.fileName().startsWith(serialUriFilter))
+            continue;
+
+        if (QFile::remove(lft_file))
+            path_list << lft_file;
+    }
+
+    return path_list;
 }
 
 LFTManager::LFTManager(QObject *parent)
     : QObject(parent)
 {
+    { // 创建一个普通文件, 在程序正常退出时删除, 用于识别进程未正常退出
+        QFile file(getAppRungingFile());
+
+        if (file.exists()) {
+            // 说明进程上次未正常退出, 无法保证这些lft文件是正常的, 此处需要清理它们
+            removeLFTFiles();
+        }
+
+        if (file.open(QIODevice::WriteOnly)) {
+            file.close();
+        }
+    }
+
     qAddPostRoutine(cleanLFTManager);
     refresh();
     // 可能会加载到一些自动生成的未被允许的索引文件, 此处应该清理一遍
@@ -791,6 +832,10 @@ LFTManager::LFTManager(QObject *parent)
             this, &LFTManager::onMountAdded);
     connect(LFTDiskTool::diskManager(), &DFMDiskManager::mountRemoved,
             this, &LFTManager::onMountRemoved);
+    connect(LFTDiskTool::diskManager(), &DFMDiskManager::fileSystemAdded,
+            this, &LFTManager::onFSAdded);
+    connect(LFTDiskTool::diskManager(), &DFMDiskManager::fileSystemRemoved,
+            this, &LFTManager::onFSRemoved);
 
     QTimer *sync_timer = new QTimer(this);
 
@@ -906,4 +951,25 @@ void LFTManager::onMountRemoved(const QString &blockDevicePath, const QByteArray
 //    const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(mount_root);
 
     sync(mount_root);
+}
+
+// 当文件系统变动时, 删除目前的索引数据
+void LFTManager::onFSAdded(const QString &blockDevicePath)
+{
+    QScopedPointer<DFMBlockDevice> device(DFMDiskManager::createBlockDevice(blockDevicePath));
+    const QString &id = device->id();
+
+    if (!id.isEmpty()) {
+        removeLFTFiles("serial:" + id.toLocal8Bit());
+    }
+}
+
+void LFTManager::onFSRemoved(const QString &blockDevicePath)
+{
+    QScopedPointer<DFMBlockDevice> device(DFMDiskManager::createBlockDevice(blockDevicePath));
+    const QString &id = device->id();
+
+    if (!id.isEmpty()) {
+        removeLFTFiles("serial:" + id.toLocal8Bit());
+    }
 }
