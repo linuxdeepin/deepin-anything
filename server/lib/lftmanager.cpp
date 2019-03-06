@@ -62,6 +62,8 @@ class _LFTManager : public LFTManager {};
 Q_GLOBAL_STATIC(_LFTManager, _global_lftmanager)
 typedef QMap<QString, fs_buf*> FSBufMap;
 Q_GLOBAL_STATIC(FSBufMap, _global_fsBufMap)
+typedef QMap<fs_buf*, QString> FSBufToFileMap;
+Q_GLOBAL_STATIC(FSBufToFileMap, _global_fsBufToFileMap)
 typedef QMap<QString, QFutureWatcher<fs_buf*>*> FSJobWatcherMap;
 Q_GLOBAL_STATIC(FSJobWatcherMap, _global_fsWatcherMap)
 Q_GLOBAL_STATIC_WITH_ARGS(QSettings, _global_settings, (getCacheDir() + "/config.ini", QSettings::IniFormat))
@@ -172,7 +174,7 @@ bool LFTManager::addPath(QString path)
         (*_global_fsWatcherMap)[path] = watcher;
     }
 
-    connect(watcher, &QFutureWatcher<fs_buf*>::finished, this, [this, path_list, watcher] {
+    connect(watcher, &QFutureWatcher<fs_buf*>::finished, this, [this, path_list, path, watcher] {
         fs_buf *buf = watcher->result();
 
         for (const QByteArray &path_raw : path_list) {
@@ -189,6 +191,10 @@ bool LFTManager::addPath(QString path)
             Q_EMIT addPathFinished(path, buf);
         }
 
+        if (buf) {
+            _global_fsBufToFileMap->insert(buf, getLFTFileByPath(path));
+        }
+
         watcher->deleteLater();
     });
 
@@ -201,8 +207,10 @@ bool LFTManager::addPath(QString path)
 
 static bool markLFTFileToDirty(fs_buf *buf)
 {
-    const char *root = get_root_path(buf);
-    const QString &lft_file = getLFTFileByPath(QString::fromLocal8Bit(root));
+    const QString &lft_file = _global_fsBufToFileMap->value(buf);
+
+    if (lft_file.isEmpty())
+        return false;
 
     return QFile::remove(lft_file);
 }
@@ -230,11 +238,15 @@ static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path)
     if (!path.startsWith("/"))
         return QList<QPair<QString, fs_buf*>>();
 
-    QStorageInfo storage_info(path);
+    QDir path_dir(path);
 
-    if (!storage_info.isValid())
-        return QList<QPair<QString, fs_buf*>>();;
+    // 找到一个存在的路径
+    while (!path_dir.exists()) {
+        if (!path_dir.cdUp())
+            break;
+    }
 
+    QStorageInfo storage_info(path_dir);
     QString result_path = path;
     QList<QPair<QString, fs_buf*>> buf_list;
 
@@ -242,7 +254,21 @@ static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path)
         fs_buf *buf = _global_fsBufMap->value(result_path, (fs_buf*)0x01);
 
         if (buf != (fs_buf*)0x01) {
-            buf_list << qMakePair(result_path, buf);
+            // path相对于此fs_buf root_path的路径
+            QString new_path = path.mid(result_path.size());
+
+            // 移除多余的 / 字符
+            if (new_path.startsWith("/"))
+                new_path = new_path.mid(1);
+
+            // fs_buf中的root_path以/结尾，所以此处直接拼接
+            new_path.prepend(QString::fromLocal8Bit(get_root_path(buf)));
+
+            // 移除多余的 / 字符
+            if (new_path.endsWith("/"))
+                new_path.chop(1);
+
+            buf_list << qMakePair(new_path, buf);
         }
 
         if (result_path == "/" || result_path == storage_info.rootPath())
@@ -324,12 +350,21 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
         if (!serialUriFilter.isEmpty() && !dir_iterator.fileName().startsWith(serialUriFilter))
             continue;
 
+        const QByteArrayList pathList = LFTDiskTool::fromSerialUri(QByteArray::fromPercentEncoding(dir_iterator.fileName().toLocal8Bit()));
+
+        if (pathList.isEmpty()) {
+            continue;
+        }
+
         fs_buf *buf = nullptr;
 
         if (load_fs_buf(&buf, lft_file.toLocal8Bit().constData()) != 0)
             continue;
 
-        const QByteArrayList pathList = LFTDiskTool::fromSerialUri(QByteArray::fromPercentEncoding(dir_iterator.fileName().toLocal8Bit()));
+        if (!buf) {
+            qWarning() << "Failed on load:" << lft_file;
+            continue;
+        }
 
         for (const QByteArray &path_raw : pathList) {
             QString path = QString::fromLocal8Bit(path_raw);
@@ -339,10 +374,7 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
             (*_global_fsBufMap)[path] = buf;
         }
 
-        // buf未使用时应该销毁
-        if (pathList.isEmpty()) {
-            free_fs_buf(buf);
-        }
+        _global_fsBufToFileMap->insert(buf, dir_iterator.fileName());
     }
 
     return path_list;
@@ -370,9 +402,7 @@ QStringList LFTManager::sync(const QString &mountPoint)
 
         // 只同步此挂载点的数据
         if (!mountPoint.isEmpty()) {
-            QStorageInfo info(path);
-
-            if (info.rootPath() != mountPoint) {
+            if (!(path + "/").startsWith(mountPoint + '/')) {
                 continue;
             }
         }
@@ -382,7 +412,13 @@ QStringList LFTManager::sync(const QString &mountPoint)
             continue;
         }
 
-        const QString &lft_file = getLFTFileByPath(path);
+        const QString &lft_file = _global_fsBufToFileMap->value(buf);
+
+        if (lft_file.isEmpty()) {
+            qWarning() << "Can't get the LFT file path of the fs_buf:" << get_root_path(buf);
+
+            continue;
+        }
 
         if (save_fs_buf(buf, lft_file.toLocal8Bit().constData()) == 0) {
             saved_buf_list.append(buf);
@@ -402,7 +438,9 @@ static int compareString(const char *string, void *keyword)
 
 static int compareStringRegExp(const char *string, void *re)
 {
-    return static_cast<QRegularExpression*>(re)->match(QString::fromLocal8Bit(string)).hasMatch();
+    auto match = static_cast<QRegularExpression*>(re)->match(QString::fromLocal8Bit(string));
+
+    return match.hasMatch();
 }
 
 QStringList LFTManager::search(const QString &path, const QString keyword, bool useRegExp) const
@@ -423,18 +461,16 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
         return QStringList();
     }
 
-    QString new_path = path.mid(buf_list.first().first.size());
-    // fs_buf中的root_path以/结尾，所以此处直接拼接
-    new_path.prepend(QString::fromLocal8Bit(get_root_path(buf)));
-
-    uint32_t path_offset, start_offset, end_offset;
+    // new_path 为path在fs_buf中对应的路径
+    const QString &new_path = buf_list.first().first;
+    uint32_t path_offset = 0, start_offset = 0, end_offset = 0;
     get_path_range(buf, new_path.toLocal8Bit().constData(), &path_offset, &start_offset, &end_offset);
 
-    QRegularExpression re(keyword);
+    // 说明目录为空
+    if (start_offset == 0)
+        return QStringList();
 
-    re.setPatternOptions(QRegularExpression::CaseInsensitiveOption
-                         | QRegularExpression::DotMatchesEverythingOption
-                         | QRegularExpression::OptimizeOnFirstUsageOption);
+    QRegularExpression re(keyword);
 
     void *compare_param = nullptr;
     int (*compare)(const char *, void *) = nullptr;
@@ -445,6 +481,10 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
 
             return QStringList();
         }
+
+        re.setPatternOptions(QRegularExpression::CaseInsensitiveOption
+                             | QRegularExpression::DotMatchesEverythingOption
+                             | QRegularExpression::OptimizeOnFirstUsageOption);
 
         compare_param = &re;
         compare = compareStringRegExp;
@@ -461,7 +501,6 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
     QStringList list;
     char tmp_path[PATH_MAX];
     // root_path 以/结尾，所以此处需要多忽略一个字符
-    int buf_root_path_length = strlen(get_root_path(buf)) - 1;
     bool need_reset_root_path = path != new_path;
 
     do {
@@ -471,10 +510,11 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
             const char *result = get_path_by_name_off(buf, name_offsets[i], tmp_path, sizeof(tmp_path));
             const QString &origin_path = QString::fromLocal8Bit(result);
 
-            if (need_reset_root_path)
-                list << path + origin_path.mid(buf_root_path_length);
-            else
+            if (need_reset_root_path) {
+                list << path + origin_path.mid(new_path.size());
+             } else {
                 list << origin_path;
+            }
         }
     } while (count == MAX_RESULT_COUNT);
 
@@ -507,10 +547,12 @@ void LFTManager::insertFileToLFTBuf(const QByteArray &file)
         }
 
         fs_change change;
-        insert_path(buf, file.constData(), is_dir, &change);
+        int r = insert_path(buf, i.first.toLocal8Bit().constData(), is_dir, &change);
 
-        // buf内容已改动，删除对应的lft文件
-        markLFTFileToDirty(buf);
+        if (r == 0) {
+            // buf内容已改动，删除对应的lft文件
+            markLFTFileToDirty(buf);
+        }
     }
 }
 
@@ -536,30 +578,31 @@ void LFTManager::removeFileFromLFTBuf(const QByteArray &file)
                 continue;
         }
 
-        fs_change change;
-        uint32_t count;
-        remove_path(buf, file.constData(), &change, &count);
+        fs_change changes[10];
+        uint32_t count = 10;
+        int r = remove_path(buf, i.first.toLocal8Bit().constData(), changes, &count);
 
-        // buf内容已改动，删除对应的lft文件
-        markLFTFileToDirty(buf);
+        if (r == 0) {
+            // buf内容已改动，删除对应的lft文件
+            markLFTFileToDirty(buf);
+        }
     }
 }
 
 void LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFile)
 {
-    // 此处期望oldFile是fs_buf的子文件（未处理同一设备不同挂载点的问题）
-    auto list = getFsBufByPath(QString::fromLocal8Bit(oldFile));
+    auto list = getFsBufByPath(QString::fromLocal8Bit(newFile));
 
     if (list.isEmpty())
         return;
 
-    for (auto i : list) {
-        fs_buf *buf = i.second;
+    for (int i = 0; i < list.count(); ++i) {
+        fs_buf *buf = list.at(i).second;
 
         // 有可能索引正在构建
         if (!buf) {
             // 正在构建索引时需要等待
-            if (QFutureWatcher<fs_buf*> *watcher = _global_fsWatcherMap->value(i.first)) {
+            if (QFutureWatcher<fs_buf*> *watcher = _global_fsWatcherMap->value(list.at(i).first)) {
                 watcher->waitForFinished();
                 buf = watcher->result();
             }
@@ -568,12 +611,22 @@ void LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray 
                 continue;
         }
 
-        fs_change change;
-        uint32_t change_count;
-        rename_path(buf, oldFile.constData(), newFile.constData(), &change, &change_count);
+        fs_change changes[10];
+        uint32_t change_count = 10;
 
-        // buf内容已改动，删除对应的lft文件
-        markLFTFileToDirty(buf);
+        // newFile相对于此buf的路径
+        const QByteArray &new_file_new_path = list.at(i).first.toLocal8Bit();
+        int valid_suffix_size = new_file_new_path.size() - strlen(get_root_path(buf));
+        int invalid_prefix_size = newFile.size() - valid_suffix_size;
+
+        QByteArray old_file_new_path = QByteArray(get_root_path(buf)).append(oldFile.mid(invalid_prefix_size));
+
+        int r = rename_path(buf, old_file_new_path.constData(), new_file_new_path.constData(), changes, &change_count);
+
+        if (r == 0) {
+            // buf内容已改动，删除对应的lft文件
+            markLFTFileToDirty(buf);
+        }
     }
 }
 
