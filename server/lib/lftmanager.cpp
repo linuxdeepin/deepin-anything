@@ -81,6 +81,7 @@ static void clearFsBufMap()
     }
 
     _global_fsBufMap->clear();
+    _global_fsBufToFileMap->clear();
 }
 
 LFTManager::~LFTManager()
@@ -120,14 +121,15 @@ static fs_buf *buildFSBuf(const QString &path)
     return buf;
 }
 
-static QString getLFTFileByPath(const QString &path)
+static QString getLFTFileByPath(const QString &path, bool autoIndex)
 {
     QByteArray lft_file_name = LFTDiskTool::pathToSerialUri(path);
 
     if (lft_file_name.isEmpty())
         return QString();
 
-    lft_file_name += ".lft";
+    //由自动索引机制创建的文件后缀名为LFT，否则为lft
+    lft_file_name += autoIndex ? ".LFT" : ".lft";
 
     const QString &cache_path = getCacheDir();
 
@@ -137,7 +139,35 @@ static QString getLFTFileByPath(const QString &path)
     return cache_path + "/" + QString::fromLocal8Bit(lft_file_name.toPercentEncoding(":", "/"));
 }
 
-bool LFTManager::addPath(QString path)
+static bool allowableBuf(LFTManager *manager, fs_buf *buf)
+{
+    // 手动创建的buf不受属性autoIndexExternal/autoIndexInternal的控制
+    if (_global_fsBufToFileMap->value(buf).endsWith(".lft"))
+        return true;
+
+    const char *root = get_root_path(buf);
+    QStorageInfo info(QString::fromLocal8Bit(root));
+
+    if (!info.isValid()) {
+        return true;
+    }
+
+    QScopedPointer<DFMBlockPartition> device(LFTDiskTool::diskManager()->createBlockPartition(info, nullptr));
+
+    if (!device) {
+        return true;
+    }
+
+    QScopedPointer<DFMDiskDevice> disk(LFTDiskTool::diskManager()->createDiskDevice(device->drive()));
+
+    if (disk->removable()) {
+        return manager->autoIndexExternal();
+    } else {
+        return manager->autoIndexInternal();
+    }
+}
+
+bool LFTManager::addPath(QString path, bool autoIndex)
 {
     if (!path.startsWith("/")) {
         sendErrorReply(QDBusError::InvalidArgs, "The path must start with '/'");
@@ -174,8 +204,15 @@ bool LFTManager::addPath(QString path)
         (*_global_fsWatcherMap)[path] = watcher;
     }
 
-    connect(watcher, &QFutureWatcher<fs_buf*>::finished, this, [this, path_list, path, watcher] {
+    connect(watcher, &QFutureWatcher<fs_buf*>::finished, this, [this, path_list, path, watcher, autoIndex] {
         fs_buf *buf = watcher->result();
+
+        if (autoIndex && !allowableBuf(this, buf)) {
+            qWarning() << "Discarded index data of path:" << path;
+
+            free_fs_buf(buf);
+            buf = nullptr;
+        }
 
         for (const QByteArray &path_raw : path_list) {
             const QString &path = QString::fromLocal8Bit(path_raw);
@@ -192,7 +229,7 @@ bool LFTManager::addPath(QString path)
         }
 
         if (buf) {
-            _global_fsBufToFileMap->insert(buf, getLFTFileByPath(path));
+            _global_fsBufToFileMap->insert(buf, getLFTFileByPath(path, autoIndex));
         }
 
         watcher->deleteLater();
@@ -215,13 +252,36 @@ static bool markLFTFileToDirty(fs_buf *buf)
     return QFile::remove(lft_file);
 }
 
+static void removeBuf(fs_buf *buf)
+{
+    for (const QString &other_key : _global_fsBufMap->keys(buf)) {
+        _global_fsBufMap->remove(other_key);
+    }
+
+    markLFTFileToDirty(buf);
+
+    _global_fsBufToFileMap->remove(buf);
+    free_fs_buf(buf);
+}
+
 bool LFTManager::removePath(const QString &path)
 {
     if (fs_buf *buf = _global_fsBufMap->take(path)) {
-        markLFTFileToDirty(buf);
-        free_fs_buf(buf);
+        if (_global_fsBufToFileMap->value(buf).endsWith(".LFT")) {
+            // 不允许通过此接口删除由自动索引创建的数据
+            sendErrorReply(QDBusError::NotSupported, "Deleting data created by automatic indexing is not supported");
 
-        return true;
+            return false;
+        }
+
+        removeBuf(buf);
+
+        //此处被删除的是手动添加的索引数据, 之后应该更新自动生成的索引数据, 因为此目录之前一直
+        //使用手动生成的数据,现在数据被删了,但目录本身有可能是满足为其自动生成索引数据的要求
+        QStorageInfo info(path);
+
+        if (info.isValid())
+            onMountAdded(QString(), info.rootPath().toLocal8Bit());
     }
 
     sendErrorReply(QDBusError::InvalidArgs, "Not found the index data");
@@ -651,6 +711,13 @@ void LFTManager::setAutoIndexExternal(bool autoIndexExternal)
         return;
 
     _global_settings->setValue("autoIndexExternal", autoIndexExternal);
+
+    if (autoIndexExternal) {
+        _indexAll();
+    } else {
+        _cleanAllIndex();
+    }
+
     emit autoIndexExternalChanged(autoIndexExternal);
 }
 
@@ -660,6 +727,13 @@ void LFTManager::setAutoIndexInternal(bool autoIndexInternal)
         return;
 
     _global_settings->setValue("autoIndexInternal", autoIndexInternal);
+
+    if (autoIndexInternal) {
+        _indexAll();
+    } else {
+        _cleanAllIndex();
+    }
+
     emit autoIndexInternalChanged(autoIndexInternal);
 }
 
@@ -674,23 +748,11 @@ LFTManager::LFTManager(QObject *parent)
 {
     qAddPostRoutine(cleanLFTManager);
     refresh();
+    // 可能会加载到一些自动生成的未被允许的索引文件, 此处应该清理一遍
+    _cleanAllIndex();
 
-    // 遍历已挂载分区, 看是否需要为其建立索引数据
-    for (const QString &block : LFTDiskTool::diskManager()->blockDevices()) {
-        if (!DFMBlockDevice::hasFileSystem(block))
-            continue;
-
-        DFMBlockDevice *device = DFMDiskManager::createBlockDevice(block);
-
-        if (device->isLoopDevice())
-            continue;
-
-        if (device->mountPoints().isEmpty())
-            continue;
-
-        if (!hasLFT(QString::fromLocal8Bit(device->mountPoints().first())))
-            _addPathByPartition(device);
-    }
+    if (_isAutoIndexPartition())
+        _indexAll();
 
     connect(LFTDiskTool::diskManager(), &DFMDiskManager::mountAdded,
             this, &LFTManager::onMountAdded);
@@ -715,7 +777,7 @@ void LFTManager::sendErrorReply(QDBusError::ErrorType type, const QString &msg) 
     }
 }
 
-bool LFTManager::_autoIndexPartition() const
+bool LFTManager::_isAutoIndexPartition() const
 {
     return autoIndexExternal() || autoIndexInternal();
 }
@@ -723,6 +785,38 @@ bool LFTManager::_autoIndexPartition() const
 void LFTManager::_syncAll()
 {
     sync();
+}
+
+void LFTManager::_indexAll()
+{
+    // 遍历已挂载分区, 看是否需要为其建立索引数据
+    for (const QString &block : LFTDiskTool::diskManager()->blockDevices()) {
+        if (!DFMBlockDevice::hasFileSystem(block))
+            continue;
+
+        DFMBlockDevice *device = DFMDiskManager::createBlockDevice(block);
+
+        if (device->isLoopDevice())
+            continue;
+
+        if (device->mountPoints().isEmpty())
+            continue;
+
+        if (!hasLFT(QString::fromLocal8Bit(device->mountPoints().first())))
+            _addPathByPartition(device);
+    }
+}
+
+void LFTManager::_cleanAllIndex()
+{
+    for (fs_buf *buf : fsBufList()) {
+        if (!buf)
+            continue;
+
+        if (!allowableBuf(this, buf)) {
+            removeBuf(buf);
+        }
+    }
 }
 
 void LFTManager::_addPathByPartition(const DFMBlockDevice *block)
@@ -737,7 +831,7 @@ void LFTManager::_addPathByPartition(const DFMBlockDevice *block)
         }
 
         if (index) // 建立索引时一切以第一个挂载点为准
-            addPath(QString::fromLocal8Bit(block->mountPoints().first()));
+            addPath(QString::fromLocal8Bit(block->mountPoints().first()), true);
 
         device->deleteLater();
     }
@@ -750,7 +844,7 @@ void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &
     const QString &mount_root = QString::fromLocal8Bit(mountPoint);
     const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(mount_root);
 
-    if (!_autoIndexPartition())
+    if (!_isAutoIndexPartition())
         return;
 
     // 尝试加载此挂载点下的lft文件

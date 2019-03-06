@@ -36,7 +36,7 @@ public:
 
     static LFTManager *instance();
 
-    bool addPath(QString path);
+    bool addPath(QString path, bool autoIndex = false);
     bool removePath(const QString &path);
     bool hasLFT(const QString &path) const;
     bool lftBuinding(const QString &path) const;
@@ -73,9 +73,11 @@ protected:
     void sendErrorReply(QDBusError::ErrorType type, const QString &msg = QString()) const;
 
 private:
-    bool _autoIndexPartition() const;
+    bool _isAutoIndexPartition() const;
 
     void _syncAll();
+    void _indexAll();
+    void _cleanAllIndex();
     void _addPathByPartition(const DFMBlockDevice *block);
     void onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint);
     void onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint);
