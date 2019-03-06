@@ -314,21 +314,25 @@ static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path)
         fs_buf *buf = _global_fsBufMap->value(result_path, (fs_buf*)0x01);
 
         if (buf != (fs_buf*)0x01) {
-            // path相对于此fs_buf root_path的路径
-            QString new_path = path.mid(result_path.size());
+            if (!buf) {
+                buf_list << qMakePair(path, buf);
+            } else {
+                // path相对于此fs_buf root_path的路径
+                QString new_path = path.mid(result_path.size());
 
-            // 移除多余的 / 字符
-            if (new_path.startsWith("/"))
-                new_path = new_path.mid(1);
+                // 移除多余的 / 字符
+                if (new_path.startsWith("/"))
+                    new_path = new_path.mid(1);
 
-            // fs_buf中的root_path以/结尾，所以此处直接拼接
-            new_path.prepend(QString::fromLocal8Bit(get_root_path(buf)));
+                // fs_buf中的root_path以/结尾，所以此处直接拼接
+                new_path.prepend(QString::fromLocal8Bit(get_root_path(buf)));
 
-            // 移除多余的 / 字符
-            if (new_path.endsWith("/"))
-                new_path.chop(1);
+                // 移除多余的 / 字符
+                if (new_path.endsWith("/"))
+                    new_path.chop(1);
 
-            buf_list << qMakePair(new_path, buf);
+                buf_list << qMakePair(new_path, buf);
+            }
         }
 
         if (result_path == "/" || result_path == storage_info.rootPath())
