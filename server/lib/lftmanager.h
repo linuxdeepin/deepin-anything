@@ -30,11 +30,14 @@ class LFTManager : public QObject, protected QDBusContext
     Q_OBJECT
     Q_PROPERTY(bool autoIndexInternal READ autoIndexInternal WRITE setAutoIndexInternal NOTIFY autoIndexInternalChanged)
     Q_PROPERTY(bool autoIndexExternal READ autoIndexExternal WRITE setAutoIndexExternal NOTIFY autoIndexExternalChanged)
+    Q_PROPERTY(int logLevel READ logLevel WRITE setLogLevel)
 
 public:
     ~LFTManager();
 
     static LFTManager *instance();
+    static QString cacheDir();
+    static QStringList logCategoryList();
 
     bool addPath(QString path, bool autoIndex = false);
     bool removePath(const QString &path);
@@ -58,9 +61,13 @@ public:
     bool autoIndexExternal() const;
     bool autoIndexInternal() const;
 
+    int logLevel() const;
+
 public Q_SLOTS:
     void setAutoIndexExternal(bool autoIndexExternal);
     void setAutoIndexInternal(bool autoIndexInternal);
+
+    void setLogLevel(int logLevel);
 
 Q_SIGNALS:
     void addPathFinished(const QString &path, bool success);

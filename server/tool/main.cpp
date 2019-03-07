@@ -26,14 +26,37 @@
 #include <QCommandLineParser>
 #include <QDBusConnection>
 
+#include <DLog>
+
 #include "lftmanager.h"
 #include "anything_adaptor.h"
+
+DCORE_USE_NAMESPACE
+
+static QString logFormat = "[%{time}{yyyy-MM-dd, HH:mm:ss.zzz}] [%{type:-7}] [%{file}=>%{function}: %{line}] %{message}\n";
 
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
 
     app.setOrganizationName("deepin");
+
+    // init log
+    ConsoleAppender *consoleAppender = new ConsoleAppender;
+    consoleAppender->setFormat(logFormat);
+
+    RollingFileAppender *rollingFileAppender = new RollingFileAppender(LFTManager::cacheDir() + "/app.log");
+    rollingFileAppender->setFormat(logFormat);
+    rollingFileAppender->setLogFilesLimit(5);
+    rollingFileAppender->setDatePattern(RollingFileAppender::DailyRollover);
+
+    logger->registerAppender(consoleAppender);
+    logger->registerAppender(rollingFileAppender);
+
+    for (const QString &c : LFTManager::logCategoryList()) {
+        logger->registerCategoryAppender(c, consoleAppender);
+        logger->registerCategoryAppender(c, rollingFileAppender);
+    }
 
     QCommandLineOption option_dbus("dbus", "Start on DBus mode.");
     QCommandLineParser parser;

@@ -1,5 +1,5 @@
 TARGET = deepin-anything-tool
-QT += core dbus
+QT += core dbus dtkcore
 QT -= gui
 TEMPLATE = app
 
