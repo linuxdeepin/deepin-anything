@@ -44,6 +44,7 @@ public:
     bool removePath(const QString &path);
     bool hasLFT(const QString &path) const;
     bool lftBuinding(const QString &path) const;
+    bool cancelBuild(const QString &path);
 
     QStringList allPath() const;
     QStringList hasLFTSubdirectories(QString path) const;

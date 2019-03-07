@@ -101,6 +101,12 @@ static void clearFsBufMap()
 
     if (_global_fsBufToFileMap)
         _global_fsBufToFileMap->clear();
+
+    if (_global_fsWatcherMap.exists()) {
+        for (const QString &path : _global_fsWatcherMap->keys()) {
+            LFTManager::instance()->cancelBuild(path);
+        }
+    }
 }
 
 // 标记为脏文件, 定时清理(对象销毁时也会清理)
@@ -186,14 +192,30 @@ struct FSBufDeleter
     }
 };
 
-static fs_buf *buildFSBuf(const QString &path)
+static int handle_build_fs_buf_progress(uint32_t file_count, uint32_t dir_count, const char* cur_dir, const char* cur_file, void* param)
+{
+    Q_UNUSED(file_count)
+    Q_UNUSED(dir_count)
+    Q_UNUSED(cur_dir)
+    Q_UNUSED(cur_file)
+
+    QFutureWatcherBase *futureWatcher = static_cast<QFutureWatcherBase*>(param);
+
+    if (futureWatcher->isCanceled()) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static fs_buf *buildFSBuf(QFutureWatcherBase *futureWatcher, const QString &path)
 {
     fs_buf *buf = new_fs_buf(1 << 24, path.toLocal8Bit().constData());
 
     if (!buf)
         return buf;
 
-    if (build_fstree(buf, false, nullptr, nullptr) != 0) {
+    if (build_fstree(buf, false, handle_build_fs_buf_progress, futureWatcher) != 0) {
         free_fs_buf(buf);
 
         nWarning() << "Failed on build fs buffer of path: " << path;
@@ -278,6 +300,8 @@ bool LFTManager::addPath(QString path, bool autoIndex)
     // 此路径对应的设备可能被挂载到多个位置
     const QByteArrayList &path_list = LFTDiskTool::fromSerialUri(serial_uri);
 
+    nDebug() << "Equivalent paths:" << path_list;
+
     // 将路径改为相对于第一个挂载点的路径，vfs_monitor中所有文件的改动都是以设备第一个挂载点通知的
     path = path_list.first();
 
@@ -292,7 +316,7 @@ bool LFTManager::addPath(QString path, bool autoIndex)
     connect(watcher, &QFutureWatcher<fs_buf*>::finished, this, [this, path_list, path, watcher, autoIndex] {
         fs_buf *buf = watcher->result();
 
-        if (autoIndex && !allowableBuf(this, buf)) {
+        if (!_global_fsBufMap->contains(path) || (autoIndex && !allowableBuf(this, buf))) {
             nWarning() << "Discarded index data of path:" << path;
 
             free_fs_buf(buf);
@@ -320,7 +344,7 @@ bool LFTManager::addPath(QString path, bool autoIndex)
         watcher->deleteLater();
     });
 
-    QFuture<fs_buf*> result = QtConcurrent::run(buildFSBuf, path.endsWith('/') ? path : path + "/");
+    QFuture<fs_buf*> result = QtConcurrent::run(buildFSBuf, watcher, path.endsWith('/') ? path : path + "/");
 
     watcher->setFuture(result);
 
@@ -332,6 +356,8 @@ static void removeBuf(fs_buf *buf, bool removeLFTFile = true)
     nDebug() << get_root_path(buf) << removeLFTFile;
 
     for (const QString &other_key : _global_fsBufMap->keys(buf)) {
+        nDebug() << "do remove:" << other_key;
+
         _global_fsBufMap->remove(other_key);
     }
 
@@ -345,6 +371,8 @@ static void removeBuf(fs_buf *buf, bool removeLFTFile = true)
 
 bool LFTManager::removePath(const QString &path)
 {
+    nDebug() << path;
+
     if (fs_buf *buf = _global_fsBufMap->take(path)) {
         if (_global_fsBufToFileMap->value(buf).endsWith(".LFT")) {
             // 不允许通过此接口删除由自动索引创建的数据
@@ -359,8 +387,11 @@ bool LFTManager::removePath(const QString &path)
         //使用手动生成的数据,现在数据被删了,但目录本身有可能是满足为其自动生成索引数据的要求
         QStorageInfo info(path);
 
-        if (info.isValid())
+        if (info.isValid()) {
+            nDebug() << "will process mount point(do build lft data for it):" << info.rootPath();
+
             onMountAdded(QString(), info.rootPath().toLocal8Bit());
+        }
     }
 
     sendErrorReply(QDBusError::InvalidArgs, "Not found the index data");
@@ -444,6 +475,28 @@ bool LFTManager::lftBuinding(const QString &path) const
     auto list = getFsBufByPath(path);
 
     return !list.isEmpty() && !list.first().second;
+}
+
+bool LFTManager::cancelBuild(const QString &path)
+{
+    nDebug() << path;
+
+    if (QFutureWatcher<fs_buf*> *watcher = _global_fsWatcherMap->take(path)) {
+        watcher->cancel();
+        nDebug() << "will wait for finished";
+        watcher->waitForFinished();
+
+        // 清理其它等价的路径
+        for (const QString &path : _global_fsWatcherMap->keys(watcher)) {
+            qDebug() << "do remove:" << path;
+
+            _global_fsWatcherMap->remove(path);
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 QStringList LFTManager::allPath() const

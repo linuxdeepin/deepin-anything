@@ -10,7 +10,7 @@ typedef struct __partition__ {
 	char major, minor;
 } partition;
 
-typedef int (*progress_callback_fn)(uint32_t file_count, uint32_t dir_count, const char* cur_dir, void* param);
+typedef int (*progress_callback_fn)(uint32_t file_count, uint32_t dir_count, const char* cur_dir, const char *cur_file, void* param);
 
 int get_partitions(int* part_count, partition* parts);
 int build_fstree(fs_buf* fsbuf, int merge_partition, progress_callback_fn pcf, void *param);

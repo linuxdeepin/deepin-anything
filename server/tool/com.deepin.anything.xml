@@ -32,6 +32,10 @@
         <arg type='s' name='path' direction='in'/>
         <arg type='b' name='success' direction='out'/>
     </method>
+    <method name='cancelBuild'>
+        <arg type='s' name='path' direction='in'/>
+        <arg type='b' name='success' direction='out'/>
+    </method>
     <method name='refresh'>
         <arg type='ay' name='serialUriFilter' direction='in'/>
         <arg type='as' name='rootPathList' direction='out'/>

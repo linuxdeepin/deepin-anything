@@ -109,7 +109,7 @@ static int walkdir(const char* name, fs_buf* fsbuf, uint32_t parent_off, progres
 	if (should_skip_path(name, pf))
 		return EMPTY_DIR;
 
-	if (pr->pcf && pr->pcf(pr->file_count, pr->dir_count, name, pr->param))
+	if (pr->pcf && pr->pcf(pr->file_count, pr->dir_count, name, NULL, pr->param))
 		return CANCELLED;
 
 	DIR* dir = opendir(name);
@@ -133,6 +133,9 @@ static int walkdir(const char* name, fs_buf* fsbuf, uint32_t parent_off, progres
 			pr->dir_count++;
 		else
 			pr->file_count++;
+
+		if (pr->pcf && pr->pcf(pr->file_count, pr->dir_count, name, de->d_name, pr->param))
+			return CANCELLED;
 	}
 	closedir(dir);
 
