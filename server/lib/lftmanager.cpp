@@ -1026,7 +1026,7 @@ void LFTManager::_indexAll()
         if (!hasLFT(QString::fromLocal8Bit(device->mountPoints().first())))
             _addPathByPartition(device);
         else
-            nDebug() << "Not has LFT:" << device->mountPoints().first() << ", block:" << block;
+            nDebug() << "Exist index data:" << device->mountPoints().first() << ", block:" << block;
     }
 }
 
