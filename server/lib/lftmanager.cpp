@@ -796,7 +796,11 @@ QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
             markLFTFileToDirty(buf);
             root_path_list << QString::fromLocal8Bit(get_root_path(buf));
         } else {
-            cWarning() << "Failed:" << i.first << ", result:" << r;
+            if (r == ERR_NO_MEM) {
+                cWarning() << "Failed(No Memory):" << i.first;
+            } else {
+                cDebug() << "Failed:" << i.first << ", result:" << r;
+            }
         }
     }
 
@@ -843,7 +847,11 @@ QStringList LFTManager::removeFileFromLFTBuf(const QByteArray &file)
             markLFTFileToDirty(buf);
             root_path_list << QString::fromLocal8Bit(get_root_path(buf));
         } else {
-            cWarning() << "Failed:" << i.first << ", result:" << r;
+            if (r == ERR_NO_MEM) {
+                cWarning() << "Failed(No Memory):" << i.first;
+            } else {
+                cDebug() << "Failed:" << i.first << ", result:" << r;
+            }
         }
     }
 
@@ -898,7 +906,11 @@ QStringList LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByt
             markLFTFileToDirty(buf);
             root_path_list << QString::fromLocal8Bit(get_root_path(buf));
         } else {
-            cWarning() << "Failed: result=" << r;
+            if (r == ERR_NO_MEM) {
+                cWarning() << "Failed(No Memory)";
+            } else {
+                cDebug() << "Failed: result=" << r;
+            }
         }
     }
 
@@ -1068,6 +1080,9 @@ LFTManager::LFTManager(QObject *parent)
             this, &LFTManager::onFSAdded);
     connect(LFTDiskTool::diskManager(), &DFMDiskManager::fileSystemRemoved,
             this, &LFTManager::onFSRemoved);
+
+    // 监听设备信号
+    LFTDiskTool::diskManager()->setWatchChanges(true);
 
     QTimer *sync_timer = new QTimer(this);
 

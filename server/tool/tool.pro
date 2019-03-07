@@ -41,4 +41,7 @@ dbus_config.files = $$PWD/com.deepin.anything.conf
 
 target.path = $$PREFIX/bin
 
-INSTALLS += target dbus_xmls dbus_service dbus_config
+systemd_service.files = $${TARGET}.service
+systemd_service.path = /lib/systemd/system
+
+INSTALLS += target dbus_xmls dbus_service dbus_config systemd_service
