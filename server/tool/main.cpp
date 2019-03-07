@@ -18,6 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <signal.h>
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -30,6 +31,15 @@
 
 #include "lftmanager.h"
 #include "anything_adaptor.h"
+
+void handleSIGTERM(int sig)
+{
+    qDebug() << sig;
+
+    if (qApp) {
+        qApp->quit();
+    }
+}
 
 DCORE_USE_NAMESPACE
 
@@ -88,6 +98,8 @@ int main(int argc, char *argv[])
     } else {
         return 0;
     }
+
+    signal(SIGTERM, handleSIGTERM);
 
     return app.exec();
 }
