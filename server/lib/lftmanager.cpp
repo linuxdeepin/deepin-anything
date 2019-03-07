@@ -89,6 +89,9 @@ Q_GLOBAL_STATIC_WITH_ARGS(QSettings, _global_settings, (_getCacheDir() + "/confi
 
 static QSet<fs_buf*> fsBufList()
 {
+    if (!_global_fsBufMap.exists())
+        return QSet<fs_buf*>();
+
     return _global_fsBufMap->values().toSet();
 }
 
@@ -99,8 +102,11 @@ static void clearFsBufMap()
             free_fs_buf(buf);
     }
 
-    _global_fsBufMap->clear();
-    _global_fsBufToFileMap->clear();
+    if (_global_fsBufMap.exists())
+        _global_fsBufMap->clear();
+
+    if (_global_fsBufToFileMap)
+        _global_fsBufToFileMap->clear();
 }
 
 // 标记为脏文件, 定时清理(对象销毁时也会清理)
@@ -124,6 +130,9 @@ static bool doLFTFileToDirty(fs_buf *buf)
 
 static void cleanDirtyLFTFiles()
 {
+    if (!_global_fsBufDirtyList.exists())
+        return;
+
     for (fs_buf *buf : _global_fsBufDirtyList.operator *()) {
         doLFTFileToDirty(buf);
     }
@@ -525,6 +534,10 @@ QStringList LFTManager::sync(const QString &mountPoint)
     nDebug() << mountPoint;
 
     QStringList path_list;
+
+    if (!_global_fsBufMap.exists()) {
+        return path_list;
+    }
 
     if (!QDir::home().mkpath(cacheDir())) {
         sendErrorReply(QDBusError::AccessDenied, "Failed on create path: " + cacheDir());
