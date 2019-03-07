@@ -38,6 +38,7 @@ public:
     static LFTManager *instance();
     static QString cacheDir();
     static QStringList logCategoryList();
+    static QByteArray setCodecNameForLocale(const QByteArray &codecName);
 
     bool addPath(QString path, bool autoIndex = false);
     bool removePath(const QString &path);
@@ -52,9 +53,9 @@ public:
 
     QStringList search(const QString &path, const QString keyword, bool useRegExp = false) const;
 
-    void insertFileToLFTBuf(const QByteArray &file);
-    void removeFileFromLFTBuf(const QByteArray &file);
-    void renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFIle);
+    QStringList insertFileToLFTBuf(const QByteArray &file);
+    QStringList removeFileFromLFTBuf(const QByteArray &file);
+    QStringList renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFIle);
 
     void quit();
 

@@ -5,6 +5,10 @@
     <method name='cacheDir'>
         <arg type='s' name='path' direction='out'/>
     </method>
+    <method name='setCodecNameForLocale'>
+        <arg type='ay' name='name' direction='in'/>
+        <arg type='ay' name='oldCodecName' direction='out'/>
+    </method>
     <method name='allPath'>
         <arg type='as' name='pathList' direction='out'/>
     </method>
@@ -44,13 +48,16 @@
     </method>
     <method name='insertFileToLFTBuf'>
         <arg type='ay' name='filePath' direction='in'/>
+        <arg type='as' name='bufRootPathList' direction='out'/>
     </method>
     <method name='removeFileFromLFTBuf'>
         <arg type='ay' name='filePath' direction='in'/>
+        <arg type='as' name='bufRootPathList' direction='out'/>
     </method>
     <method name='renameFileOfLFTBuf'>
         <arg type='ay' name='fromFilePath' direction='in'/>
         <arg type='ay' name='toFilePath' direction='in'/>
+        <arg type='as' name='bufRootPathList' direction='out'/>
     </method>
     <method name='quit'>
     </method>

@@ -52,25 +52,19 @@ static QString _getCacheDir()
 {
     QString cachePath = QString("/var/cache/%1/deepin-anything").arg(qApp->organizationName());
 
-    if (getuid() == 0) {
-        nInfo() << "Cache Dir:" << cachePath;
+    if (getuid() != 0 && !QFileInfo(cachePath).isWritable()) {
+        cachePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
 
-        return cachePath;
-    }
-
-    if (QFileInfo(cachePath).isWritable()) {
-        nInfo() << "Cache Dir:" << cachePath;
-
-        return cachePath;
-    }
-
-    cachePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-
-    if (cachePath.isEmpty() || cachePath == "/") {
-        cachePath = QString("/tmp/%1/deepin-anything").arg(qApp->organizationName());
+        if (cachePath.isEmpty() || cachePath == "/") {
+            cachePath = QString("/tmp/%1/deepin-anything").arg(qApp->organizationName());
+        }
     }
 
     nInfo() << "Cache Dir:" << cachePath;
+
+    if (!QDir::home().mkpath(cachePath)) {
+        nWarning() << "Failed on create chache path";
+    }
 
     return cachePath;
 }
@@ -168,6 +162,20 @@ QStringList LFTManager::logCategoryList()
          << changesLog->categoryName();
 
     return list;
+}
+
+QByteArray LFTManager::setCodecNameForLocale(const QByteArray &codecName)
+{
+    const QTextCodec *old_codec = QTextCodec::codecForLocale();
+
+    if (codecName.isEmpty())
+        QTextCodec::setCodecForLocale(nullptr);
+    else
+        QTextCodec::setCodecForLocale(QTextCodec::codecForName(codecName));
+
+    nDebug() << codecName << "old:" << old_codec->name();
+
+    return old_codec->name();
 }
 
 struct FSBufDeleter
@@ -489,9 +497,11 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 
         nDebug() << "will load:" << dir_iterator.fileName();
 
-        const QByteArrayList pathList = LFTDiskTool::fromSerialUri(QByteArray::fromPercentEncoding(dir_iterator.fileName().toLocal8Bit()));
+        QByteArray file_name = dir_iterator.fileName().toLocal8Bit();
+        file_name.chop(4); // 去除 .lft 后缀
+        const QByteArrayList pathList = LFTDiskTool::fromSerialUri(QByteArray::fromPercentEncoding(file_name));
 
-        nDebug() << "serial uri list:" << pathList;
+        nDebug() << "path list of serial uri:" << pathList;
 
         if (pathList.isEmpty()) {
             continue;
@@ -510,9 +520,8 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
         }
 
         for (const QByteArray &path_raw : pathList) {
-            QString path = QString::fromLocal8Bit(path_raw);
+            const QString path = QString::fromLocal8Bit(path_raw);
 
-            path.chop(4);// 去除 .lft 后缀
             path_list << path;
 
             // 清理旧的buf
@@ -692,14 +701,15 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
     return list;
 }
 
-void LFTManager::insertFileToLFTBuf(const QByteArray &file)
+QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
 {
     cDebug() << file;
 
     auto list = getFsBufByPath(QString::fromLocal8Bit(file));
+    QStringList root_path_list;
 
     if (list.isEmpty())
-        return;
+        return root_path_list;
 
     QFileInfo info(QString::fromLocal8Bit(file));
     bool is_dir = info.isDir();
@@ -731,20 +741,24 @@ void LFTManager::insertFileToLFTBuf(const QByteArray &file)
         if (r == 0) {
             // buf内容已改动，标记删除对应的lft文件
             markLFTFileToDirty(buf);
+            root_path_list << QString::fromLocal8Bit(get_root_path(buf));
         } else {
             cWarning() << "Failed:" << i.first << ", result:" << r;
         }
     }
+
+    return root_path_list;
 }
 
-void LFTManager::removeFileFromLFTBuf(const QByteArray &file)
+QStringList LFTManager::removeFileFromLFTBuf(const QByteArray &file)
 {
     cDebug() << file;
 
     auto list = getFsBufByPath(QString::fromLocal8Bit(file));
+    QStringList root_path_list;
 
     if (list.isEmpty())
-        return;
+        return root_path_list;
 
     for (auto i : list) {
         fs_buf *buf = i.second;
@@ -774,20 +788,24 @@ void LFTManager::removeFileFromLFTBuf(const QByteArray &file)
         if (r == 0) {
             // buf内容已改动，标记删除对应的lft文件
             markLFTFileToDirty(buf);
+            root_path_list << QString::fromLocal8Bit(get_root_path(buf));
         } else {
             cWarning() << "Failed:" << i.first << ", result:" << r;
         }
     }
+
+    return root_path_list;
 }
 
-void LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFile)
+QStringList LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFile)
 {
     cDebug() << oldFile << newFile;
 
     auto list = getFsBufByPath(QString::fromLocal8Bit(newFile));
+    QStringList root_path_list;
 
     if (list.isEmpty())
-        return;
+        return root_path_list;
 
     for (int i = 0; i < list.count(); ++i) {
         fs_buf *buf = list.at(i).second;
@@ -825,10 +843,13 @@ void LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray 
         if (r == 0) {
             // buf内容已改动，标记删除对应的lft文件
             markLFTFileToDirty(buf);
+            root_path_list << QString::fromLocal8Bit(get_root_path(buf));
         } else {
             cWarning() << "Failed: result=" << r;
         }
     }
+
+    return root_path_list;
 }
 
 void LFTManager::quit()
@@ -955,6 +976,12 @@ static QStringList removeLFTFiles(const QByteArray &serialUriFilter = QByteArray
 LFTManager::LFTManager(QObject *parent)
     : QObject(parent)
 {
+    // ascii编码支持内容太少, 此处改为兼容它的utf8编码
+    if (QTextCodec::codecForLocale() == QTextCodec::codecForName("ASCII")) {
+        QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
+        nDebug() << "reset the locale codec to UTF-8";
+    }
+
     { // 创建一个普通文件, 在程序正常退出时删除, 用于识别进程未正常退出
         QFile file(getAppRungingFile());
 
