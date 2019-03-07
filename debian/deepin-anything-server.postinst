@@ -13,10 +13,10 @@ if [ "$action" = configure ]; then
         useradd -M -r -s /sbin/nologin $user || (echo "Failed on add user deepin-anything-server" && false)
     fi
 
-    if [ ! -d "/var/cache/deepin/deepin-anything" ]; then
-        mkdir -p /var/cache/deepin/deepin-anything
-        chown deepin-anything-server:deepin-anything-server /var/cache/deepin/deepin-anything
-    fi
+    #if [ ! -d "/var/cache/deepin/deepin-anything" ]; then
+    #    mkdir -p /var/cache/deepin/deepin-anything
+    #    chown deepin-anything-server:deepin-anything-server /var/cache/deepin/deepin-anything
+    #fi
 fi
 
 #DEBHELPER#
