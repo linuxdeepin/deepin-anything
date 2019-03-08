@@ -585,7 +585,7 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
             (*_global_fsBufMap)[path] = buf;
         }
 
-        _global_fsBufToFileMap->insert(buf, dir_iterator.fileName());
+        _global_fsBufToFileMap->insert(buf, lft_file);
     }
 
     return path_list;
