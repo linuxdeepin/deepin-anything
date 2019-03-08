@@ -438,7 +438,7 @@ static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path)
                 new_path.prepend(QString::fromLocal8Bit(get_root_path(buf)));
 
                 // 移除多余的 / 字符
-                if (new_path.endsWith("/"))
+                if (new_path.size() > 1 && new_path.endsWith("/"))
                     new_path.chop(1);
 
                 buf_list << qMakePair(new_path, buf);
