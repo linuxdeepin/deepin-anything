@@ -52,7 +52,10 @@ public:
     QStringList refresh(const QByteArray &serialUriFilter = QByteArray());
     QStringList sync(const QString &mountPoint = QString());
 
-    QStringList search(const QString &path, const QString keyword, bool useRegExp = false) const;
+    QStringList search(const QString &path, const QString &keyword, bool useRegExp = false) const;
+    QStringList search(int maxCount, qint64 maxTime, quint32 startOffset, quint32 endOffset,
+                       const QString &path, const QString &keyword, bool useRegExp,
+                       quint32 &startOffsetReturn, quint32 &endOffsetReturn) const;
 
     QStringList insertFileToLFTBuf(const QByteArray &file);
     QStringList removeFileFromLFTBuf(const QByteArray &file);

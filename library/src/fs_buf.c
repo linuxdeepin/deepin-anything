@@ -846,7 +846,8 @@ __attribute__((visibility("default"))) int rename_path(fs_buf *fsbuf, const char
 	return r;
 }
 
-__attribute__((visibility("default"))) void search_files(fs_buf *fsbuf, uint32_t *start_off, uint32_t end_off, void *param, int (*comparator)(const char *, void *), uint32_t *results, uint32_t *count)
+__attribute__((visibility("default"))) void search_files(fs_buf *fsbuf, uint32_t *start_off, uint32_t end_off, uint32_t *results, uint32_t *count,
+							comparator_fn comparator, void *comparator_param, progress_fn pcf, void *pcf_param)
 {
 	uint32_t size = *count;
 	*count = 0;
@@ -856,7 +857,12 @@ __attribute__((visibility("default"))) void search_files(fs_buf *fsbuf, uint32_t
 	while (name_off < min_off && *count < size)
 	{
 		char *name = fsbuf->head + name_off;
-		if (*name != 0 && (*comparator)(name, param) != 0)
+
+		if (pcf && (*pcf)(*count, name, pcf_param) != 0) {
+			break;
+		}
+
+		if (*name != 0 && (*comparator)(name, comparator_param) == 0)
 		{
 			results[*count] = name_off;
 			*count = *count + 1;

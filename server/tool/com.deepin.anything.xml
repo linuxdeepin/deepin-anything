@@ -50,6 +50,18 @@
         <arg type='b' name='useRegExp' direction='in'/>
         <arg type='as' name='results' direction='out'/>
     </method>
+    <method name='search'>
+        <arg type='i' name='maxCount' direction='in'/>
+        <arg type='x' name='maxTime' direction='in'/>
+        <arg type='u' name='startOffset' direction='in'/>
+        <arg type='u' name='endOffset' direction='in'/>
+        <arg type='s' name='path' direction='in'/>
+        <arg type='s' name='keyword' direction='in'/>
+        <arg type='b' name='useRegExp' direction='in'/>
+        <arg type='as' name='results' direction='out'/>
+        <arg type='u' name='startOffset' direction='out'/>
+        <arg type='u' name='endOffset' direction='out'/>
+    </method>
     <method name='insertFileToLFTBuf'>
         <arg type='ay' name='filePath' direction='in'/>
         <arg type='as' name='bufRootPathList' direction='out'/>

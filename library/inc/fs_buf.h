@@ -43,8 +43,10 @@ int rename_path(fs_buf* fsbuf, const char* src_path, const char* dst_path, fs_ch
 void get_path_range(fs_buf *fsbuf, const char *path, uint32_t *path_off, uint32_t *start_off, uint32_t *end_off);
 
 // do not check null pointer.
-void search_files(fs_buf* fsbuf, uint32_t* start_off, uint32_t end_off, void* param, int (*comparator)(const char*, void*), uint32_t* results, uint32_t* count);
-
+typedef int (*progress_fn)(uint32_t count, const char* cur_file, void* param);
+typedef int (*comparator_fn)(const char *file_name, void* param);
+void search_files(fs_buf* fsbuf, uint32_t* start_off, uint32_t end_off, uint32_t* results, uint32_t* count,
+		comparator_fn comparator, void *comparator_param, progress_fn pcf, void *pcf_param);
 
 // functions below are used internally
 void set_kids_off(fs_buf* fsbuf, uint32_t name_off, uint32_t kids_off);

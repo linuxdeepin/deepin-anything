@@ -660,19 +660,38 @@ QStringList LFTManager::sync(const QString &mountPoint)
 
 static int compareString(const char *string, void *keyword)
 {
-    return QString::fromLocal8Bit(string).indexOf(*static_cast<const QString*>(keyword), 0, Qt::CaseInsensitive) >= 0;
+    return QString::fromLocal8Bit(string).indexOf(*static_cast<const QString*>(keyword), 0, Qt::CaseInsensitive) < 0;
 }
 
 static int compareStringRegExp(const char *string, void *re)
 {
     auto match = static_cast<QRegularExpression*>(re)->match(QString::fromLocal8Bit(string));
 
-    return match.hasMatch();
+    return !match.hasMatch();
 }
 
-QStringList LFTManager::search(const QString &path, const QString keyword, bool useRegExp) const
+static int timeoutGuard(uint32_t count, const char* cur_file, void* param)
 {
-    nDebug() << path << keyword << useRegExp;
+    Q_UNUSED(count)
+    Q_UNUSED(cur_file)
+
+    QPair<QElapsedTimer*, qint64> *data = static_cast<QPair<QElapsedTimer*, qint64>*>(param);
+
+    return data->first->elapsed() >= data->second; // 返回false时表示不终端搜索
+}
+
+QStringList LFTManager::search(const QString &path, const QString &keyword, bool useRegExp) const
+{
+    quint32 start, end;
+
+    return search(-1, -1, 0, 0, path, keyword, useRegExp, start, end);
+}
+
+QStringList LFTManager::search(int maxCount, qint64 maxTime, quint32 startOffset, quint32 endOffset,
+                               const QString &path, const QString &keyword, bool useRegExp,
+                               quint32 &startOffsetReturn, quint32 &endOffsetReturn) const
+{
+    nDebug() << maxCount << maxTime << startOffset << endOffset << path << keyword << useRegExp;
 
     auto buf_list = getFsBufByPath(path);
 
@@ -692,11 +711,15 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
 
     // new_path 为path在fs_buf中对应的路径
     const QString &new_path = buf_list.first().first;
-    uint32_t path_offset = 0, start_offset = 0, end_offset = 0;
-    get_path_range(buf, new_path.toLocal8Bit().constData(), &path_offset, &start_offset, &end_offset);
+
+    if (startOffset == 0 || endOffset == 0) {
+        // 未指定有效的搜索区间时, 根据路径获取
+        uint32_t path_offset = 0;
+        get_path_range(buf, new_path.toLocal8Bit().constData(), &path_offset, &startOffset, &endOffset);
+    }
 
     // 说明目录为空
-    if (start_offset == 0) {
+    if (startOffset == 0) {
         nDebug() << "Empty directory:" << new_path;
 
         return QStringList();
@@ -705,7 +728,7 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
     QRegularExpression re(keyword);
 
     void *compare_param = nullptr;
-    int (*compare)(const char *, void *) = nullptr;
+    comparator_fn compare = nullptr;
 
     if (useRegExp) {
         if (!re.isValid()) {
@@ -725,7 +748,7 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
         compare = compareString;
     }
 
-#define MAX_RESULT_COUNT 1000
+#define MAX_RESULT_COUNT 100
 
     uint32_t name_offsets[MAX_RESULT_COUNT];
     uint32_t count = MAX_RESULT_COUNT;
@@ -735,8 +758,20 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
     // root_path 以/结尾，所以此处需要多忽略一个字符
     bool need_reset_root_path = path != new_path;
 
+    QElapsedTimer et;
+    progress_fn progress = nullptr;
+    QPair<QElapsedTimer*, qint64> progress_param;
+
+    if (maxTime >= 0) {
+        et.start();
+        progress = timeoutGuard;
+        progress_param.first = &et;
+        progress_param.second = maxTime;
+    }
+
     do {
-        search_files(buf, &start_offset, end_offset, compare_param, compare, name_offsets, &count);
+        count = qMin(MAX_RESULT_COUNT, maxCount - list.count());
+        search_files(buf, &startOffset, endOffset, name_offsets, &count, compare, compare_param, progress, &progress_param);
 
         for (uint32_t i = 0; i < count; ++i) {
             const char *result = get_path_by_name_off(buf, name_offsets[i], tmp_path, sizeof(tmp_path));
@@ -749,7 +784,14 @@ QStringList LFTManager::search(const QString &path, const QString keyword, bool 
                 list << origin_path;
             }
         }
+
+        if (maxTime >= 0 && et.elapsed() >= maxTime) {
+            break;
+        }
     } while (count == MAX_RESULT_COUNT);
+
+    startOffsetReturn = startOffset;
+    endOffsetReturn = endOffset;
 
     return list;
 }
