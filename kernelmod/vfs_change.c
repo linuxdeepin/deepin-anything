@@ -14,8 +14,14 @@
 #define MAX_VFS_CHANGE_MEM	(1<<20)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+#define TIMESTRUCT timeval
+#else
+#define TIMESTRUCT timespec64
+#endif
+
 typedef struct __vfs_change__ {
-	struct timeval ts;
+	struct TIMESTRUCT ts;
 	char *src, *dst;
 	unsigned char action;
 	unsigned short size;
@@ -77,7 +83,7 @@ static int open_vfs_changes(struct inode* si, struct file* filp)
 		return -EBUSY;
 	}
 
-	struct timeval* tv = kzalloc(sizeof(struct timeval), GFP_KERNEL);
+	struct TIMESTRUCT* tv = kzalloc(sizeof(struct TIMESTRUCT), GFP_KERNEL);
 	if (unlikely(tv == 0)) {
 		atomic_set(&vfs_changes_is_open, 0);
 		return -ENOMEM;
@@ -104,13 +110,19 @@ MODULE_PARM_DESC(hour_shift, "hour shift for displaying /proc/vfs_changes line i
 
 #define MIN_LINE_SIZE	50
 
-static ssize_t copy_vfs_changes(struct timeval *last, char* buf, size_t size)
+static ssize_t copy_vfs_changes(struct TIMESTRUCT *last, char* buf, size_t size)
 {
 	size_t total = 0;
 	vfs_change* vc;
 	list_for_each_entry(vc, &vfs_changes, list) {
 		if (vc->ts.tv_sec < last->tv_sec || 
-			(vc->ts.tv_sec == last->tv_sec && vc->ts.tv_usec <= last->tv_usec))
+			(vc->ts.tv_sec == last->tv_sec && 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+			vc->ts.tv_usec <= last->tv_usec
+#else
+			vc->ts.tv_nsec <= last->tv_nsec
+#endif
+			))
 			continue;
 
 		time_t shifted_secs = vc->ts.tv_sec + hour_shift*3600;
@@ -122,8 +134,13 @@ static ssize_t copy_vfs_changes(struct timeval *last, char* buf, size_t size)
 #endif
 		char temp[MIN_LINE_SIZE];
 		snprintf(temp, sizeof(temp), "%04ld-%02d-%02d %02d:%02d:%02d.%03ld %s ",
-			1900+ts.tm_year, 1+ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, vc->ts.tv_usec/1000, 
-			action_names[vc->action]);
+			1900+ts.tm_year, 1+ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+			vc->ts.tv_usec/1000
+#else
+			vc->ts.tv_nsec
+#endif
+			, action_names[vc->action]);
 		size_t line_len = strlen(temp) + strlen(vc->src) + 1;  //+1 for \n
 		if (vc->dst)
 			line_len += strlen(vc->dst) + 1;  //+1 for space
@@ -158,7 +175,7 @@ static ssize_t read_vfs_changes(struct file* filp, char __user* buf, size_t size
 	if (kbuf == 0)
 		return -ENOMEM;
 
-	struct timeval *last = (struct timeval*)filp->private_data;
+	struct TIMESTRUCT *last = (struct TIMESTRUCT*)filp->private_data;
 	spin_lock(&sl_changes);
 	ssize_t r = copy_vfs_changes(last, kbuf, size);
 	spin_unlock(&sl_changes);
@@ -585,7 +602,11 @@ void vfs_changed(int act, const char* root, const char* src, const char* dst)
 		strcat(full_dst, dst);
 	}
 	vfs_change* vc = (vfs_change*)p;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
 	do_gettimeofday(&vc->ts);
+#else
+	ktime_get_real_ts64(&vc->ts);
+#endif
 	vc->size = size;
 	vc->action = act;
 	vc->src = full_src;
