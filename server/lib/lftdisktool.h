@@ -24,7 +24,7 @@
 #include <QString>
 #include <QByteArrayList>
 
-class DFMDiskManager;
+class DDiskManager;
 namespace LFTDiskTool
 {
 struct MountPointInfo {
@@ -37,7 +37,7 @@ QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mount
 QByteArray pathToSerialUri(const QString &path);
 QByteArrayList fromSerialUri(const QByteArray &uri);
 
-DFMDiskManager *diskManager();
+DDiskManager *diskManager();
 }
 
 QDebug &operator <<(QDebug &deg, const LFTDiskTool::MountPointInfo &info);

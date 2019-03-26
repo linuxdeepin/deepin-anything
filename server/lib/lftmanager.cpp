@@ -26,9 +26,9 @@ extern "C" {
 #include "walkdir.h"
 }
 
-#include <dfmdiskmanager.h>
-#include <dfmblockpartition.h>
-#include <dfmdiskdevice.h>
+#include <ddiskmanager.h>
+#include <dblockpartition.h>
+#include <ddiskdevice.h>
 
 #include <QtConcurrent>
 #include <QFutureWatcher>
@@ -257,13 +257,13 @@ static bool allowableBuf(LFTManager *manager, fs_buf *buf)
         return true;
     }
 
-    QScopedPointer<DFMBlockPartition> device(LFTDiskTool::diskManager()->createBlockPartition(info, nullptr));
+    QScopedPointer<DBlockPartition> device(LFTDiskTool::diskManager()->createBlockPartition(info, nullptr));
 
     if (!device) {
         return true;
     }
 
-    QScopedPointer<DFMDiskDevice> disk(LFTDiskTool::diskManager()->createDiskDevice(device->drive()));
+    QScopedPointer<DDiskDevice> disk(LFTDiskTool::diskManager()->createDiskDevice(device->drive()));
 
     if (disk->removable()) {
         return manager->autoIndexExternal();
@@ -1114,13 +1114,13 @@ LFTManager::LFTManager(QObject *parent)
     if (_isAutoIndexPartition())
         _indexAll();
 
-    connect(LFTDiskTool::diskManager(), &DFMDiskManager::mountAdded,
+    connect(LFTDiskTool::diskManager(), &DDiskManager::mountAdded,
             this, &LFTManager::onMountAdded);
-    connect(LFTDiskTool::diskManager(), &DFMDiskManager::mountRemoved,
+    connect(LFTDiskTool::diskManager(), &DDiskManager::mountRemoved,
             this, &LFTManager::onMountRemoved);
-    connect(LFTDiskTool::diskManager(), &DFMDiskManager::fileSystemAdded,
+    connect(LFTDiskTool::diskManager(), &DDiskManager::fileSystemAdded,
             this, &LFTManager::onFSAdded);
-    connect(LFTDiskTool::diskManager(), &DFMDiskManager::fileSystemRemoved,
+    connect(LFTDiskTool::diskManager(), &DDiskManager::fileSystemRemoved,
             this, &LFTManager::onFSRemoved);
 
     // 监听设备信号
@@ -1162,10 +1162,10 @@ void LFTManager::_indexAll()
 {
     // 遍历已挂载分区, 看是否需要为其建立索引数据
     for (const QString &block : LFTDiskTool::diskManager()->blockDevices()) {
-        if (!DFMBlockDevice::hasFileSystem(block))
+        if (!DBlockDevice::hasFileSystem(block))
             continue;
 
-        DFMBlockDevice *device = DFMDiskManager::createBlockDevice(block);
+        DBlockDevice *device = DDiskManager::createBlockDevice(block);
 
         if (device->isLoopDevice())
             continue;
@@ -1192,11 +1192,11 @@ void LFTManager::_cleanAllIndex()
     }
 }
 
-void LFTManager::_addPathByPartition(const DFMBlockDevice *block)
+void LFTManager::_addPathByPartition(const DBlockDevice *block)
 {
     nDebug() << block->device() << block->id() << block->drive();
 
-    if (DFMDiskDevice *device = LFTDiskTool::diskManager()->createDiskDevice(block->drive())) {
+    if (DDiskDevice *device = LFTDiskTool::diskManager()->createDiskDevice(block->drive())) {
         bool index = false;
 
         if (device->removable()) {
@@ -1233,7 +1233,7 @@ void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &
         return;
     }
 
-    if (DFMBlockDevice *block = LFTDiskTool::diskManager()->createBlockPartitionByMountPoint(mountPoint)) {
+    if (DBlockDevice *block = LFTDiskTool::diskManager()->createBlockPartitionByMountPoint(mountPoint)) {
         if (!block->isLoopDevice()) {
             _addPathByPartition(block);
         }
@@ -1255,7 +1255,7 @@ void LFTManager::onMountRemoved(const QString &blockDevicePath, const QByteArray
 // 当文件系统变动时, 删除目前的索引数据
 void LFTManager::onFSAdded(const QString &blockDevicePath)
 {
-    QScopedPointer<DFMBlockDevice> device(DFMDiskManager::createBlockDevice(blockDevicePath));
+    QScopedPointer<DBlockDevice> device(DDiskManager::createBlockDevice(blockDevicePath));
     const QString &id = device->id();
 
     nInfo() << blockDevicePath << "id:" << id;
@@ -1267,7 +1267,7 @@ void LFTManager::onFSAdded(const QString &blockDevicePath)
 
 void LFTManager::onFSRemoved(const QString &blockDevicePath)
 {
-    QScopedPointer<DFMBlockDevice> device(DFMDiskManager::createBlockDevice(blockDevicePath));
+    QScopedPointer<DBlockDevice> device(DDiskManager::createBlockDevice(blockDevicePath));
     const QString &id = device->id();
 
     nInfo() << blockDevicePath << "id:" << id;
