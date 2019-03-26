@@ -1,8 +1,8 @@
 PACKAGE_VERSION="@@VERSION@@"
 
 PACKAGE_NAME="deepin-anything"
-MAKE[0]="make -C ${kernel_source_dir} SUBDIRS=${dkms_tree}/${PACKAGE_NAME}/${PACKAGE_VERSION}/build modules"
-CLEAN="make -C ${kernel_source_dir} SUBDIRS=${dkms_tree}/${PACKAGE_NAME}/${PACKAGE_VERSION}/build clean"
+MAKE[0]="make -C ${kernel_source_dir} KBUILD_EXTMOD=${dkms_tree}/${PACKAGE_NAME}/${PACKAGE_VERSION}/build modules"
+CLEAN="make -C ${kernel_source_dir} KBUILD_EXTMOD=${dkms_tree}/${PACKAGE_NAME}/${PACKAGE_VERSION}/build clean"
 
 DEST_MODULE_LOCATION[0]="/updates/"
 BUILT_MODULE_NAME[0]="vfs_monitor"
