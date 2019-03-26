@@ -20,8 +20,8 @@
  */
 #include "lftdisktool.h"
 
-#include <dfmblockpartition.h>
-#include <dfmdiskmanager.h>
+#include <dblockpartition.h>
+#include <ddiskmanager.h>
 
 #include <QStorageInfo>
 #include <QScopedPointer>
@@ -32,7 +32,7 @@ extern "C" {
 }
 
 namespace LFTDiskTool {
-Q_GLOBAL_STATIC(DFMDiskManager, _global_diskManager)
+Q_GLOBAL_STATIC(DDiskManager, _global_diskManager)
 
 QByteArray pathToSerialUri(const QString &path)
 {
@@ -55,7 +55,7 @@ QByteArray pathToSerialUri(const QString &path)
     if (device == QByteArrayLiteral("/dev/fuse\0"))
         return QByteArray();
 
-    QScopedPointer<DFMBlockDevice> block_obj(_global_diskManager->createBlockDeviceByDevicePath(device));
+    QScopedPointer<DBlockDevice> block_obj(_global_diskManager->createBlockDeviceByDevicePath(device));
 
     if (!block_obj || block_obj->isLoopDevice())
         return QByteArray();
@@ -103,7 +103,7 @@ QByteArrayList fromSerialUri(const QByteArray &uri)
     const QByteArray path = uri.mid(path_start_pos);
 
     for (const QString &block : _global_diskManager->blockDevices()) {
-        QScopedPointer<DFMBlockDevice> block_obj(_global_diskManager->createBlockPartition(block));
+        QScopedPointer<DBlockDevice> block_obj(_global_diskManager->createBlockPartition(block));
         const QString _block_id = block_obj->id();
 
         if (_block_id == block_id) {
@@ -136,7 +136,7 @@ QByteArrayList fromSerialUri(const QByteArray &uri)
     return QByteArrayList();
 }
 
-DFMDiskManager *diskManager()
+DDiskManager *diskManager()
 {
     return _global_diskManager;
 }

@@ -24,7 +24,7 @@
 #include <QObject>
 #include <QDBusContext>
 
-class DFMBlockDevice;
+class DBlockDevice;
 class LFTManager : public QObject, protected QDBusContext
 {
     Q_OBJECT
@@ -90,7 +90,7 @@ private:
     void _syncAll();
     void _indexAll();
     void _cleanAllIndex();
-    void _addPathByPartition(const DFMBlockDevice *block);
+    void _addPathByPartition(const DBlockDevice *block);
     void onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint);
     void onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint);
     void onFSAdded(const QString &blockDevicePath);
