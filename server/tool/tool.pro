@@ -44,4 +44,7 @@ target.path = $$PREFIX/bin
 systemd_service.files = $${TARGET}.service
 systemd_service.path = /lib/systemd/system
 
-INSTALLS += target dbus_xmls dbus_service dbus_config systemd_service
+target_ionice.files = $${TARGET}-ionice
+target_ionice.path = $$target.path
+
+INSTALLS += target dbus_xmls dbus_service dbus_config systemd_service target_ionice
