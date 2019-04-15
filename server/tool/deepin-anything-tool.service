@@ -8,7 +8,7 @@ Type=dbus
 User=root
 Group=root
 BusName=com.deepin.anything
-ExecStart=/usr/bin/deepin-anything-tool --dbus
+ExecStart=/usr/bin/deepin-anything-tool-ionice --dbus
 Restart=on-failure
 RestartSec=10
 

@@ -2,6 +2,7 @@ usr/lib/*/libdeepin-anything-server-lib.so.*
 usr/lib/*/deepin-anything-server-lib/plugins/*
 usr/bin/deepin-anything-monitor
 usr/bin/deepin-anything-tool
+usr/bin/deepin-anything-tool-ionice
 usr/share/dbus-1/interfaces
 usr/share/dbus-1/system-services
 etc/dbus-1/system.d
