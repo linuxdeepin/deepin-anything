@@ -780,7 +780,7 @@ QStringList LFTManager::search(int maxCount, qint64 maxTime, quint32 startOffset
     }
 
     do {
-        count = qMin(MAX_RESULT_COUNT, maxCount - list.count());
+        count = qMin(uint32_t(MAX_RESULT_COUNT), uint32_t(maxCount - list.count()));
         search_files(buf, &startOffset, endOffset, name_offsets, &count, compare, compare_param, progress, &progress_param);
 
         for (uint32_t i = 0; i < count; ++i) {
