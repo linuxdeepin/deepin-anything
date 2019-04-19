@@ -1,3 +1,13 @@
+<a name="0.0.7"></a>
+## 0.0.7 (2019-04-19)
+
+
+#### Bug Fixes
+
+*   crash if the maxCount is -1 ([cdd59eac](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/cdd59eac941d6c64ed93b5b9b55964c1d40221da))
+
+
+
 <a name="0.0.6"></a>
 ## 0.0.6 (2019-03-29)
 
