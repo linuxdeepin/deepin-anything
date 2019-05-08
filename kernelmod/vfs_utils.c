@@ -24,7 +24,7 @@ char* __init read_file_content(const char* filename, int *real_size)
 		return 0;
 	}
 	mm_segment_t old_fs = get_fs();
-	set_fs(get_ds());
+	set_fs(KERNEL_DS);
 
 	// i_size_read is useless here because procfs does not have i_size
 	// loff_t size = i_size_read(file_inode(filp));
