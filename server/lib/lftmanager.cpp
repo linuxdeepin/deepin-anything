@@ -208,6 +208,12 @@ static int handle_build_fs_buf_progress(uint32_t file_count, uint32_t dir_count,
     return 0;
 }
 
+// TODO(zccrs): 检查buf是否为空，在某些情况下，创建或加载的buf为会为空，导致无法进行文件搜索
+static bool checkFSBuf(fs_buf *buf)
+{
+    return get_tail(buf) != first_name(buf);
+}
+
 static fs_buf *buildFSBuf(QFutureWatcherBase *futureWatcher, const QString &path)
 {
     fs_buf *buf = new_fs_buf(1 << 24, path.toLocal8Bit().constData());
@@ -219,6 +225,14 @@ static fs_buf *buildFSBuf(QFutureWatcherBase *futureWatcher, const QString &path
         free_fs_buf(buf);
 
         nWarning() << "Failed on build fs buffer of path: " << path;
+
+        return nullptr;
+    }
+
+    if (!checkFSBuf(buf)) {
+        free_fs_buf(buf);
+
+        nWarning() << "Failed on check fs buffer of path: " << path;
 
         return nullptr;
     }
@@ -344,7 +358,7 @@ bool LFTManager::addPath(QString path, bool autoIndex)
         fs_buf *buf = !watcher->isCanceled() ? watcher->result() : nullptr;
 
         // 已被取消构建或构建的结果不再需要时则忽略生成结果
-        if (!_global_fsWatcherMap->contains(path) || (autoIndex && !allowableBuf(this, buf))) {
+        if (!_global_fsWatcherMap->contains(path) || (autoIndex && buf && !allowableBuf(this, buf))) {
             nWarning() << "Discarded index data of path:" << path;
 
             free_fs_buf(buf);
@@ -582,6 +596,15 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 
         if (!buf) {
             nWarning() << "Failed on load:" << lft_file;
+            continue;
+        }
+
+        if (!checkFSBuf(buf)) {
+            // 重新生成fs buf
+            addPath(QString::fromLocal8Bit(get_root_path(buf)), dir_iterator.fileName().endsWith(".lft"));
+            free_fs_buf(buf);
+
+            nWarning() << "Failed on check fs buf of: " << lft_file;
             continue;
         }
 
@@ -1107,8 +1130,10 @@ LFTManager::LFTManager(QObject *parent)
         if (file.exists()) {
             nWarning() << "Last time not exiting normally";
 
+#ifdef QT_NO_DEBUG
             // 说明进程上次未正常退出, 无法保证这些lft文件是正常的, 此处需要清理它们
             removeLFTFiles();
+#endif
         }
 
         if (file.open(QIODevice::WriteOnly)) {
@@ -1118,11 +1143,13 @@ LFTManager::LFTManager(QObject *parent)
 
     qAddPostRoutine(cleanLFTManager);
     refresh();
+#ifdef QT_NO_DEBUG
     // 可能会加载到一些自动生成的未被允许的索引文件, 此处应该清理一遍
     _cleanAllIndex();
 
     if (_isAutoIndexPartition())
         _indexAll();
+#endif
 
     connect(LFTDiskTool::diskManager(), &DDiskManager::mountAdded,
             this, &LFTManager::onMountAdded);
