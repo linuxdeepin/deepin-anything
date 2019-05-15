@@ -1,3 +1,13 @@
+<a name="0.0.9"></a>
+## 0.0.9 (2019-05-15)
+
+
+#### Bug Fixes
+
+*   the search results is empty on sametimes ([204aab72](https://github.com/linuxdeepin/deepin-anything/tree/master/commit/204aab720ff33db71ccb0022f57edc482c62a346))
+
+
+
 <a name="0.0.7"></a>
 ## 0.0.7 (2019-04-19)
 
