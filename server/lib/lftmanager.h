@@ -89,6 +89,7 @@ private:
 
     void _syncAll();
     void _indexAll();
+    void _indexAllDelay(int time = 10 * 60 * 1000);
     void _cleanAllIndex();
     void _addPathByPartition(const DBlockDevice *block);
     void onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint);

@@ -1148,7 +1148,7 @@ LFTManager::LFTManager(QObject *parent)
     _cleanAllIndex();
 
     if (_isAutoIndexPartition())
-        _indexAll();
+        _indexAllDelay();
 #endif
 
     connect(LFTDiskTool::diskManager(), &DDiskManager::mountAdded,
@@ -1215,6 +1215,12 @@ void LFTManager::_indexAll()
         else
             nDebug() << "Exist index data:" << device->mountPoints().first() << ", block:" << block;
     }
+}
+
+// 不要立马自动生成索引，防止刚开机时和其它进程抢占io
+void LFTManager::_indexAllDelay(int time)
+{
+    QTimer::singleShot(time, this, &LFTManager::_indexAll);
 }
 
 void LFTManager::_cleanAllIndex()
