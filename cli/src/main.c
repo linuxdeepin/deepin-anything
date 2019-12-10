@@ -121,10 +121,16 @@ static int load(int argc, char* argv[])
 {
 	char dir[NAME_MAX] = ".";
 	int load_policy = LOAD_NONE, opt;
-	while ((opt = getopt(argc, argv, "d:l:")) != -1) {
+	char fullpath[PATH_MAX];
+
+	while ((opt = getopt(argc, argv, "d:l:f:")) != -1) {
 		switch(opt) {
+		case 'f':
+			strcpy(fullpath, optarg);
+			break;
 		case 'd':
 			strcpy(dir, optarg);
+			sprintf(fullpath, "%s/%s", dir, FSBUF_FILE);
 			break;
 		case 'l':
 			load_policy = atoi(optarg);
@@ -140,12 +146,10 @@ static int load(int argc, char* argv[])
 	}
 
 	fs_buf* fsbuf = 0;
-	char fullpath[PATH_MAX];
 
 	struct timeval s, e;
 	gettimeofday(&s, 0);
 
-	sprintf(fullpath, "%s/%s", dir, FSBUF_FILE);
 	int r = load_fs_buf(&fsbuf, fullpath);
 	if (r != 0) {
 		printf("load linear file tree file %s failed: %d\n", fullpath, r);

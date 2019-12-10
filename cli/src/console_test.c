@@ -15,17 +15,20 @@
 
 int match_str(const char *name, void *query)
 {
-	return strstr(name, (char *)query);
+	return !strstr(name, (char *)query);
 }
 
 int match_regex(const char *name, void *query)
 {
 	regmatch_t subs;
 	regex_t *compiled = (regex_t *)query;
-	return (regexec(compiled, name, 1, &subs, 0) == REG_NOERROR) ? 1 : 0;
+	return (regexec(compiled, name, 1, &subs, 0) == REG_NOERROR) ? 0 : 1;
 }
 
-
+int progress_function(uint32_t count, const char* cur_file, void* param) {
+	// printf("progress: %d file(s) founded, current file: %s\n", count, cur_file);
+	return 0;
+}
 
 static uint32_t search_by_fsbuf(fs_buf *fsbuf, const char *query)
 {
@@ -36,7 +39,7 @@ static uint32_t search_by_fsbuf(fs_buf *fsbuf, const char *query)
 
 	if (!err)
 	{
-		search_files(fsbuf, &start_off, end_off, &compiled, match_regex, name_offs, &count);
+		search_files(fsbuf, &start_off, end_off, name_offs, &count, match_regex, &compiled, progress_function, NULL);
 		char path[PATH_MAX] = {'0'};
 		for (uint32_t i = 0; i < count; i++)
 		{
@@ -46,7 +49,7 @@ static uint32_t search_by_fsbuf(fs_buf *fsbuf, const char *query)
 		uint32_t total = count;
 		while (count == MAX_RESULTS)
 		{
-			search_files(fsbuf, &start_off, end_off, &compiled, match_regex, name_offs, &count);
+			search_files(fsbuf, &start_off, end_off, name_offs, &count, match_regex, &compiled, progress_function, NULL);
 			total += count;
 		}
 		regfree(&compiled);
@@ -54,7 +57,7 @@ static uint32_t search_by_fsbuf(fs_buf *fsbuf, const char *query)
 	}
 	else
 	{
-		search_files(fsbuf, &start_off, end_off, query, match_str, name_offs, &count);
+		search_files(fsbuf, &start_off, end_off, name_offs, &count, match_str, query, progress_function, NULL);
 		char path[PATH_MAX];
 		for (uint32_t i = 0; i < count; i++)
 		{
@@ -64,7 +67,7 @@ static uint32_t search_by_fsbuf(fs_buf *fsbuf, const char *query)
 		uint32_t total = count;
 		while (count == MAX_RESULTS)
 		{
-			search_files(fsbuf, &start_off, end_off, query, match_str, name_offs, &count);
+			search_files(fsbuf, &start_off, end_off, name_offs, &count, match_str, query, progress_function, NULL);
 			// search_files(fsbuf, &start_off, end_off, query, name_offs, &count, comparison_by_regex);
 			total += count;
 		}
