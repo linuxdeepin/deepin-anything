@@ -125,7 +125,11 @@ static ssize_t copy_vfs_changes(struct TIMESTRUCT *last, char* buf, size_t size)
 			))
 			continue;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0))
 		time_t shifted_secs = vc->ts.tv_sec + hour_shift*3600;
+#else
+		ktime_t shifted_secs = vc->ts.tv_sec + hour_shift*3600;
+#endif
 		struct tm ts;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)
 		time_to_tm(shifted_secs, 0, &ts);
@@ -333,6 +337,7 @@ static long ioctl_vfs_changes(struct file* filp, unsigned int cmd, unsigned long
 	}
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0))
 static struct file_operations procfs_ops = {
 	.owner = THIS_MODULE,
 	.open = open_vfs_changes,
@@ -342,6 +347,16 @@ static struct file_operations procfs_ops = {
 	//.llseek = generic_file_llseek,
 	.release = release_vfs_changes,
 };
+#else
+static struct proc_ops procfs_ops = {
+	.proc_open = open_vfs_changes,
+	.proc_read = read_vfs_changes,
+	.proc_compat_ioctl = ioctl_vfs_changes,
+	.proc_lseek = no_llseek,
+	//proc_lseek = generic_file_llseek,
+	.proc_release = release_vfs_changes,
+};
+#endif
 
 int __init init_vfs_changes(void)
 {
