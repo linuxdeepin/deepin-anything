@@ -17,6 +17,7 @@
 
 typedef struct __do_mount_args__ {
 	char dir_name[NAME_MAX];
+        char dir_type[NAME_MAX];
 } do_mount_args;
 
 #define _DECL_CMN_KRP(fn, symbol) static struct kretprobe fn##_krp = {\
@@ -70,6 +71,19 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 		args->dir_name[0] = 0;
 		return 1;
 	}
+  
+	/*存储mount的时候的type值，在后面on_do_mount_ret 进行使用*/
+        const char __user* type_name = (const char __user*)get_arg(regs, 3);
+        if(strlen(type_name)<=0||strlen(type_name)>NAME_MAX){
+          printk("no type\n");
+          return 1;
+        }else{
+            if (unlikely(strncpy(args->dir_type, type_name, strlen(type_name)) < 0)) {
+                printk("strncpy_from_user failed\n");
+                args->dir_type[0]=0;
+                return 1;
+            }
+	}
 
 	const char __user* dir_name = (const char __user*)get_arg(regs, 2);
 	if (unlikely(strncpy_from_user(args->dir_name, dir_name, NAME_MAX) < 0)) {
@@ -120,6 +134,18 @@ static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 	do_mount_args* args = (do_mount_args*)ri->data;
 	if (args == 0 || args->dir_name[0] == 0)
 		return 0;
+
+	/*解决ntfs文件系统挂载的时候开启了auditd以后，mount的时候会导致系统卡死问题*/
+	/*对挂载的ntfs等fuse类型的文件系统进行判断，如果是这类文件系统则退出，*/
+	if(args->dir_type[0] == 0){
+            printk("dir_type is null");
+	    return 0;
+        }
+  
+        if(strcmp(args->dir_type,"fuseblk")==0){
+            printk("This is the fuse filesytem，so return\n");
+            return 0;
+        }
 
 	unsigned long retval = regs_return_value(regs);
 	if (retval != 0)
