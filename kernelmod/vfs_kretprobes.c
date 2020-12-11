@@ -75,8 +75,8 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 	/*存储mount的时候的type值，在后面on_do_mount_ret 进行使用*/
         const char __user* type_name = (const char __user*)get_arg(regs, 3);
         if(strlen(type_name)<=0||strlen(type_name)>NAME_MAX){
-          printk("no type\n");
-          return 1;
+		printk("no type\n");
+		return 1;
         }else{
             if (unlikely(strncpy(args->dir_type, type_name, strlen(type_name)) < 0)) {
                 printk("strncpy_from_user failed\n");
