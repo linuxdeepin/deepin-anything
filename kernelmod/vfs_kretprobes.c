@@ -142,8 +142,8 @@ static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 	    return 0;
         }
   
-        if(strcmp(args->dir_type,"fuseblk")==0){
-            printk("This is the fuse filesytem，so return\n");
+        if(strstr(args->dir_type,"fuseblk")){
+            printk("\nThis is the fuse filesytem，so return\n\n");
             return 0;
         }
 
