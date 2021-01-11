@@ -6,7 +6,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/file.h>
-
+#include <linux/version.h>
 #include "vfs_utils.h"
 
 #define ALLOC_UNIT	(1<<12)
@@ -23,8 +23,10 @@ char* __init read_file_content(const char* filename, int *real_size)
 		pr_err("error opening %s\n", filename);
 		return 0;
 	}
-	mm_segment_t old_fs = get_fs();
-	set_fs(KERNEL_DS);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
+        mm_segment_t old_fs = get_fs();
+        set_fs(KERNEL_DS);
+#endif
 
 	// i_size_read is useless here because procfs does not have i_size
 	// loff_t size = i_size_read(file_inode(filp));
@@ -36,8 +38,12 @@ char* __init read_file_content(const char* filename, int *real_size)
 			break;
 
 		loff_t off = 0;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+               *real_size = kernel_read(filp, buf, size, &off);
+#else
 		char __user* user_buf = (char __user*)buf;
 		*real_size = kernel_read(filp, user_buf, size, &off);
+#endif
 		if (*real_size > 0 && *real_size < size) {
 			buf[*real_size] = 0;
 			break;
@@ -46,7 +52,9 @@ char* __init read_file_content(const char* filename, int *real_size)
 		size += ALLOC_UNIT;
 		kfree(buf);
 	}
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(old_fs);
+#endif
 	filp_close(filp, 0);
 	// pr_info("%s size: %d\n", filename, *real_size);
 	return buf;

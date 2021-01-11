@@ -137,12 +137,12 @@ static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	/*解决ntfs文件系统挂载的时候开启了auditd以后，mount的时候会导致系统卡死问题*/
 	/*对挂载的ntfs等fuse类型的文件系统进行判断，如果是这类文件系统则退出，*/
-	if(args->dir_type[0] == 0){
+	if (args->dir_type[0] == 0) {
             printk("dir_type is null");
 	    return 0;
         }
   
-        if(strstr(args->dir_type,"fuseblk")){
+        if (strstr(args->dir_type, "fuse")) {
             printk("\nThis is the fuse filesytem，so return\n\n");
             return 0;
         }
