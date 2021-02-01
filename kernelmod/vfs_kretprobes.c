@@ -9,6 +9,30 @@
 #include <linux/uaccess.h>
 #include <linux/namei.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+#include <linux/cdev.h>
+#include <linux/device.h>
+#define CHRDEV_NAME      "driver_set_info"
+#define CLASS_NAME       "class_set_info"    //表示在/system/class目录下创建的设备类别目录
+#define DEVICE_NAME      "driver_set_info"   //在/dev/目录和/sys/class/class_wrbuff目录下分别创建设备文件driver_wrbuff
+static dev_t         devt_wrbuffer;  //alloc_chrdev_region函数向内核申请下来的设备号
+static struct cdev*  cdev_wrbuffer;  //注册到驱动的字符设备
+static struct class* class_wrbuffer; //字符设备创建的设备节点
+int my_open(struct inode *inode, struct file *file); //字符设备打开函数
+int my_release(struct inode *inode, struct file *file); //字符设备释放函数
+ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f);//字符设备读函数
+ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f);//字符设备写函数
+
+int init_vfs_flag=0;  //vfs初始化函数
+struct file_operations fops_chrdriver =
+{
+        open:my_open,
+        release:my_release,
+        read:my_read,
+        write:my_write,
+};
+
+#endif
 
 #include "arg_extractor.h"
 #include "vfs_change_consts.h"
@@ -32,6 +56,7 @@ typedef struct __do_mount_args__ {
 
 static DEFINE_SPINLOCK(sl_parts);
 static LIST_HEAD(partitions);
+
 
 static void get_root(char* root, unsigned char major, unsigned char minor)
 {
@@ -391,6 +416,89 @@ static struct kretprobe* vfs_krps[] = {&do_mount_krp, &vfs_create_krp, &vfs_unli
 	&sys_umount_krp, &security_inode_create_krp
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+//打开
+int my_open(struct inode *inode, struct file *file)
+{
+	printk("open mydrive OK!\n");
+	try_module_get(THIS_MODULE);
+	return 0;
+}
+//关闭
+int my_release(struct inode *inode, struct file *file)
+{
+	printk("mydrive released!\n");
+	module_put(THIS_MODULE);
+	return 0;
+} 
+//读设备里的信息
+ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f)
+{
+	return 0;
+} 
+//向设备里写信息
+ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f)
+{
+    unsigned long p = *f;
+    int ret=0;
+    char buff[4096*2]={0};
+    if (copy_from_user(buff, user, t)) {
+        return -1;
+    } else {
+        f+=t;
+        if (buff) {
+            int i=0;
+            buff[t]=0;
+            if (!is_mnt_ns_valid()) {
+                printk("is_mnt_ns_valid failed\n");
+                return;
+            }
+            int size = 0;
+
+            size = 0;
+            int parts_count = 0;
+
+            // __init section doesnt need lock
+            krp_partition* part;
+            unsigned int major, minor;
+            char mp[NAME_MAX], *line = buff;
+            while (sscanf(line, "%*d %*d %d:%d %*s %250s %*s %*s %*s %*s %*s %*s\n", &major, &minor, mp) == 3) {
+                line = strchr(line, '\n') + 1;
+
+                if (is_special_mp(mp))
+                    continue;
+
+                krp_partition* part = kmalloc(sizeof(krp_partition) + strlen(mp) + 1, GFP_KERNEL);
+                if (unlikely(part == 0)) {
+                    pr_err("krp-partition kmalloc failed for %s\n", mp);
+                    continue;
+                }
+                part->major = major;
+                part->minor = minor;
+                strcpy(part->root, mp);
+                list_add_tail(&part->list, &partitions);
+            }
+
+            list_for_each_entry(part, &partitions, list) {
+                parts_count++;
+                pr_info("mp: %s, major: %d, minor: %d\n", part->root, part->major, part->minor);
+            }
+            if(!init_vfs_flag)
+            {
+                int ret = register_kretprobes(vfs_krps, sizeof(vfs_krps)/sizeof(void *));
+                if (ret < 0) {
+                    pr_err("register_kretprobes failed, returned %d\n", ret);
+                    cleanup_vfs_changes();
+                    return ret;
+                }
+                init_vfs_flag=1;
+            }
+            pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps)/sizeof(void *));
+        }
+    }
+    return sizeof(buff);
+}
+#else
 static void __init init_mounts_info(void)
 {
 	if (!is_mnt_ns_valid())
@@ -431,28 +539,71 @@ static void __init init_mounts_info(void)
 	if (cmdline)
 		kfree(cmdline);
 }
-
+#endif
 int __init init_module()
 {
-	init_mounts_info();
-	int ret = init_vfs_changes();
-	if (ret != 0) {
-		pr_err("init_vfs_changes failed, returned %d\n", ret);
-		return ret;
-	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)	
+    int ret=0;
+    init_vfs_flag=0;
+    /*1、申请设备号*/
+    ret = alloc_chrdev_region(&devt_wrbuffer,0,1,CHRDEV_NAME);
+    if(ret) {
+        printk("alloc char driver error!\n");
+        return ret;
+    }
 
-	ret = register_kretprobes(vfs_krps, sizeof(vfs_krps)/sizeof(void *));
-	if (ret < 0) {
-		pr_err("register_kretprobes failed, returned %d\n", ret);
-		cleanup_vfs_changes();
-		return ret;
-	}
-	pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps)/sizeof(void *));
-	return 0;
+    /*2、注册字符设备*/
+    cdev_wrbuffer = cdev_alloc();
+    cdev_init(cdev_wrbuffer,&fops_chrdriver);
+    cdev_wrbuffer->owner = THIS_MODULE;
+    ret = cdev_add(cdev_wrbuffer,devt_wrbuffer,1);
+    if(ret) {
+        printk("cdev create error!\n");
+        unregister_chrdev_region(devt_wrbuffer,1);
+        return ret;
+    }
+
+    /*3、创建设备节点*/
+    class_wrbuffer = class_create(THIS_MODULE,CLASS_NAME);
+    device_create(class_wrbuffer,NULL,devt_wrbuffer,NULL,DEVICE_NAME);
+    printk("mydriver driver is init ok!\n");
+
+    ret = init_vfs_changes();
+    if (ret != 0) {
+        pr_err("init_vfs_changes failed, returned %d\n", ret);
+        return ret;
+    }
+#else
+    init_mounts_info();
+    int ret = init_vfs_changes();
+    if (ret != 0) {
+        pr_err("init_vfs_changes failed, returned %d\n", ret);
+        return ret;
+    }
+
+    ret = register_kretprobes(vfs_krps, sizeof(vfs_krps)/sizeof(void *));
+    if (ret < 0) {
+        pr_err("register_kretprobes failed, returned %d\n", ret);
+        cleanup_vfs_changes();
+        return ret;
+    }
+#endif
+    pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps)/sizeof(void *));
+    return 0;
 }
 
 void __exit cleanup_module()
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+	 /*1、删除设备节点*/
+    device_destroy(class_wrbuffer,devt_wrbuffer);  
+    class_destroy(class_wrbuffer);  
+    /*2、取消字符设备注册*/  
+    cdev_del(cdev_wrbuffer); 
+    /*3、释放设备号*/  
+    unregister_chrdev_region(devt_wrbuffer,1);
+    printk("mydriver unregister successful.\n");
+#endif
 	unregister_kretprobes(vfs_krps, sizeof(vfs_krps)/sizeof(void *));
 	cleanup_vfs_changes();
 	pr_info("unregister_kretprobes %ld ok\n", sizeof(vfs_krps)/sizeof(void *));
