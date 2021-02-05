@@ -451,7 +451,7 @@ ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f
             buff[t]=0;
             if (!is_mnt_ns_valid()) {
                 printk("is_mnt_ns_valid failed\n");
-                return;
+                return -1;
             }
             int size = 0;
 
