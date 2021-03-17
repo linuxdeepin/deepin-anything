@@ -439,64 +439,59 @@ ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f)
 //向设备里写信息
 ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f)
 {
-    unsigned long p = *f;
-    int ret=0;
     char buff[4096*2]={0};
     if (copy_from_user(buff, user, t)) {
         return -1;
     } else {
         f+=t;
-        if (buff) {
-            int i=0;
-            buff[t]=0;
-            if (!is_mnt_ns_valid()) {
-                printk("is_mnt_ns_valid failed\n");
+        buff[t]=0;
+        if (!is_mnt_ns_valid()) {
+            printk("is_mnt_ns_valid failed\n");
+            return -1;
+        }
+        int size = 0;
+
+        size = 0;
+        int parts_count = 0;
+
+        // __init section doesnt need lock
+        krp_partition* part;
+        unsigned int major, minor;
+        char mp[NAME_MAX], *line = buff;
+        while (sscanf(line, "%*d %*d %d:%d %*s %250s %*s %*s %*s %*s %*s %*s\n", &major, &minor, mp) == 3) {
+            line = strchr(line, '\n') + 1;
+
+            if (is_special_mp(mp))
+                continue;
+
+            krp_partition* part = kmalloc(sizeof(krp_partition) + strlen(mp) + 1, GFP_KERNEL);
+            if (unlikely(part == 0)) {
+                pr_err("krp-partition kmalloc failed for %s\n", mp);
+                continue;
+            }
+            part->major = major;
+            part->minor = minor;
+            strcpy(part->root, mp);
+            list_add_tail(&part->list, &partitions);
+        }
+
+        list_for_each_entry(part, &partitions, list) {
+            parts_count++;
+            pr_info("mp: %s, major: %d, minor: %d\n", part->root, part->major, part->minor);
+        }
+        if(!init_vfs_flag)
+        {
+            int ret = register_kretprobes(vfs_krps, sizeof(vfs_krps)/sizeof(void *));
+            if (ret < 0) {
+                pr_err("register_kretprobes failed, returned %d\n", ret);
+                cleanup_vfs_changes();
                 return -1;
             }
-            int size = 0;
-
-            size = 0;
-            int parts_count = 0;
-
-            // __init section doesnt need lock
-            krp_partition* part;
-            unsigned int major, minor;
-            char mp[NAME_MAX], *line = buff;
-            while (sscanf(line, "%*d %*d %d:%d %*s %250s %*s %*s %*s %*s %*s %*s\n", &major, &minor, mp) == 3) {
-                line = strchr(line, '\n') + 1;
-
-                if (is_special_mp(mp))
-                    continue;
-
-                krp_partition* part = kmalloc(sizeof(krp_partition) + strlen(mp) + 1, GFP_KERNEL);
-                if (unlikely(part == 0)) {
-                    pr_err("krp-partition kmalloc failed for %s\n", mp);
-                    continue;
-                }
-                part->major = major;
-                part->minor = minor;
-                strcpy(part->root, mp);
-                list_add_tail(&part->list, &partitions);
-            }
-
-            list_for_each_entry(part, &partitions, list) {
-                parts_count++;
-                pr_info("mp: %s, major: %d, minor: %d\n", part->root, part->major, part->minor);
-            }
-            if(!init_vfs_flag)
-            {
-                int ret = register_kretprobes(vfs_krps, sizeof(vfs_krps)/sizeof(void *));
-                if (ret < 0) {
-                    pr_err("register_kretprobes failed, returned %d\n", ret);
-                    cleanup_vfs_changes();
-                    return ret;
-                }
-                init_vfs_flag=1;
-            }
-            pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps)/sizeof(void *));
+            init_vfs_flag=1;
         }
+        pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps)/sizeof(void *));
     }
-    return sizeof(buff);
+    return 0;
 }
 #else
 static void __init init_mounts_info(void)
