@@ -293,29 +293,6 @@ typedef struct __vfs_op_args__ {
                                                               .maxactive      = 64,\
                                                                                 .kp.symbol_name = ""#fn"",\
     };
-/*获取当前的动作*/
-char *get_action(int action)
-{
-    if (action == 0)
-        return "ACT_NEW_FILE";
-    else if (action == 1)
-        return "ACT_NEW_LINK";
-    else if (action == 2)
-        return "ACT_NEW_SYMLINK";
-    else if (action == 3)
-        return "ACT_NEW_FOLDER";
-    else if (action == 4)
-        return "ACT_DEL_FILE";
-    else if (action == 5)
-        return "ACT_DEL_FOLDER";
-    else if (action == 6)
-        return "ACT_RENAME_FILE";
-    else if (action == 7)
-        return "ACT_RENAME_FOLDER";
-    else
-        return "no action";
-}
-
 
 static int common_vfs_ent(vfs_op_args *args, struct dentry *de)
 {
@@ -356,16 +333,7 @@ static int common_vfs_ret(struct kretprobe_instance *ri, struct pt_regs *regs, i
         pr_info("action %d args->path null? in proc[%d]: %s\n", action, current->pid, current->comm);
         return 0;
     }
-    /*监控文件变化，打印出当前的用户UID，当前动作以及执行应用，操作目录等*/
-    if (action == 4 || action == 5) {
-        char *cur_path = 0, *path_buf = kmalloc(PATH_MAX, GFP_KERNEL);
-        if (path_buf)
-            cur_path = file_path(get_task_exe_file(current), path_buf, PATH_MAX);
-        uid_t uid = from_kuid(&init_user_ns, task_uid(current));
-        pr_info("user:%d,action:%s,comm[%d:%d]: %s, app: %s,filepath:%s\n", uid, get_action(action), current->pid, current->tgid, current->comm, cur_path, args->path);
-        if (path_buf)
-            kfree(path_buf);
-    }
+
     char root[NAME_MAX];
     get_root(root, args->major, args->minor);
     if (*root == 0)
@@ -440,14 +408,6 @@ static int on_vfs_rename_ret(struct kretprobe_instance *ri, struct pt_regs *regs
     vfs_rename_args *args = (vfs_rename_args *)ri->data;
     if (args == 0 || args->old_path == 0)
         return 0;
-
-    char *cur_path = 0, *path_buf = kmalloc(PATH_MAX, GFP_KERNEL);
-    if (path_buf)
-        cur_path = file_path(get_task_exe_file(current), path_buf, PATH_MAX);
-    uid_t uid = from_kuid(&init_user_ns, task_uid(current));
-    pr_info("user:%d,action:%s,comm[%d:%d],app: %s, args->old_path:%s, args->new_path: %s\n", uid, "rename", current->pid, current->tgid, current->comm, args->old_path, args->new_path);
-    if (path_buf)
-        kfree(path_buf);
 
     char root[NAME_MAX];
     get_root(root, args->major, args->minor);
