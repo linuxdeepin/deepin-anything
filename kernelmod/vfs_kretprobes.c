@@ -437,6 +437,16 @@ int my_release(struct inode *inode, struct file *file)
 {
     printk("mydrive released!\n");
     module_put(THIS_MODULE);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+    /*1、删除设备节点*/
+    device_destroy(class_wrbuffer, devt_wrbuffer);
+    class_destroy(class_wrbuffer);
+    /*2、取消字符设备注册*/
+    cdev_del(cdev_wrbuffer);
+    /*3、释放设备号*/
+    unregister_chrdev_region(devt_wrbuffer, 1);
+    printk("mydriver unregister successful.\n");
+#endif
     return 0;
 }
 //读设备里的信息
@@ -596,16 +606,6 @@ int __init init_module()
 
 void __exit cleanup_module()
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-    /*1、删除设备节点*/
-    device_destroy(class_wrbuffer, devt_wrbuffer);
-    class_destroy(class_wrbuffer);
-    /*2、取消字符设备注册*/
-    cdev_del(cdev_wrbuffer);
-    /*3、释放设备号*/
-    unregister_chrdev_region(devt_wrbuffer, 1);
-    printk("mydriver unregister successful.\n");
-#endif
     unregister_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
     cleanup_vfs_changes();
     pr_info("unregister_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
