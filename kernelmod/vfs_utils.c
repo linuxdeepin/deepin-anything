@@ -71,7 +71,8 @@ int is_special_mp(const char* mp)
 		return 1;
 
 	return mounted_at(mp, "/sys") || mounted_at(mp, "/proc") ||
-		mounted_at(mp, "/run") || mounted_at(mp, "/dev");
+		mounted_at(mp, "/run") || mounted_at(mp, "/dev") ||
+		mounted_at(mp, "/data/uengine");
 }
 
 void __init parse_mounts_info(char* buf, struct list_head* parts)
