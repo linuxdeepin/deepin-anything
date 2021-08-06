@@ -13,17 +13,17 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 #define CHRDEV_NAME      "driver_set_info"
-#define CLASS_NAME       "class_set_info"    //表示在/system/class目录下创建的设备类别目录
-#define DEVICE_NAME      "driver_set_info"   //在/dev/目录和/sys/class/class_wrbuff目录下分别创建设备文件driver_wrbuff
-static dev_t         devt_wrbuffer;  //alloc_chrdev_region函数向内核申请下来的设备号
-static struct cdev  *cdev_wrbuffer;  //注册到驱动的字符设备
-static struct class *class_wrbuffer; //字符设备创建的设备节点
-int my_open(struct inode *inode, struct file *file); //字符设备打开函数
-int my_release(struct inode *inode, struct file *file); //字符设备释放函数
-ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f);//字符设备读函数
-ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f);//字符设备写函数
+#define CLASS_NAME       "class_set_info"    /* 表示在/system/class目录下创建的设备类别目录 */
+#define DEVICE_NAME      "driver_set_info"   /* 在/dev/目录和/sys/class/class_wrbuff目录下分别创建设备文件driver_wrbuff */
+static dev_t         devt_wrbuffer;  /* alloc_chrdev_region函数向内核申请下来的设备号 */
+static struct cdev  *cdev_wrbuffer;  /* 注册到驱动的字符设备 */
+static struct class *class_wrbuffer; /* 字符设备创建的设备节点 */
+int my_open(struct inode *inode, struct file *file); /* 字符设备打开函数 */
+int my_release(struct inode *inode, struct file *file); /* 字符设备释放函数 */
+ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f); /* 字符设备读函数 */
+ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f); /* 字符设备写函数 */
 
-int init_vfs_flag = 0; //vfs初始化函数
+int init_vfs_flag = 0; /* vfs初始化函数 */
 struct file_operations fops_chrdriver = {
 open: my_open,
 release: my_release,
@@ -96,27 +96,28 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
         return 1;
     }
 
-    /*存储mount的时候的type值，在后面on_do_mount_ret 进行使用*/
+    /* 存储mount的时候的type值，在后面on_do_mount_ret 进行使用 */
     const char __user *type_name = (const char __user *)get_arg(regs, 3);
-    //解决bug69979，升级过程中type_name为空导致内核崩溃
+    /* 解决bug69979，升级过程中type_name为空导致内核崩溃 */
     if (type_name == NULL) {
-        printk("on_do_mount_ent type_name is null\n");
+        pr_err("on_do_mount_ent type_name is null\n");
         return 1;
     }
-    if (strlen(type_name) <= 0 || strlen(type_name) > NAME_MAX) {
-        printk("on_do_mount_ent no type\n");
+    if (strlen(type_name) <= 0 || strlen(type_name) >= sizeof(args->dir_type)) {
+        pr_err("on_do_mount_ent type is empty or too long\n");
         return 1;
     } else {
-        if (unlikely(strncpy(args->dir_type, type_name, strlen(type_name)) < 0)) {
-            printk("strncpy_from_user failed\n");
+        if (unlikely(strncpy(args->dir_type, type_name, sizeof(args->dir_type)-1) < 0)) {
+            pr_err("on_do_mount_ent strncpy failed\n");
             args->dir_type[0] = 0;
             return 1;
         }
+        args->dir_type[sizeof(args->dir_type)-1] = 0;
     }
 
     const char __user *dir_name = (const char __user *)get_arg(regs, 2);
     if (dir_name == NULL) {
-        printk("on_do_mount_ent dir_name is null\n");
+        pr_err("on_do_mount_ent dir_name is null\n");
         return 1;
     }
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, NAME_MAX) < 0)) {
@@ -129,8 +130,6 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
         return 1;
     }
 
-    //const char* dev_name = (const char*)get_arg(regs, 1);
-    //pr_info("do_mount_ent dev: %s, dir: %s\n", dev_name, args->dir_name);
     return 0;
 }
 
@@ -168,8 +167,8 @@ static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
     if (args == 0 || args->dir_name[0] == 0)
         return 0;
 
-    /*解决ntfs文件系统挂载的时候开启了auditd以后，mount的时候会导致系统卡死问题*/
-    /*对挂载的ntfs等fuse类型的文件系统进行判断，如果是这类文件系统则退出，*/
+    /* 解决ntfs文件系统挂载的时候开启了auditd以后，mount的时候会导致系统卡死问题 */
+    /* 对挂载的ntfs等fuse类型的文件系统进行判断，如果是这类文件系统则退出 */
     if (args->dir_type[0] == 0) {
         printk("dir_type is null");
         return 0;
@@ -425,36 +424,26 @@ static struct kretprobe *vfs_krps[] = {&do_mount_krp, &vfs_create_krp, &vfs_unli
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-//打开
+/* 打开 */
 int my_open(struct inode *inode, struct file *file)
 {
-    printk("open mydrive OK!\n");
-    try_module_get(THIS_MODULE);
+    if (!try_module_get(THIS_MODULE)) {
+        return -ENODEV;
+    }
     return 0;
 }
-//关闭
+/* 关闭 */
 int my_release(struct inode *inode, struct file *file)
 {
-    printk("mydrive released!\n");
     module_put(THIS_MODULE);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-    /*1、删除设备节点*/
-    device_destroy(class_wrbuffer, devt_wrbuffer);
-    class_destroy(class_wrbuffer);
-    /*2、取消字符设备注册*/
-    cdev_del(cdev_wrbuffer);
-    /*3、释放设备号*/
-    unregister_chrdev_region(devt_wrbuffer, 1);
-    printk("mydriver unregister successful.\n");
-#endif
     return 0;
 }
-//读设备里的信息
+/* 读设备里的信息 */
 ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f)
 {
     return 0;
 }
-//向设备里写信息
+/* 向设备里写信息 */
 ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f)
 {
     char buff[4096 * 2] = {0};
@@ -464,15 +453,17 @@ ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f
         f += t;
         buff[t] = 0;
         if (!is_mnt_ns_valid()) {
-            printk("is_mnt_ns_valid failed\n");
+            pr_err("is_mnt_ns_valid failed\n");
             return -1;
         }
         int size = 0;
 
         size = 0;
         int parts_count = 0;
-
-        // __init section doesnt need lock
+        if (init_vfs_flag) {
+            return 1;
+        }
+        /* init vfs_change */
         krp_partition *part;
         unsigned int major, minor;
         char mp[NAME_MAX], *line = buff;
@@ -497,15 +488,14 @@ ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f
             parts_count++;
             pr_info("mp: %s, major: %d, minor: %d\n", part->root, part->major, part->minor);
         }
-        if (!init_vfs_flag) {
-            int ret = register_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
-            if (ret < 0) {
-                pr_err("register_kretprobes failed, returned %d\n", ret);
-                cleanup_vfs_changes();
-                return -1;
-            }
-            init_vfs_flag = 1;
+
+        int ret = register_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
+        if (ret < 0) {
+            pr_err("register_kretprobes failed, returned %d\n", ret);
+            cleanup_vfs_changes();
+            return -1;
         }
+        init_vfs_flag = 1;
         pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
     }
     return 0;
@@ -533,7 +523,7 @@ static void __init init_mounts_info(void)
 
     int parts_count = 0;
 
-    // __init section doesnt need lock
+    /* get mounts info */
     krp_partition *part;
     parse_mounts_info(buf, &partitions);
     list_for_each_entry(part, &partitions, list) {
@@ -557,28 +547,42 @@ int __init init_module()
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
     int ret = 0;
     init_vfs_flag = 0;
-    /*1、申请设备号*/
+
+    /* 申请设备号 */
     ret = alloc_chrdev_region(&devt_wrbuffer, 0, 1, CHRDEV_NAME);
     if (ret) {
-        printk("alloc char driver error!\n");
+        pr_err("alloc char driver error!\n");
         return ret;
     }
 
-    /*2、注册字符设备*/
+    /* 注册字符设备 */
     cdev_wrbuffer = cdev_alloc();
+    if (!cdev_wrbuffer) {
+        return ENOMEM;
+    }
     cdev_init(cdev_wrbuffer, &fops_chrdriver);
     cdev_wrbuffer->owner = THIS_MODULE;
     ret = cdev_add(cdev_wrbuffer, devt_wrbuffer, 1);
     if (ret) {
-        printk("cdev create error!\n");
+        pr_err("cdev create error!\n");
         unregister_chrdev_region(devt_wrbuffer, 1);
+        cdev_del(cdev_wrbuffer);
         return ret;
     }
 
-    /*3、创建设备节点*/
+    /* 创建设备节点 */
     class_wrbuffer = class_create(THIS_MODULE, CLASS_NAME);
-    device_create(class_wrbuffer, NULL, devt_wrbuffer, NULL, DEVICE_NAME);
-    printk("mydriver driver is init ok!\n");
+    if (IS_ERR(class_wrbuffer)) {
+        cdev_del(cdev_wrbuffer);
+        return ENOMEM;
+    }
+    struct device *dev=device_create(class_wrbuffer, NULL, devt_wrbuffer, NULL, DEVICE_NAME);
+    if (IS_ERR(dev)) {
+        /* 删除设备节点 */
+        device_destroy(class_wrbuffer, devt_wrbuffer);
+        class_destroy(class_wrbuffer);
+        return ENOMEM;
+    }
 
     ret = init_vfs_changes();
     if (ret != 0) {
@@ -606,6 +610,15 @@ int __init init_module()
 
 void __exit cleanup_module()
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+    /* 删除设备节点 */
+    device_destroy(class_wrbuffer, devt_wrbuffer);
+    class_destroy(class_wrbuffer);
+    /* 取消字符设备注册 */
+    cdev_del(cdev_wrbuffer);
+    /* 释放设备号 */
+    unregister_chrdev_region(devt_wrbuffer, 1);
+#endif
     unregister_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
     cleanup_vfs_changes();
     pr_info("unregister_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
