@@ -101,15 +101,17 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
     /* 解决bug69979，升级过程中type_name为空导致内核崩溃 */
     if (type_name == NULL) {
         pr_err("on_do_mount_ent type_name is null\n");
+        args->dir_name[0] = 0;
         return 1;
     }
     if (strlen(type_name) <= 0 || strlen(type_name) >= sizeof(args->dir_type)) {
         pr_err("on_do_mount_ent type is empty or too long\n");
+        args->dir_name[0] = 0;
         return 1;
     } else {
         if (unlikely(strncpy(args->dir_type, type_name, sizeof(args->dir_type)-1) < 0)) {
             pr_err("on_do_mount_ent strncpy failed\n");
-            args->dir_type[0] = 0;
+            args->dir_name[0] = 0;
             return 1;
         }
         args->dir_type[sizeof(args->dir_type)-1] = 0;
@@ -118,6 +120,7 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
     const char __user *dir_name = (const char __user *)get_arg(regs, 2);
     if (dir_name == NULL) {
         pr_err("on_do_mount_ent dir_name is null\n");
+        args->dir_name[0] = 0;
         return 1;
     }
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, NAME_MAX) < 0)) {
@@ -161,6 +164,38 @@ static int get_major_minor(const char *dir_name, unsigned char *major, unsigned 
     return 0;
 }
 
+typedef struct __do_mount_work_stuct__ {
+    struct work_struct work;
+    char dir_name[NAME_MAX];
+} do_mount_work_stuct;
+
+void do_mount_work_handle(struct work_struct *work)
+{
+    do_mount_work_stuct *do_mount_work = (do_mount_work_stuct*)work;
+
+    unsigned char major, minor;
+    if (get_major_minor(do_mount_work->dir_name, &major, &minor)) {
+        pr_err("do_mount_work_handle get_major_minor failed for %s\n", do_mount_work->dir_name);
+        kfree(do_mount_work);
+        return;
+    }
+
+    char root[NAME_MAX];
+    get_root(root, major, minor);
+    if (*root != 0 && strcmp(root, do_mount_work->dir_name) == 0) {
+        pr_info("do_mount_work_handle partition(%s) alread exist\n", do_mount_work->dir_name);
+        kfree(do_mount_work);
+        return;
+    }
+
+    spin_lock(&sl_parts);
+    add_partition(do_mount_work->dir_name, major, minor);
+    spin_unlock(&sl_parts);
+
+    pr_info("do_mount_work_handle quit for %s\n", do_mount_work->dir_name);
+    kfree(do_mount_work);
+}
+
 static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     do_mount_args *args = (do_mount_args *)ri->data;
@@ -170,33 +205,35 @@ static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
     /* 解决ntfs文件系统挂载的时候开启了auditd以后，mount的时候会导致系统卡死问题 */
     /* 对挂载的ntfs等fuse类型的文件系统进行判断，如果是这类文件系统则退出 */
     if (args->dir_type[0] == 0) {
-        printk("dir_type is null");
+        pr_err("dir_type is null");
         return 0;
     }
 
     if (strstr(args->dir_type, "fuse")) {
-        printk("\nThis is the fuse filesytem，so return\n\n");
+        pr_info("This is the fuse filesytem，so return\n");
         return 0;
     }
 
     unsigned long retval = regs_return_value(regs);
     if (retval != 0)
         return 0;
-
-    unsigned char major, minor;
-    if (get_major_minor(args->dir_name, &major, &minor)) {
-        pr_err("get_mj_mn failed for %s\n", args->dir_name);
+    /*增加工作队列处理*/
+    do_mount_work_stuct *do_mount_work = kmalloc(sizeof(do_mount_work_stuct), GFP_ATOMIC);
+    if (unlikely(0 == do_mount_work)) {
+        pr_err("do_mount_work kmalloc failed\n");
         return 0;
     }
 
-    char root[NAME_MAX];
-    get_root(root, major, minor);
-    if (*root != 0 && strcmp(root, args->dir_name) == 0)
+    if (unlikely(strncpy(do_mount_work->dir_name, args->dir_name, sizeof(do_mount_work->dir_name)-1) < 0)) {
+        pr_err("on_do_mount_ret: strncpy failed\n");
+        kfree(do_mount_work);
         return 0;
+    }
+    do_mount_work->dir_name[sizeof(do_mount_work->dir_name)]= 0;
+    INIT_WORK(&(do_mount_work->work), do_mount_work_handle);
+    schedule_work(&do_mount_work->work);
 
-    spin_lock(&sl_parts);
-    add_partition(args->dir_name, major, minor);
-    spin_unlock(&sl_parts);
+    pr_info("on_do_mount_ret: %s\n", args->dir_name);
     return 0;
 }
 
@@ -235,20 +272,34 @@ static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs
     return 0;
 }
 
-static void drop_partition(sys_umount_args *args)
+typedef struct __sys_umount_work_stuct__ {
+    struct work_struct work;
+    sys_umount_args args;
+} sys_umount_work_stuct;
+
+void sys_umount_work_handle(struct work_struct *work)
 {
+    sys_umount_work_stuct *sys_umount_work = (sys_umount_work_stuct*)work;
+
+    spin_lock(&sl_parts);
     struct list_head *p, *next;
+    struct list_head *target = NULL;
     list_for_each_safe(p, next, &partitions) {
         krp_partition *part = list_entry(p, krp_partition, list);
-        if (part->major != args->major || part->minor != args->minor ||
-                strcmp(part->root, args->dir_name))
+        if (strcmp(part->root, sys_umount_work->args.dir_name))
             continue;
-
-        pr_info("partition %s [%d, %d] umounted\n", part->root, part->major, part->minor);
-        list_del(p);
-        kfree(part);
-        break;
+        target = p;
     }
+    if (target)
+    {
+        krp_partition *part = list_entry(target, krp_partition, list);
+        pr_info("partition %s [%d, %d] umounted\n", part->root, part->major, part->minor);
+        list_del(target);
+        kfree(part);
+    }
+    spin_unlock(&sl_parts);
+    pr_info("sys_umount_work_handle quit for %s\n", sys_umount_work->args.dir_name);
+    kfree(sys_umount_work);
 }
 
 static int on_sys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
@@ -261,9 +312,26 @@ static int on_sys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs
     if (retval != 0)
         return 0;
 
-    spin_lock(&sl_parts);
-    drop_partition(args);
-    spin_unlock(&sl_parts);
+    /*增加工作队列处理方式*/
+    sys_umount_work_stuct *sys_umount_work = kmalloc(sizeof(sys_umount_work_stuct), GFP_ATOMIC);
+    if (unlikely(0 == sys_umount_work)) {
+        pr_err("on_sys_umount_ret kmalloc failed\n");
+        return 0;
+    }
+
+    if (unlikely(strncpy(sys_umount_work->args.dir_name, args->dir_name, sizeof(sys_umount_work->args.dir_name)-1) < 0)) {
+        pr_err("on_sys_umount_ret strncpy failed\n");
+        kfree(sys_umount_work);
+        return 0;
+    }
+    sys_umount_work->args.dir_name[sizeof(sys_umount_work->args.dir_name)] = 0;
+    sys_umount_work->args.major = args->major;
+    sys_umount_work->args.minor = args->minor;
+
+    INIT_WORK(&(sys_umount_work->work), sys_umount_work_handle);
+    schedule_work(&sys_umount_work->work);
+
+    pr_info("on_sys_umount_ret: %s\n", args->dir_name);
     return 0;
 }
 
