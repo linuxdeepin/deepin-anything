@@ -1142,7 +1142,16 @@ LFTManager::LFTManager(QObject *parent)
     }
 
     qAddPostRoutine(cleanLFTManager);
-    refresh();
+    /*解决在最开始的10分钟内搜索不到问题 92168*/
+   connect(&refresh_timer,&QTimer::timeout,this,[this](){
+     const QStringList &list = this->refresh();
+     if(!list.isEmpty()){
+        refresh_timer.stop();
+     } 
+       
+   });
+   refresh_timer.setInterval(10*1000);
+   refresh_timer.start();
 #ifdef QT_NO_DEBUG
     // 可能会加载到一些自动生成的未被允许的索引文件, 此处应该清理一遍
     _cleanAllIndex();

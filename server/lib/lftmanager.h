@@ -23,6 +23,7 @@
 
 #include <QObject>
 #include <QDBusContext>
+#include <QTimer>
 
 class DBlockDevice;
 class LFTManager : public QObject, protected QDBusContext
@@ -85,6 +86,7 @@ protected:
     void sendErrorReply(QDBusError::ErrorType type, const QString &msg = QString()) const;
 
 private:
+    QTimer refresh_timer;
     bool _isAutoIndexPartition() const;
 
     void _syncAll();
