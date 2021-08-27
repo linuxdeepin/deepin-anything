@@ -12,7 +12,7 @@ install:
 	mkdir -p $(DESTDIR)/usr/src/deepin-anything-$(VERSION)
 	cp -r kernelmod/* $(DESTDIR)/usr/src/deepin-anything-$(VERSION)
 	mkdir -p $(DESTDIR)/usr/lib/modules-load.d
-	echo "vfs_monitor" | tee $(DESTDIR)/usr/lib/modules-load.d/anything.conf
+	echo "" | tee $(DESTDIR)/usr/lib/modules-load.d/anything.conf
 	mkdir -p $(DESTDIR)/usr/include/deepin-anything
 	cp -r library/inc/* $(DESTDIR)/usr/include/deepin-anything
 	cp -r kernelmod/vfs_change_uapi.h $(DESTDIR)/usr/include/deepin-anything

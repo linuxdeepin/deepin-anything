@@ -1,11 +1,13 @@
 [Unit]
 Description=Deepin anything service
-After=systemd-modules-load.service
+After=deepin-anything-tool.service
 
 [Service]
-User=deepin-anything-server
+User=root
 Group=deepin-anything-server
 ExecStart=/usr/bin/deepin-anything-monitor
+ExecStartPre=modprobe vfs_monitor
+ExecStopPost=rmmod vfs_monitor
 Environment=DAS_DEBUG_PLUGINS=1
 Restart=always
 RestartSec=10
