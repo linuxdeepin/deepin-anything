@@ -55,7 +55,11 @@ QByteArray pathToSerialUri(const QString &path)
     if (device == QByteArrayLiteral("/dev/fuse\0"))
         return QByteArray();
 
-    QScopedPointer<DBlockDevice> block_obj(_global_diskManager->createBlockDeviceByDevicePath(device));
+    // 为了和udisks2返回的device做比较，故加上\0结尾
+    QByteArray mount_partition = QByteArray(path.toLocal8Bit()).append('\0');
+    // 分区为加密盘时（TYPE：lvm），QStorageInfo::device() 返回“/dev/mapper/xxx”，与udisks2返回的“/dev/dm-x\0x00” 不匹配。
+    // 使用挂载点匹配获取块设备。
+    QScopedPointer<DBlockDevice> block_obj(_global_diskManager->createBlockPartitionByMountPoint(mount_partition));
 
     if (!block_obj || block_obj->isLoopDevice())
         return QByteArray();
