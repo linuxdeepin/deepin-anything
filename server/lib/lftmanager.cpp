@@ -200,6 +200,11 @@ static int handle_build_fs_buf_progress(uint32_t file_count, uint32_t dir_count,
     Q_UNUSED(cur_file)
 
     QFutureWatcherBase *futureWatcher = static_cast<QFutureWatcherBase*>(param);
+    // 在并行里立即检测watcher, 它的状态可能未更新(isStarted=true 但是isRunning=false && isFinished=true)
+    // BUG93215，导致索引建立被取消
+    if (!futureWatcher || !futureWatcher->isRunning()) {
+        return 0;
+    }
 
     if (futureWatcher->isCanceled()) {
         return 1;
