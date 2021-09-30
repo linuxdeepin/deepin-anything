@@ -19,9 +19,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <sys/utsname.h>
+
 #include <QCoreApplication>
 #include <QThread>
 #include <QLoggingCategory>
+#include <QFile>
 
 #include "server.h"
 #include "dasfactory.h"
@@ -77,9 +80,70 @@ void removePlugins(const QStringList &keys, Server *server)
     }
 }
 
+enum WriteMountInfoError
+{
+    Success = 0,
+    UnameFail,
+    UnrecognizedVersion,
+    OpenSrcFileFail,
+    OpenDstFileFail,
+    WriteDstFileFail
+};
+
+// write mountinfo for vfs_monitor when kernel version >= 5.10
+WriteMountInfoError writeMountInfo()
+{
+    struct utsname uts;
+    if (uname(&uts) != 0) {
+        qWarning() << "uname fail";
+        return WriteMountInfoError::UnameFail;
+    }
+    qDebug() << "the kernel version: " << uts.release;
+
+    QStringList ver_list = QString(uts.release).split(".");
+    if (ver_list.size() < 3) {
+        qWarning() << "unrecognized version format, expect x.y.z";
+        return WriteMountInfoError::UnrecognizedVersion;
+    }
+    int ver_x = ver_list[0].toInt();
+    int ver_y = ver_list[1].toInt();
+
+    // write when version >= 5.10
+    if (ver_x >= 6 || (5 == ver_x && ver_y >= 10)) {
+        QString file_mountinfo_path("/proc/self/mountinfo");
+        QFile file_mountinfo(file_mountinfo_path);
+        if (!file_mountinfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            qWarning() << "open file " << file_mountinfo_path << " failed";
+            return WriteMountInfoError::OpenSrcFileFail;
+        }
+        QByteArray mount_info;
+        mount_info = file_mountinfo.readAll();
+        file_mountinfo.close();
+
+        // driver_set_info is created by vfs_monitor and be used to receive mount information
+        QString file_drv_path("/dev/driver_set_info");
+        QFile file_drv(file_drv_path);
+        if (!file_drv.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            qWarning() << "open file " << file_drv_path << " failed";
+            return WriteMountInfoError::OpenDstFileFail;
+        }
+        if (file_drv.write(mount_info.data(), mount_info.size()) != mount_info.size()) {
+            qWarning() << "write file " << file_drv_path << " failed";
+            return WriteMountInfoError::WriteDstFileFail;
+        }
+        file_drv.close();
+
+        qDebug() << "write mountinfo success";
+    }
+
+    return WriteMountInfoError::Success;
+}
+
 int main(int argc, char *argv[])
 {
     qSetMessagePattern("[%{time yyyy-MM-dd, HH:mm:ss.zzz}] [%{category}-%{type}] [%{function}: %{line}]: %{message}");
+
+    writeMountInfo();
 
     QCoreApplication app(argc, argv);
 

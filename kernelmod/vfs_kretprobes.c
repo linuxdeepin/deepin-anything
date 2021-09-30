@@ -104,18 +104,12 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
         args->dir_name[0] = 0;
         return 1;
     }
-    if (strlen(type_name) <= 0 || strlen(type_name) >= sizeof(args->dir_type)) {
+    if (strlen(type_name) == 0 || strlen(type_name) >= sizeof(args->dir_type)) {
         pr_err("on_do_mount_ent type is empty or too long\n");
         args->dir_name[0] = 0;
         return 1;
-    } else {
-        if (unlikely(strncpy(args->dir_type, type_name, sizeof(args->dir_type)-1) < 0)) {
-            pr_err("on_do_mount_ent strncpy failed\n");
-            args->dir_name[0] = 0;
-            return 1;
-        }
-        args->dir_type[sizeof(args->dir_type)-1] = 0;
     }
+    strcpy(args->dir_type, type_name);
 
     const char __user *dir_name = (const char __user *)get_arg(regs, 2);
     if (dir_name == NULL) {
@@ -224,12 +218,12 @@ static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
         return 0;
     }
 
-    if (unlikely(strncpy(do_mount_work->dir_name, args->dir_name, sizeof(do_mount_work->dir_name)-1) < 0)) {
-        pr_err("on_do_mount_ret: strncpy failed\n");
+    if (unlikely(strlen(args->dir_name) >= sizeof(do_mount_work->dir_name))) {
+        pr_err("on_do_mount_ret: dir_name is too long\n");
         kfree(do_mount_work);
         return 0;
     }
-    do_mount_work->dir_name[sizeof(do_mount_work->dir_name)]= 0;
+    strcpy(do_mount_work->dir_name, args->dir_name);
     INIT_WORK(&(do_mount_work->work), do_mount_work_handle);
     schedule_work(&do_mount_work->work);
 
@@ -319,12 +313,12 @@ static int on_sys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs
         return 0;
     }
 
-    if (unlikely(strncpy(sys_umount_work->args.dir_name, args->dir_name, sizeof(sys_umount_work->args.dir_name)-1) < 0)) {
-        pr_err("on_sys_umount_ret strncpy failed\n");
+    if (unlikely(strlen(args->dir_name) >= sizeof(sys_umount_work->args.dir_name))) {
+        pr_err("on_sys_umount_ret dir_name is too long\n");
         kfree(sys_umount_work);
         return 0;
     }
-    sys_umount_work->args.dir_name[sizeof(sys_umount_work->args.dir_name)] = 0;
+    strcpy(sys_umount_work->args.dir_name, args->dir_name);
     sys_umount_work->args.major = args->major;
     sys_umount_work->args.minor = args->minor;
 
@@ -671,8 +665,8 @@ int __init init_module()
         cleanup_vfs_changes();
         return ret;
     }
-#endif
     pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
+#endif
     return 0;
 }
 

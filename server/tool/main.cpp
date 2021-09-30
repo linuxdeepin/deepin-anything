@@ -26,7 +26,7 @@
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QDBusConnection>
-#include<sys/utsname.h>
+
 #include <DLog>
 
 #include "lftmanager.h"
@@ -51,35 +51,6 @@ int main(int argc, char *argv[])
 
     app.setOrganizationName("deepin");
 
-    //read the kernel version
-    struct utsname uts;
-    if (uname(&uts) >= 0) {
-        qWarning() << "the kernel version:" << uts.release;
-        QString s_release(uts.release);
-        if (s_release.startsWith("5.10")) {
-            QFile file_mountinfo("/proc/self/mountinfo");
-            QByteArray t_info;
-            if (!file_mountinfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                qWarning() << "open file" << file_mountinfo.Text << "failed";
-            } else {
-                t_info = file_mountinfo.readAll();
-                file_mountinfo.close();
-            }
-
-            QFile file_drv("/dev/driver_set_info");
-            char buf[4096 * 2]; //缓冲区
-
-            if (!file_drv.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                qWarning() << "open driver_set_info file" << file_drv.Text << "failed";
-            } else {
-                //写信息
-                memcpy(buf, t_info, t_info.size());
-                qWarning() << "write file info:" << buf;
-                file_drv.write(buf);
-                file_drv.close();
-            }
-        }
-    }
     // init log
     ConsoleAppender *consoleAppender = new ConsoleAppender;
     consoleAppender->setFormat(logFormat);
