@@ -22,3 +22,4 @@ install:
 clean:
 	rm -f debian/deepin-anything-dkms.dkms
 	make -C library clean
+	@[ -f server/Makefile ] && make -C server distclean || true
