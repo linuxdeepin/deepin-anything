@@ -429,7 +429,8 @@ DECL_CMN_KRP(vfs_link);
 typedef struct __vfs_rename_args__ {
     char *old_path;
     char *new_path;
-    char buf[PATH_MAX];
+    char old_buf[PATH_MAX];
+    char new_buf[PATH_MAX];
     unsigned char major, minor, is_dir;
 } vfs_rename_args;
 
@@ -446,12 +447,12 @@ static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs
     }
     args->major = MAJOR(de_old->d_sb->s_dev);
     args->minor = MINOR(de_old->d_sb->s_dev);
-    args->old_path = dentry_path_raw(de_old, args->buf, sizeof(args->buf));
+    args->old_path = dentry_path_raw(de_old, args->old_buf, sizeof(args->old_buf));
     if (IS_ERR(args->old_path)) {
         args->old_path = 0;
         return 1;
     }
-    args->new_path = dentry_path_raw(de_new, args->buf, sizeof(args->buf) - strlen(args->old_path) - 1);
+    args->new_path = dentry_path_raw(de_new, args->new_buf, sizeof(args->new_buf));
     if (IS_ERR(args->new_path)) {
         args->old_path = 0;
         return 1;
