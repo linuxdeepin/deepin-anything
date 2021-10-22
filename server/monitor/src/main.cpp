@@ -123,7 +123,7 @@ WriteMountInfoError writeMountInfo()
         // driver_set_info is created by vfs_monitor and be used to receive mount information
         QString file_drv_path("/dev/driver_set_info");
         QFile file_drv(file_drv_path);
-        if (!file_drv.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        if (!file_drv.open(QIODevice::ExistingOnly | QIODevice::WriteOnly | QIODevice::Text)) {
             qWarning() << "open file " << file_drv_path << " failed";
             return WriteMountInfoError::OpenDstFileFail;
         }

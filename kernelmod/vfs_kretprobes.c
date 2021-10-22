@@ -23,7 +23,6 @@ int my_release(struct inode *inode, struct file *file); /* 字符设备释放函
 ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f); /* 字符设备读函数 */
 ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f); /* 字符设备写函数 */
 
-int init_vfs_flag = 0; /* vfs初始化函数 */
 struct file_operations fops_chrdriver = {
 open: my_open,
 release: my_release,
@@ -45,10 +44,10 @@ typedef struct __do_mount_args__ {
 
 #define _DECL_CMN_KRP(fn, symbol) static struct kretprobe fn##_krp = {\
         .entry_handler  = on_##fn##_ent,\
-                          .handler        = on_##fn##_ret,\
-                                            .data_size      = sizeof(fn##_args),\
-                                                              .maxactive      = 64,\
-                                                                                .kp.symbol_name = ""#symbol"",\
+        .handler        = on_##fn##_ret,\
+        .data_size      = sizeof(fn##_args),\
+        .maxactive      = 64,\
+        .kp.symbol_name = ""#symbol"",\
     };
 
 #define DECL_CMN_KRP(fn) _DECL_CMN_KRP(fn, fn)
@@ -56,6 +55,7 @@ typedef struct __do_mount_args__ {
 static DEFINE_SPINLOCK(sl_parts);
 static LIST_HEAD(partitions);
 
+static int is_registered_kretprobes = 0;
 
 static void get_root(char *root, unsigned char major, unsigned char minor)
 {
@@ -340,19 +340,24 @@ typedef struct __vfs_op_args__ {
     unsigned char major, minor;
     char *path;
     char buf[PATH_MAX];
-} vfs_op_args, vfs_link_args;
+} vfs_op_args;
 
-#define DECL_VFS_KRP(fn, act) static int on_##fn##_ret(struct kretprobe_instance *ri, struct pt_regs *regs)\
+#define DECL_VFS_KRP(fn, act, de_i) static int on_##fn##_ent(struct kretprobe_instance *ri, struct pt_regs *regs)\
+    {\
+        return common_vfs_ent((vfs_op_args *)ri->data, (struct dentry *)get_arg(regs, de_i));\
+    }\
+    \
+    static int on_##fn##_ret(struct kretprobe_instance *ri, struct pt_regs *regs)\
     {\
         return common_vfs_ret(ri, regs, act);\
     }\
     \
     static struct kretprobe fn##_krp = {\
-        .entry_handler  = on_vfs_op_ent,\
-                          .handler        = on_##fn##_ret,\
-                                            .data_size      = sizeof(vfs_op_args),\
-                                                              .maxactive      = 64,\
-                                                                                .kp.symbol_name = ""#fn"",\
+        .entry_handler  = on_##fn##_ent,\
+        .handler        = on_##fn##_ret,\
+        .data_size      = sizeof(vfs_op_args),\
+        .maxactive      = 64,\
+        .kp.symbol_name = ""#fn"",\
     };
 
 static int common_vfs_ent(vfs_op_args *args, struct dentry *de)
@@ -369,18 +374,6 @@ static int common_vfs_ent(vfs_op_args *args, struct dentry *de)
 
     args->path = path;
     return 0;
-}
-
-static int on_vfs_op_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
-{
-    // vfs-create: struct inode*, struct dentry*, umode_t, bool
-    // vfs-unlink: struct inode*, struct dentry*, struct inode**
-    // vfs-mkdir: struct inode*, struct dentry*, umode_t
-    // vfs-rmdir: struct inode*, struct dentry*
-    // vfs-symlink: struct inode*, struct dentry*, const char*
-    // security-inode-create: struct inode*, struct dentry*, umode_t
-    struct dentry *de = (struct dentry *)get_arg(regs, 2);
-    return common_vfs_ent((vfs_op_args *)ri->data, de);
 }
 
 static int common_vfs_ret(struct kretprobe_instance *ri, struct pt_regs *regs, int action)
@@ -404,27 +397,43 @@ static int common_vfs_ret(struct kretprobe_instance *ri, struct pt_regs *regs, i
     return 0;
 }
 
-DECL_VFS_KRP(vfs_create, ACT_NEW_FILE);
-DECL_VFS_KRP(vfs_unlink, ACT_DEL_FILE);
-DECL_VFS_KRP(vfs_mkdir, ACT_NEW_FOLDER);
-DECL_VFS_KRP(vfs_rmdir, ACT_DEL_FOLDER);
-DECL_VFS_KRP(vfs_symlink, ACT_NEW_SYMLINK);
-// newer kernel rarely calls vfs_create... so we have to rely on the not-so-reliable security_inode_create
-DECL_VFS_KRP(security_inode_create, ACT_NEW_FILE);
-
-static int on_vfs_link_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
-{
-    // vfs-link: struct dentry*, struct inode*, struct dentry*, struct inode**
-    struct dentry *de = (struct dentry *)get_arg(regs, 1);
-    return common_vfs_ent((vfs_op_args *)ri->data, de);
-}
-
-static int on_vfs_link_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
-{
-    return common_vfs_ret(ri, regs, ACT_NEW_LINK);
-}
-
-DECL_CMN_KRP(vfs_link);
+// select dentry from vfs api by different kernel
+// If the vfs api in the subsequent kernel changes, please define a new macro branch.
+// The main work of the definition is to specify the position number (starting from 1) of 
+// the dentry parameter according to the definition of vfs api.
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
+// vfs-create: struct inode*, struct dentry*, umode_t, bool
+// vfs-unlink: struct inode*, struct dentry*, struct inode**
+// vfs-mkdir: struct inode*, struct dentry*, umode_t
+// vfs-rmdir: struct inode*, struct dentry*
+// vfs-symlink: struct inode*, struct dentry*, const char*
+// security-inode-create: struct inode*, struct dentry*, umode_t
+// vfs-link: struct dentry*, struct inode*, struct dentry*, struct inode**
+DECL_VFS_KRP(vfs_create, ACT_NEW_FILE, 2);
+DECL_VFS_KRP(vfs_unlink, ACT_DEL_FILE, 2);
+DECL_VFS_KRP(vfs_mkdir, ACT_NEW_FOLDER, 2);
+DECL_VFS_KRP(vfs_rmdir, ACT_DEL_FOLDER, 2);
+DECL_VFS_KRP(vfs_symlink, ACT_NEW_SYMLINK, 2);
+DECL_VFS_KRP(security_inode_create, ACT_NEW_FILE, 2);
+// select dest(3) dentry, not src(1) dentry
+DECL_VFS_KRP(vfs_link, ACT_NEW_LINK, 3);
+#else
+// int vfs_create(struct user_namespace *, struct inode *, struct dentry *, umode_t, bool);
+// int vfs_unlink(struct user_namespace *, struct inode *, struct dentry *, struct inode **);
+// int vfs_mkdir(struct user_namespace *, struct inode *, struct dentry *, umode_t);
+// int vfs_rmdir(struct user_namespace *, struct inode *, struct dentry *);
+// int vfs_symlink(struct user_namespace *, struct inode *, struct dentry *, const char *);
+// int security_inode_create(struct inode *dir, struct dentry *dentry, umode_t mode);
+// int vfs_link(struct dentry *, struct user_namespace *, struct inode *, struct dentry *, struct inode **);
+DECL_VFS_KRP(vfs_create, ACT_NEW_FILE, 3);
+DECL_VFS_KRP(vfs_unlink, ACT_DEL_FILE, 3);
+DECL_VFS_KRP(vfs_mkdir, ACT_NEW_FOLDER, 3);
+DECL_VFS_KRP(vfs_rmdir, ACT_DEL_FOLDER, 3);
+DECL_VFS_KRP(vfs_symlink, ACT_NEW_SYMLINK, 3);
+DECL_VFS_KRP(security_inode_create, ACT_NEW_FILE, 2);
+// select dest(4) dentry, not src(1) dentry
+DECL_VFS_KRP(vfs_link, ACT_NEW_LINK, 4);
+#endif
 
 typedef struct __vfs_rename_args__ {
     char *old_path;
@@ -436,11 +445,29 @@ typedef struct __vfs_rename_args__ {
 
 static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    // vfs-rename: struct inode*, struct dentry*, struct inode*, struct dentry*, struct inode**, unsigned int
     vfs_rename_args *args = (vfs_rename_args *)ri->data;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
+    // vfs-rename: struct inode*, struct dentry*, struct inode*, struct dentry*, struct inode**, unsigned int
     struct dentry *de_old = (struct dentry *)get_arg(regs, 2);
     struct dentry *de_new = (struct dentry *)get_arg(regs, 4);
+#else
+    // int vfs_rename(struct renamedata *);
+    // struct renamedata {
+    //     struct user_namespace *old_mnt_userns;
+    //     struct inode *old_dir;
+    //     struct dentry *old_dentry;
+    //     struct user_namespace *new_mnt_userns;
+    //     struct inode *new_dir;
+    //     struct dentry *new_dentry;
+    //     struct inode **delegated_inode;
+    //     unsigned int flags;
+    // } __randomize_layout;
+    struct renamedata *renamedata = (struct renamedata *)get_arg(regs, 1);
+    struct dentry *de_old = renamedata->old_dentry;
+    struct dentry *de_new = renamedata->new_dentry;
+#endif
+
     if (de_old == 0 || de_old->d_sb == 0 || de_new == 0) {
         args->old_path = 0;
         return 1;
@@ -511,6 +538,7 @@ ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f
 {
     char buff[4096 * 2] = {0};
     if (copy_from_user(buff, user, t)) {
+        pr_err("copy_from_user failed\n");
         return -1;
     } else {
         f += t;
@@ -523,7 +551,8 @@ ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f
 
         size = 0;
         int parts_count = 0;
-        if (init_vfs_flag) {
+        if (is_registered_kretprobes) {
+            pr_info("my_write already init\n");
             return 1;
         }
         /* init vfs_change */
@@ -558,7 +587,7 @@ ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f
             cleanup_vfs_changes();
             return -1;
         }
-        init_vfs_flag = 1;
+        is_registered_kretprobes = 1;
         pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
     }
     return 0;
@@ -609,7 +638,6 @@ int __init init_module()
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
     int ret = 0;
-    init_vfs_flag = 0;
 
     /* 申请设备号 */
     ret = alloc_chrdev_region(&devt_wrbuffer, 0, 1, CHRDEV_NAME);
@@ -666,8 +694,10 @@ int __init init_module()
         cleanup_vfs_changes();
         return ret;
     }
+    is_registered_kretprobes = 1;
     pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
 #endif
+    pr_info("vfs_monitor init ok\n");
     return 0;
 }
 
@@ -682,9 +712,12 @@ void __exit cleanup_module()
     /* 释放设备号 */
     unregister_chrdev_region(devt_wrbuffer, 1);
 #endif
-    unregister_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
+    if (is_registered_kretprobes) {
+        unregister_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
+        pr_info("unregister_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
+    }
     cleanup_vfs_changes();
-    pr_info("unregister_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
+    pr_info("vfs_monitor clearup ok\n");
 }
 
 MODULE_LICENSE("GPL");
