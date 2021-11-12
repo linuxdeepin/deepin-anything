@@ -45,6 +45,9 @@ static wait_queue_head_t wq_vfs_changes;
 static atomic_t wait_vfs_changes_count;
 static atomic_t vfs_changes_is_open;
 
+/* 内核模块向用户空间进程拷贝事件的中转缓冲区 */
+static char *vfs_changes_buf = NULL;
+
 static void wait_vfs_changes_timer_callback(
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
 unsigned long data
@@ -172,21 +175,17 @@ static ssize_t copy_vfs_changes(struct TIMESTRUCT *last, char* buf, size_t size)
 // format: YYYY-MM-DD hh:mm:ss.SSS $action $src $dst, let's require at least 50 bytes
 static ssize_t read_vfs_changes(struct file* filp, char __user* buf, size_t size, loff_t* offset)
 {
-	if (size < MIN_LINE_SIZE)
+	if (size < MIN_LINE_SIZE || size > MAX_VFS_CHANGE_MEM)
 		return -EINVAL;
-
-	char* kbuf = kmalloc(size, GFP_KERNEL);
-	if (kbuf == 0)
-		return -ENOMEM;
 
 	struct TIMESTRUCT *last = (struct TIMESTRUCT*)filp->private_data;
 	spin_lock(&sl_changes);
-	ssize_t r = copy_vfs_changes(last, kbuf, size);
-	spin_unlock(&sl_changes);
-	if (r > 0 && copy_to_user(buf, kbuf, r))
+	/* 确保vfs_changes_buf不会被多线程访问 */
+	ssize_t r = copy_vfs_changes(last, vfs_changes_buf, size);
+	if (r > 0 && copy_to_user(buf, vfs_changes_buf, r))
 		r = -EFAULT;
+	spin_unlock(&sl_changes);
 
-	kfree(kbuf);
 	return r;
 }
 
@@ -202,15 +201,15 @@ static long move_vfs_changes(ioctl_rd_args __user* ira)
 		return -EFAULT;
 	}
 
-	char *kbuf = kmalloc(kira.size, GFP_KERNEL);
-	if (kbuf == 0) {
+	if (kira.size > MAX_VFS_CHANGE_MEM) {
 		atomic_set(&wait_vfs_changes_count, -1);
-		return -ENOMEM;
+		return -EINVAL;
 	}
 
 	int total_bytes = 0, total_items = 0;
 
 	spin_lock(&sl_changes);
+	/* 确保vfs_changes_buf不会被多线程访问 */
 	struct list_head *p, *next;
 	list_for_each_safe(p, next, &vfs_changes) {
 		vfs_change* vc = list_entry(p, vfs_change, list);
@@ -221,23 +220,21 @@ static long move_vfs_changes(ioctl_rd_args __user* ira)
 		if (this_len + total_bytes > kira.size)
 			break;
 
-		memcpy(kbuf + total_bytes, &head, sizeof(head));
+		memcpy(vfs_changes_buf + total_bytes, &head, sizeof(head));
 		total_bytes += sizeof(head);
 		// src and dst are adjacent when allocated
-		memcpy(kbuf + total_bytes, vc->src, this_len - sizeof(head));
+		memcpy(vfs_changes_buf + total_bytes, vc->src, this_len - sizeof(head));
 		total_bytes += this_len-sizeof(head);
 
 		total_items++;
 		REMOVE_ENTRY(p, vc);
 	}
-	spin_unlock(&sl_changes);
-
-	if (total_bytes && copy_to_user(kira.data, kbuf, total_bytes)) {
-		kfree(kbuf);
+	if (total_bytes && copy_to_user(kira.data, vfs_changes_buf, total_bytes)) {
+		spin_unlock(&sl_changes);
 		atomic_set(&wait_vfs_changes_count, -1);
 		return -EFAULT;
 	}
-	kfree(kbuf);
+	spin_unlock(&sl_changes);
 
 	kira.size = total_items;
 	if (copy_to_user(ira, &kira, sizeof(kira)) != 0) {
@@ -357,8 +354,16 @@ static struct proc_ops procfs_ops = {
 #endif
 int __init init_vfs_changes(void)
 {
+	vfs_changes_buf = kmalloc(MAX_VFS_CHANGE_MEM, GFP_KERNEL);
+	if (!vfs_changes_buf) {
+		pr_warn("init_vfs_changes kmalloc fail\n", PROCFS_NAME);
+		return -ENOMEM;
+	}
+
 	struct proc_dir_entry* procfs_entry = proc_create(PROCFS_NAME, 0666, 0, &procfs_ops);
 	if (procfs_entry == 0) {
+		kfree(vfs_changes_buf);
+		vfs_changes_buf = NULL;
 		pr_warn("%s already exists?\n", PROCFS_NAME);
 		return -1;
 	}
@@ -382,6 +387,11 @@ void cleanup_vfs_changes(void)
 		REMOVE_ENTRY(p, vc);
 	}
 	spin_unlock(&sl_changes);
+
+	if (vfs_changes_buf) {
+		kfree(vfs_changes_buf);
+		vfs_changes_buf = NULL;
+	}
 }
 
 static void remove_oldest(void)
