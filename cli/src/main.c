@@ -25,11 +25,11 @@
 #define MAX_PARTS		32
 #endif
 
-static int report_progress(uint32_t file_count, uint32_t dir_count, const char* cur_dir, void* param)
+static int report_progress(uint32_t file_count, uint32_t dir_count, const char* cur_dir, const char* cur_file, void* param)
 {
 	int *n10k = (int *)param;
 	if (file_count + dir_count >= (*n10k)*10000) {
-		printf("files: %'u, dirs: %'u, current dir: %s\n", file_count, dir_count, cur_dir);
+		printf("files: %'u, dirs: %'u, current dir: %s, current file: %s\n", file_count, dir_count, cur_dir, cur_file);
 		*n10k = *n10k + 1;
 	}
 	return 0;
@@ -206,7 +206,7 @@ struct {
 } commands[] = {
 	{"help", help, 0, "Print this help information"},
 	{"scan", scan, "[-d $dir] [-i] [-m] [$root]", "Scan directories $root (default to /), merge all partitions (if -m), make indice(if -i), save data to $dir and test search"},
-	{"load", load, "[-d $dir] [-l #load_policy]", "Load previously saved indice from $dir all into memory if -l 0 or none into memory if -l 1 and test search"},
+	{"load", load, "[-d $dir] [-f $lftfile] [-l #load_policy]", "Load previously saved indice from $dir all into memory or load xx.lft index file if -l 0 or none into memory if -l 1 and test search"},
 	{"partitions", get_parts, 0, "Get partitions"},
 	{0, 0, 0, 0}
 };
