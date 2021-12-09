@@ -89,7 +89,15 @@ static int is_mnt_ns_valid(void)
 
 static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    // const char*, const char __user*, ...
+    /*
+     * >= 5.9
+     * int path_mount(const char *dev_name, struct path *path,
+     *  const char *type_page, unsigned long flags, void *data_page)
+     * 
+     * < 5.9
+     * long do_mount(const char *dev_name, const char __user *dir_name,
+     *  const char *type_page, unsigned long flags, void *data_page)
+     */
     do_mount_args *args = (do_mount_args *)ri->data;
     if (!is_mnt_ns_valid()) {
         args->dir_name[0] = 0;
@@ -111,6 +119,7 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
     }
     strcpy(args->dir_type, type_name);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
     const char __user *dir_name = (const char __user *)get_arg(regs, 2);
     if (dir_name == NULL) {
         pr_err("on_do_mount_ent dir_name is null\n");
@@ -121,6 +130,16 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
         args->dir_name[0] = 0;
         return 1;
     }
+#else
+    struct path *path = (struct path *)get_arg(regs, 2);
+    char *dir = d_path(path, args->dir_name, sizeof(args->dir_name));
+    if (IS_ERR(dir)){
+        pr_err("on_do_mount_ent get mount dir fail\n");
+        args->dir_name[0] = 0;
+        return 1;
+    }
+    strcpy(args->dir_name, dir);
+#endif
 
     if (is_special_mp(args->dir_name)) {
         args->dir_name[0] = 0;
@@ -244,12 +263,24 @@ static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs
         return 1;
     }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
     //char __user* dir_name, int flags
     const char __user *dir_name = (const char __user *)get_arg(regs, 1);
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0)) {
         args->dir_name[0] = 0;
         return 1;
     }
+#else
+    /* int path_umount(struct path *path, int flags) */
+    struct path *path = (struct path *)get_arg(regs, 1);
+    char *dir = d_path(path, args->dir_name, sizeof(args->dir_name));
+    if (IS_ERR(dir)){
+        pr_err("on_sys_umount_ent get umount dir fail\n");
+        args->dir_name[0] = 0;
+        return 1;
+    }
+    strcpy(args->dir_name, dir);
+#endif
 
     // we must get all the info before umount, otherwise, they will be lost after umount returns
     if (is_special_mp(args->dir_name)) {
@@ -329,11 +360,18 @@ static int on_sys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs
     return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 DECL_CMN_KRP(do_mount);
+#else
+_DECL_CMN_KRP(do_mount, path_mount);
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
 DECL_CMN_KRP(sys_umount);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 _DECL_CMN_KRP(sys_umount, ksys_umount);
+#else
+_DECL_CMN_KRP(sys_umount, path_umount);
 #endif
 
 typedef struct __vfs_op_args__ {
@@ -536,16 +574,21 @@ ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f)
 /* 向设备里写信息 */
 ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f)
 {
-    char buff[4096 * 2] = {0};
+    /* 不使用大的栈空间，以避免模块构建报错 */
+    int ret = -1;
+    char *buff = kmalloc(t+1, GFP_KERNEL);
+    if (!buff)
+        return ret;
+
     if (copy_from_user(buff, user, t)) {
         pr_err("copy_from_user failed\n");
-        return -1;
+        goto out;
     } else {
         f += t;
         buff[t] = 0;
         if (!is_mnt_ns_valid()) {
             pr_err("is_mnt_ns_valid failed\n");
-            return -1;
+            goto out;
         }
         int size = 0;
 
@@ -553,7 +596,8 @@ ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f
         int parts_count = 0;
         if (is_registered_kretprobes) {
             pr_info("my_write already init\n");
-            return 1;
+            ret = 1;
+            goto out;
         }
         /* init vfs_change */
         krp_partition *part;
@@ -580,17 +624,21 @@ ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f
             parts_count++;
             pr_info("mp: %s, major: %d, minor: %d\n", part->root, part->major, part->minor);
         }
-
-        int ret = register_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
+        
+        ret = register_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
         if (ret < 0) {
             pr_err("register_kretprobes failed, returned %d\n", ret);
             cleanup_vfs_changes();
-            return -1;
+            goto out;
         }
         is_registered_kretprobes = 1;
         pr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
+        ret = 0;
     }
-    return 0;
+
+out:
+    kfree(buff);
+    return ret;
 }
 #else
 static void __init init_mounts_info(void)
@@ -712,11 +760,12 @@ void __exit cleanup_module()
     /* 释放设备号 */
     unregister_chrdev_region(devt_wrbuffer, 1);
 #endif
+    /* 仅当初始化成功，才进行资源的释放 */
     if (is_registered_kretprobes) {
         unregister_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
         pr_info("unregister_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
+        cleanup_vfs_changes();
     }
-    cleanup_vfs_changes();
     pr_info("vfs_monitor clearup ok\n");
 }
 
