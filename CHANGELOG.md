@@ -1,3 +1,15 @@
+<a name="5.0.16"></a>
+
+## 5.0.16 (2021-12-16)
+
+
+#### Update License
+
+*   deepin-anything prior to version 5.0.15 (included) is licensed under GPLv2
+*   deepin-anything after version 5.0.15 is licensed under GPLv3+
+
+
+
 <a name="0.0.9"></a>
 ## 0.0.9 (2019-05-15)
 
