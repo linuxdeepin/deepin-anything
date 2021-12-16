@@ -1,9 +1,11 @@
 /*
- * Copyright (C) 2017 ~ 2018 Deepin Technology Co., Ltd.
+ * Copyright (C) 2021 UOS Technology Co., Ltd.
  *
  * Author:     zccrs <zccrs@live.com>
  *
  * Maintainer: zccrs <zhangjide@deepin.com>
+ *             yangwu <yangwu@uniontech.com>
+ *             wangrong <wangrong@uniontech.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

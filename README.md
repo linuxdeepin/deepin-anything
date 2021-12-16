@@ -32,3 +32,8 @@ anything的开发源自于Windows下的everything，它致力于为Linux用户�
 * 使用anything的二级索引搜索hellfire，耗时0毫秒，二级索引占用内存约230MB，测试程序占用内存约500MB
 
 实际上，多次测试的结果表明，使用基础索引比使用带缓存的`find`搜索要快大约500倍甚至更多。若使用全内存式的二级索引，anything的搜索速度是使用基础索引搜索速度的20倍以上，但是占用内存将增长35倍。若将二级索引存放在磁盘上，其内存占用将减少到近乎零，在大部分情况下仍然能够取得很好的搜索速度，仍比基础索引有明显的速度加快，但是在原始字符串较多的情况下，因为需要从索引文件中读取较大量的数据，就会显得比基础索引搜索还要慢了，这个是典型的时间空间复杂度互换的问题。
+
+# License 变更
+
+deepin-anything prior to version 5.0.15 (included) is licensed under [GPLv2](LICENSE)
+deepin-anything after version 5.0.15 is licensed under [GPLv3+](LICENSE)
