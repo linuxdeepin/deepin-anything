@@ -376,15 +376,15 @@ static struct proc_ops procfs_ops = {
 #endif
 int __init init_vfs_changes(void)
 {
-	vfs_changes_buf = kmalloc(MAX_VFS_CHANGE_MEM, GFP_KERNEL);
+	vfs_changes_buf = vmalloc(MAX_VFS_CHANGE_MEM);
 	if (!vfs_changes_buf) {
-		pr_warn("init_vfs_changes kmalloc fail\n", PROCFS_NAME);
+		pr_warn("init_vfs_changes vmalloc fail\n", PROCFS_NAME);
 		return -ENOMEM;
 	}
 
 	struct proc_dir_entry* procfs_entry = proc_create(PROCFS_NAME, 0666, 0, &procfs_ops);
 	if (procfs_entry == 0) {
-		kfree(vfs_changes_buf);
+		vfree(vfs_changes_buf);
 		vfs_changes_buf = NULL;
 		pr_warn("%s already exists?\n", PROCFS_NAME);
 		return -1;
@@ -411,7 +411,7 @@ void cleanup_vfs_changes(void)
 	spin_unlock(&sl_changes);
 
 	if (vfs_changes_buf) {
-		kfree(vfs_changes_buf);
+		vfree(vfs_changes_buf);
 		vfs_changes_buf = NULL;
 	}
 }
