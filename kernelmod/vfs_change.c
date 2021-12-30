@@ -195,6 +195,18 @@ static ssize_t copy_vfs_changes(struct TIMESTRUCT *last, char* buf, size_t size)
 
 // give string format output for debugging purpose (cat /proc/vfs_changes)
 // format: YYYY-MM-DD hh:mm:ss.SSS $action $src $dst, let's require at least 50 bytes
+/*
+ * read_vfs_changes can only be called by one thread at the same time, otherwise the result is undefined.
+ *
+ * This module transfer event data by copy_to_user and data buffer.
+ * If the buffer is dynamically allocated when the function is called, the allocation may fail.
+ * If the buffer is allocated before the function call, the buffer will be locked and protected,
+ * but this may lead to a deadlock, which will cause the system to freeze.
+ *
+ * The current method is to declare that the function does not support multi-threaded access,
+ * which avoids locking the buffer. At the same time, since the module is currently only accessed
+ * by a single thread, it will not affect system functions.
+ */
 static ssize_t read_vfs_changes(struct file* filp, char __user* buf, size_t size, loff_t* offset)
 {
 	if (size < MIN_LINE_SIZE || size > MAX_VFS_CHANGE_MEM)
@@ -202,15 +214,26 @@ static ssize_t read_vfs_changes(struct file* filp, char __user* buf, size_t size
 
 	struct TIMESTRUCT *last = (struct TIMESTRUCT*)filp->private_data;
 	spin_lock(&sl_changes);
-	/* 确保vfs_changes_buf不会被多线程访问 */
 	ssize_t r = copy_vfs_changes(last, vfs_changes_buf, size);
+	spin_unlock(&sl_changes);
 	if (r > 0 && copy_to_user(buf, vfs_changes_buf, r))
 		r = -EFAULT;
-	spin_unlock(&sl_changes);
 
 	return r;
 }
 
+/*
+ * move_vfs_changes can only be called by one thread at the same time, otherwise the result is undefined.
+ *
+ * This module transfer event data by copy_to_user and data buffer.
+ * If the buffer is dynamically allocated when the function is called, the allocation may fail.
+ * If the buffer is allocated before the function call, the buffer will be locked and protected,
+ * but this may lead to a deadlock, which will cause the system to freeze.
+ *
+ * The current method is to declare that the function does not support multi-threaded access,
+ * which avoids locking the buffer. At the same time, since the module is currently only accessed
+ * by a single thread, it will not affect system functions.
+ */
 static long move_vfs_changes(ioctl_rd_args __user* ira)
 {
 	if (atomic_cmpxchg(&wait_vfs_changes_count, -1, INT_MAX) >= 0) {
@@ -251,12 +274,12 @@ static long move_vfs_changes(ioctl_rd_args __user* ira)
 		total_items++;
 		REMOVE_ENTRY(p, vc);
 	}
+	spin_unlock(&sl_changes);
+
 	if (total_bytes && copy_to_user(kira.data, vfs_changes_buf, total_bytes)) {
-		spin_unlock(&sl_changes);
 		atomic_set(&wait_vfs_changes_count, -1);
 		return -EFAULT;
 	}
-	spin_unlock(&sl_changes);
 
 	kira.size = total_items;
 	if (copy_to_user(ira, &kira, sizeof(kira)) != 0) {
