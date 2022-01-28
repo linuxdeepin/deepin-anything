@@ -401,7 +401,7 @@ int __init init_vfs_changes(void)
 {
 	vfs_changes_buf = kmalloc(MAX_VFS_CHANGE_MEM, GFP_KERNEL);
 	if (!vfs_changes_buf) {
-		pr_warn("init_vfs_changes kmalloc fail\n", PROCFS_NAME);
+		pr_warn("init_vfs_changes kmalloc fail\n");
 		return -ENOMEM;
 	}
 
@@ -649,7 +649,7 @@ void vfs_changed(int act, const char* root, const char* src, const char* dst)
 		size += strlen(dst) + extra_bytes + 1;
 	char* p = kmalloc(size, GFP_ATOMIC);
 	if (unlikely(p == 0)) {
-		pr_info("vfs_changed_1: %s, src: %s, dst: %s, proc: %s[%d]\n",
+		pr_info("vfs_monitor: vfs_changed_1: %s, src: %s, dst: %s, proc: %s[%d]\n",
 			action_names[act], src, dst, current->comm, current->pid);
 		return;
 	}
