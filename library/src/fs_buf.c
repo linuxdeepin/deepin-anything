@@ -82,15 +82,15 @@ enum rule_type {
 };
 
 typedef struct search_context_s {
-    fs_buf *fsbuf;
+	fs_buf *fsbuf;
 	comparator_fn compara_fn;
-    uint32_t *results;
-    void *query;
+	uint32_t *results;
+	void *query;
 	search_rule *search_rules;
-    uint32_t num_results;
+	uint32_t num_results;
 	uint32_t req_results;
-    uint32_t start_pos;
-    uint32_t end_pos;
+	uint32_t start_pos;
+	uint32_t end_pos;
 } search_thread_context_t;
 
 static FsearchThreadPool *search_pool;
@@ -1110,25 +1110,27 @@ static search_thread_context_t *search_thread_context_new(fs_buf *fsbuf,
                            uint32_t start_pos,
                            uint32_t end_pos)
 {
-    search_thread_context_t *ctx = calloc(1, sizeof(search_thread_context_t));
-	if (ctx == NULL || end_pos < start_pos)
+	if (end_pos < start_pos)
+		return NULL;
+	search_thread_context_t *ctx = calloc(1, sizeof(search_thread_context_t));
+	if (ctx == NULL)
 		return NULL;
 
-    ctx->fsbuf = fsbuf;
+	ctx->fsbuf = fsbuf;
 	ctx->compara_fn = comparator;
-    ctx->query = query;
+	ctx->query = query;
 	ctx->search_rules = rules;
-    ctx->results = calloc(req_results, sizeof (uint32_t));
+	ctx->results = calloc(req_results, sizeof (uint32_t));
 	if (ctx->results == NULL) {
 		g_free(ctx);
 		return NULL;
 	}
 
-    ctx->num_results = 0;
+	ctx->num_results = 0;
 	ctx->req_results = req_results;
-    ctx->start_pos = start_pos;
-    ctx->end_pos = end_pos;
-    return ctx;
+	ctx->start_pos = start_pos;
+	ctx->end_pos = end_pos;
+	return ctx;
 }
 
 static int do_match_str(const char *haystack, const char *needle, bool icase)
@@ -1221,7 +1223,7 @@ static int pcre_regex(const char *name, void *query)
 static void *search_thread(void * user_data)
 {
     search_thread_context_t *ctx = (search_thread_context_t *)user_data;
-    if(ctx == NULL || ctx->results == NULL)
+    if (ctx == NULL || ctx->results == NULL)
         return NULL;
 
     const uint32_t start = ctx->start_pos;
@@ -1255,7 +1257,7 @@ static void *search_thread(void * user_data)
 static void *rulesearch_thread(void * user_data)
 {
     search_thread_context_t *ctx = (search_thread_context_t *)user_data;
-    if(ctx == NULL || ctx->results == NULL || ctx->search_rules == NULL)
+    if (ctx == NULL || ctx->results == NULL || ctx->search_rules == NULL)
         return NULL;
 
     const uint32_t start = ctx->start_pos;
@@ -1408,7 +1410,7 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 
     uint32_t start_pos = s_off;
 	// get intact name and set its offset as end pos of this piece
-    uint32_t end_pos = num_items_per_thread - 1;
+    uint32_t end_pos = start_pos + num_items_per_thread - 1;
 	if (end_pos > min_off) {
 		end_pos = min_off; // make sure the end pos within tail or search end offset
 	} else {
@@ -1417,43 +1419,40 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 
 	bool error_occur = false; // mark error occured by something.
 	void *compare_query = regex ? (void*)regex : (void*)query;
-    GList *temp = fsearch_thread_pool_get_threads(search_pool);
-    for (uint32_t i = 0; i < num_threads; i++) {
-        thread_data[i] = search_thread_context_new(fsbuf,
+	GList *temp = fsearch_thread_pool_get_threads(search_pool);
+	for (uint32_t i = 0; i < num_threads; i++) {
+		thread_data[i] = search_thread_context_new(fsbuf,
 				regex ? pcre_regex : icase ? match_str_icase : match_str,
 				compare_query,
 				rule,
 				max_results,
-                start_pos,
-                i == num_threads - 1 ? min_off : end_pos);
+				start_pos,
+				i == num_threads - 1 ? min_off : end_pos);
 		if (thread_data[i] == NULL) {
-			printf("error occur -> create thread_data[%d] FAILED!\n", i);
+			printf("error occur -> create thread_data[%u] for [%u, %u] FAILED!\n", i, start_pos, end_pos);
 			error_occur = true;
 			break;
 		}
 
 		// start with next name which near by current end pos.
-        start_pos = next_name(fsbuf, end_pos);
+		start_pos = next_name(fsbuf, end_pos);
 		// get next piece end pos.
-        end_pos += num_items_per_thread;
+		end_pos += num_items_per_thread;
 		if (end_pos > min_off) {
 			end_pos = min_off; // make sure the end pos within tail or search end offset
 		} else {
 			end_pos = next_name(fsbuf, end_pos);
 		}
 
-        fsearch_thread_pool_push_data(search_pool,
-                                       temp,
-                                       is_rule ? rulesearch_thread : search_thread,
-                                       thread_data[i]);
-        temp = temp->next;
-    }
+		fsearch_thread_pool_push_data(search_pool, temp, is_rule ? rulesearch_thread : search_thread, thread_data[i]);
+		temp = temp->next;
+	}
 	// wait for all threads finished
-    temp = fsearch_thread_pool_get_threads(search_pool);
-    while (temp) {
-        fsearch_thread_pool_wait_for_thread(search_pool, temp);
-        temp = temp->next;
-    }
+	temp = fsearch_thread_pool_get_threads(search_pool);
+	while (temp) {
+		fsearch_thread_pool_wait_for_thread(search_pool, temp);
+		temp = temp->next;
+	}
 	pthread_rwlock_unlock(&fsbuf->lock);
 
 	if (regex)

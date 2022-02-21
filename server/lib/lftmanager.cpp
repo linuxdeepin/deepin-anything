@@ -1240,7 +1240,6 @@ void LFTManager::onMountRemoved(const QString &blockDevicePath, const QByteArray
 //    const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(mount_root);
 
     for (const QString &path : hasLFTSubdirectories(mount_root)) {
-        bool removeFile = false;
         auto index = _global_fsBufMap->find(path);
 
         if (index != _global_fsBufMap->constEnd()) {
@@ -1249,7 +1248,7 @@ void LFTManager::onMountRemoved(const QString &blockDevicePath, const QByteArray
             } else {
                 if (_global_fsBufDirtyList->contains(index.value()))
                     sync(path);
-
+                bool removeFile = false;
                 removeBuf(index.value(), removeFile);
             }
         }
@@ -1331,7 +1330,6 @@ bool LFTManager::_getRuleArgs(const QStringList &rules, int searchFlag, quint32 
         flag = rule.left(4).toInt(&ok, 0);
         if (ok && flag == searchFlag) {
             quint32 value = rule.mid(4).toUInt(&ok, 0);
-            nDebug() << searchFlag << "return " << value;
             valueReturn = value;
             return true;
         }
