@@ -40,6 +40,7 @@ extern "C" {
 #include <QLoggingCategory>
 
 #include <unistd.h>
+#include <sys/time.h>
 
 Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, normalLog, ("manager.normal"))
 Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, changesLog, ("manager.changes", QtWarningMsg))
@@ -49,6 +50,7 @@ Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, changesLog, ("manager.changes", QtWa
 #define nWarning(...) qCWarning((*normalLog), __VA_ARGS__)
 #define cDebug(...) qCDebug((*changesLog), __VA_ARGS__)
 #define cWarning(...) qCWarning((*changesLog), __VA_ARGS__)
+#define DEFAULT_RESULT_COUNT 100
 
 static QString _getCacheDir()
 {
@@ -698,28 +700,6 @@ QStringList LFTManager::sync(const QString &mountPoint)
     return path_list;
 }
 
-static int compareString(const char *string, void *keyword)
-{
-    return QString::fromLocal8Bit(string).indexOf(*static_cast<const QString*>(keyword), 0, Qt::CaseInsensitive) < 0;
-}
-
-static int compareStringRegExp(const char *string, void *re)
-{
-    auto match = static_cast<QRegularExpression*>(re)->match(QString::fromLocal8Bit(string));
-
-    return !match.hasMatch();
-}
-
-static int timeoutGuard(uint32_t count, const char* cur_file, void* param)
-{
-    Q_UNUSED(count)
-    Q_UNUSED(cur_file)
-
-    QPair<QElapsedTimer*, qint64> *data = static_cast<QPair<QElapsedTimer*, qint64>*>(param);
-
-    return data->first->elapsed() >= data->second; // 返回false时表示不终端搜索
-}
-
 QStringList LFTManager::search(const QString &path, const QString &keyword, bool useRegExp) const
 {
     quint32 start, end;
@@ -727,114 +707,29 @@ QStringList LFTManager::search(const QString &path, const QString &keyword, bool
     return search(-1, -1, 0, 0, path, keyword, useRegExp, start, end);
 }
 
-QStringList LFTManager::search(int maxCount, qint64 maxTime, quint32 startOffset, quint32 endOffset,
+QStringList LFTManager::search(int maxCount, qint64 icase, quint32 startOffset, quint32 endOffset,
                                const QString &path, const QString &keyword, bool useRegExp,
                                quint32 &startOffsetReturn, quint32 &endOffsetReturn) const
 {
-    nDebug() << maxCount << maxTime << startOffset << endOffset << path << keyword << useRegExp;
+    QStringList rules; //append some old args in the rule list.
+    rules.append(QString("0x%1%2").arg(RULE_SEARCH_REGX, 2, 16, QLatin1Char('0')).arg(useRegExp? 1 : 0));
+    rules.append(QString("0x%1%2").arg(RULE_SEARCH_MAX_COUNT, 2, 16, QLatin1Char('0')).arg(maxCount));
+    rules.append(QString("0x%1%2").arg(RULE_SEARCH_ICASE, 2, 16, QLatin1Char('0')).arg(icase));
+    rules.append(QString("0x%1%2").arg(RULE_SEARCH_STARTOFF, 2, 16, QLatin1Char('0')).arg(startOffset));
+    rules.append(QString("0x%1%2").arg(RULE_SEARCH_ENDOFF, 2, 16, QLatin1Char('0')).arg(endOffset));
 
-    auto buf_list = getFsBufByPath(path);
-
-    if (buf_list.isEmpty()) {
-        sendErrorReply(QDBusError::InvalidArgs, "Not found the index data");
-
-        return QStringList();
-    }
-
-    fs_buf *buf = buf_list.first().second;
-
-    if (!buf) {
-        sendErrorReply(QDBusError::InternalError, "Index is being generated");
-
-        return QStringList();
-    }
-
-    // new_path 为path在fs_buf中对应的路径
-    const QString &new_path = buf_list.first().first;
-
-    if (startOffset == 0 || endOffset == 0) {
-        // 未指定有效的搜索区间时, 根据路径获取
-        uint32_t path_offset = 0;
-        get_path_range(buf, new_path.toLocal8Bit().constData(), &path_offset, &startOffset, &endOffset);
-    }
-
-    // 说明目录为空
-    if (startOffset == 0) {
-        nDebug() << "Empty directory:" << new_path;
-
-        return QStringList();
-    }
-
-    QRegularExpression re(keyword);
-
-    void *compare_param = nullptr;
-    comparator_fn compare = nullptr;
-
-    if (useRegExp) {
-        if (!re.isValid()) {
-            sendErrorReply(QDBusError::InvalidArgs, "Invalid regular expression: " + re.errorString());
-
-            return QStringList();
-        }
-
-        re.setPatternOptions(QRegularExpression::CaseInsensitiveOption
-                             | QRegularExpression::DotMatchesEverythingOption
-                             | QRegularExpression::OptimizeOnFirstUsageOption);
-
-        compare_param = &re;
-        compare = compareStringRegExp;
-    } else {
-        compare_param = const_cast<QString*>(&keyword);
-        compare = compareString;
-    }
-
-#define MAX_RESULT_COUNT 100
-
-    uint32_t name_offsets[MAX_RESULT_COUNT];
-    uint32_t count = MAX_RESULT_COUNT;
-
-    QStringList list;
-    char tmp_path[PATH_MAX];
-    // root_path 以/结尾，所以此处需要多忽略一个字符
-    bool need_reset_root_path = path != new_path;
-
-    QElapsedTimer et;
-    progress_fn progress = nullptr;
-    QPair<QElapsedTimer*, qint64> progress_param;
-
-    if (maxTime >= 0) {
-        et.start();
-        progress = timeoutGuard;
-        progress_param.first = &et;
-        progress_param.second = maxTime;
-    }
-
-    do {
-        count = qMin(uint32_t(MAX_RESULT_COUNT), uint32_t(maxCount - list.count()));
-        search_files(buf, &startOffset, endOffset, name_offsets, &count, compare, compare_param, progress, &progress_param);
-
-        for (uint32_t i = 0; i < count; ++i) {
-            const char *result = get_path_by_name_off(buf, name_offsets[i], tmp_path, sizeof(tmp_path));
-            const QString &origin_path = QString::fromLocal8Bit(result);
-
-            if (need_reset_root_path) {
-                list << path + origin_path.mid(new_path.size());
-                nDebug() << "need reset root path:" << origin_path << ", to:" << list.last();
-             } else {
-                list << origin_path;
-            }
-        }
-
-        if (maxTime >= 0 && et.elapsed() >= maxTime) {
-            break;
-        }
-    } while (count == MAX_RESULT_COUNT);
-
-    startOffsetReturn = startOffset;
-    endOffsetReturn = endOffset;
-
-    return list;
+    return _enterSearch(path, keyword, rules, startOffsetReturn, endOffsetReturn);
 }
+
+enum SearchError
+{
+    SUCCESS = 0,
+    OK_RULE,
+    NOFOUND_INDEX,
+    BUILDING_INDEX,
+    EMPTY_DIR,
+    INVALID_RE
+};
 
 QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
 {
@@ -1025,6 +920,33 @@ int LFTManager::logLevel() const
     }
 
     return 0;
+}
+
+QStringList LFTManager::parallelsearch(const QString &path, const QString &keyword, const QStringList &rules) const
+{
+    quint32 start, end;
+    QStringList nRules;
+    //check the all search rules (0x01 - 0x05), set them with default value if isn't setted by user.
+    quint32 orgval = 0;
+    if (!_getRuleArgs(rules, RULE_SEARCH_REGX, orgval)) {
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_REGX, 2, 16, QLatin1Char('0')).arg(0));
+    }
+    if (!_getRuleArgs(rules, RULE_SEARCH_MAX_COUNT, orgval)) {
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_MAX_COUNT, 2, 16, QLatin1Char('0')).arg(0));
+    }
+    if (!_getRuleArgs(rules, RULE_SEARCH_ICASE, orgval)) {
+        // default not ignoring the case(UP and LOW) of the characters in this API
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_ICASE, 2, 16, QLatin1Char('0')).arg(0));
+    }
+    if (!_getRuleArgs(rules, RULE_SEARCH_STARTOFF, orgval)) {
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_STARTOFF, 2, 16, QLatin1Char('0')).arg(0));
+    }
+    if (!_getRuleArgs(rules, RULE_SEARCH_ENDOFF, orgval)) {
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_ENDOFF, 2, 16, QLatin1Char('0')).arg(0));
+    }
+
+    nRules.append(rules);
+    return _enterSearch(path, keyword, nRules, start, end);
 }
 
 void LFTManager::setAutoIndexExternal(bool autoIndexExternal)
@@ -1361,4 +1283,204 @@ void LFTManager::onFSRemoved(const QString &blockDevicePath)
     if (!id.isEmpty()) {
         removeLFTFiles("serial:" + id.toLocal8Bit());
     }
+}
+
+int LFTManager::_prepareBuf(quint32 *startOffset, quint32 *endOffset, const QString &path, void **buf, QString *newpath) const
+{
+    auto buf_list = getFsBufByPath(path);
+
+    if (buf_list.isEmpty())
+        return NOFOUND_INDEX;
+
+    fs_buf *fs_buf = buf_list.first().second;
+
+    if (!fs_buf)
+        return BUILDING_INDEX;
+
+    // new_path 为path在fs_buf中对应的路径
+    *newpath = QString(buf_list.first().first);
+
+    if (*startOffset == 0 || *endOffset == 0) {
+        // 未指定有效的搜索区间时, 根据路径获取
+        uint32_t path_offset = 0;
+        uint32_t start_off, end_off = 0;
+        get_path_range(fs_buf, newpath->toLocal8Bit().constData(), &path_offset, &start_off, &end_off);
+        nDebug() << "get_path_range:" << start_off << end_off;
+        *startOffset = start_off;
+        *endOffset = end_off;
+    }
+    nDebug() << *startOffset << *endOffset;
+
+    // 说明目录为空
+    if (*startOffset == 0)
+        return EMPTY_DIR;
+
+    *buf = fs_buf;
+
+    return SUCCESS;
+}
+
+bool LFTManager::_getRuleArgs(const QStringList &rules, int searchFlag, quint32 &valueReturn) const
+{
+    for (const QString &rule : rules) {
+        if (rule.size() < 4 || !rule.startsWith("0x")) //incorrect format rule, not start with "0x01" "0x10" e.
+            continue;
+
+        int flag = 0;
+        bool ok;
+        flag = rule.left(4).toInt(&ok, 0);
+        if (ok && flag == searchFlag) {
+            quint32 value = rule.mid(4).toUInt(&ok, 0);
+            nDebug() << searchFlag << "return " << value;
+            valueReturn = value;
+            return true;
+        }
+    }
+
+    // not find the special flag in rules
+    return false;
+}
+
+bool LFTManager::_parseRules(void **prules, const QStringList &rules) const
+{
+    search_rule *p = nullptr; //the header of filter rule list;
+    search_rule *temp = nullptr; //temp list for rule list building.
+
+    for (const QString &rule : rules) {
+        if (rule.size() < 4 || !rule.startsWith("0x")) //incorrect format rule, not start with "0x01" "0x10" e.
+            continue;
+
+        uint8_t flag = 0;
+        bool ok;
+        flag = (uint8_t)(rule.left(4).toInt(&ok, 0));
+        QByteArray tmp = rule.mid(4).toLatin1();
+        char *rule_content = tmp.data();
+
+        search_rule *irule = reinterpret_cast<search_rule *>(malloc(sizeof(search_rule)));
+        if (irule == nullptr) {
+            nDebug() << "Failed to malloc search_rule.";
+            break;
+        }
+
+        irule->flag = flag;
+        strcpy(irule->target, rule_content);
+        irule->next = nullptr;
+
+        if (temp)
+            temp->next =irule;
+        temp = irule;
+
+        // record the rule list header
+        if (p == nullptr)
+            p = temp;
+    }
+    *prules = p;
+    return p && (p->flag != RULE_NONE);
+}
+
+QStringList LFTManager::_enterSearch(const QString &path, const QString &keyword, const QStringList &rules,
+                   quint32 &startOffsetReturn, quint32 &endOffsetReturn) const
+{
+    quint32 maxCount = 0;
+    quint32 startOffset = 0;
+    quint32 endOffset = 0;
+
+    // get the setting values: 0x02, 0x04, 0x05, which will be returned.
+    _getRuleArgs(rules, RULE_SEARCH_MAX_COUNT, maxCount);
+    _getRuleArgs(rules, RULE_SEARCH_STARTOFF, startOffset);
+    _getRuleArgs(rules, RULE_SEARCH_ENDOFF, endOffset);
+
+    nDebug() << maxCount << startOffset << endOffset << path << keyword << rules;
+
+    void *buf = nullptr;
+    QString newpath;
+    int buf_ok = _prepareBuf(&startOffset, &endOffset, path, &buf, &newpath);
+    if (buf_ok != 0) {
+        if (buf_ok == NOFOUND_INDEX)
+            sendErrorReply(QDBusError::InvalidArgs, "Not found the index data");
+        if (buf_ok == BUILDING_INDEX)
+            sendErrorReply(QDBusError::InternalError, "Index is being generated");
+        if (buf_ok == EMPTY_DIR) // 说明目录为空
+            nDebug() << "Empty directory:" << newpath;
+        return QStringList();
+    }
+
+    QStringList list;
+    QStringList results;
+
+    struct timeval s, e;
+    gettimeofday(&s, nullptr);
+
+    int total = 0;
+    // get the search result, note the @startOffset and @endOffset both are in and out, which will record the real searching offsets.
+    total += _doSearch(buf, maxCount, keyword, &startOffset, &endOffset, &results, rules);
+
+    gettimeofday(&e, nullptr);
+    long dur = (e.tv_usec + e.tv_sec * 1000000) - (s.tv_usec + s.tv_sec * 1000000);
+    // set this log as special start, it may be used to take result from log.
+    nDebug() << "anything-GOOD: found " << total << " entries for " << keyword << "in " << dur << " us\n";
+
+    bool reset_path = path != newpath;
+    if (reset_path) {
+        nDebug() << "need reset root path:" << path;
+        for (QString &spath : results) {
+            // root_path 以/结尾，所以此处需要多忽略一个字符
+            list << path + spath.mid(newpath.size());
+        }
+    } else {
+        list << results;
+    }
+
+    startOffsetReturn = startOffset;
+    endOffsetReturn = endOffset;
+    return list;
+}
+
+int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &keyword,
+                          quint32 *startOffset, quint32 *endOffset, QStringList *results, const QStringList &rules) const
+{
+    fs_buf *buf = static_cast<fs_buf*>(vbuf);
+    if (buf == nullptr)
+        return 0;
+
+    int total = 0;
+    uint32_t start = *startOffset; //the search start offset in data index
+    uint32_t end = *endOffset;  //the search end offset in data index
+    uint32_t count = DEFAULT_RESULT_COUNT;
+
+    search_rule *searc_rule = nullptr;
+    void *p = nullptr;
+    if (!rules.isEmpty() && _parseRules(&p, rules))
+        searc_rule = static_cast<search_rule*>(p);
+
+    char tmp_path[PATH_MAX] = {0};
+    //if unlimit count (maxCount = -1 or 0), only append first DEFAULT_RESULT_COUNT results.
+    uint32_t req_count = maxCount > 0 ? maxCount : count;
+    uint32_t req_number = req_count;
+    uint32_t *name_offsets = reinterpret_cast<uint32_t *>(malloc(req_count * sizeof(uint32_t)));
+    if (name_offsets == nullptr) {
+        nDebug() << "try malloc name_offsets to save result FAILED, count:" << req_count;
+        return 0;
+    }
+
+    QByteArray keyArray = keyword.toLocal8Bit();
+    const char *queryword = keyArray.data();
+    parallelsearch_files(buf, &start, end, name_offsets, &req_count, searc_rule, queryword);
+    // save request count of result.
+    uint32_t mincount = qMin(req_number, req_count);
+
+    // get the full path by the file/dir name, and append to list.
+    for (uint32_t i = 0; i < mincount; ++i) {
+        const char *name_path = get_path_by_name_off(buf, name_offsets[i], tmp_path, sizeof(tmp_path));
+        const QString &origin_path = QString::fromLocal8Bit(name_path);
+        *results << origin_path;
+    }
+    total += req_count;
+
+    *startOffset = start;
+    *endOffset = end;
+    if (name_offsets)
+        free(name_offsets);
+
+    return total;
 }

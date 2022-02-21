@@ -97,6 +97,61 @@ static uint32_t search_by_fsbuf(fs_buf *fsbuf, const char *query)
 	}
 }
 
+static uint32_t search_by_fsbuf_parallel(fs_buf *fsbuf, const char *query, const char *filter)
+{
+	uint32_t name_offs[MAX_RESULTS], end_off = get_tail(fsbuf);
+	uint32_t count = MAX_RESULTS, start_off = first_name(fsbuf);
+	search_rule *s_rule = NULL;
+	search_rule *rule_tmp = NULL;
+	uint32_t total = 0;
+	uint32_t reqcount = count;
+
+	if (filter != NULL) {
+		char *rulestr;
+		char *buff;
+		buff = filter;
+		rulestr = strsep(&buff, " ");
+		while(rulestr!=NULL)
+		{
+			// parse the rule's 'flag' and 'target' from string, i.e. 0x10.git > flag=16 target=.git
+			if (strstr(rulestr, "0x") == rulestr) {
+				char tag[4] = {0};
+				strncpy(tag, rulestr, 4); //获取规则前4字符
+
+				search_rule *irule = (search_rule *)malloc(sizeof(search_rule));
+				irule->next = NULL;
+				irule->flag = (int)strtol(tag, NULL, 0); //转换为flag, 如 0x10 -> 16
+				strcpy(irule->target, rulestr + 4);
+
+				// append new rule to tmp rule link.
+				if (rule_tmp != NULL)
+					rule_tmp->next = irule;
+				rule_tmp = irule;
+
+				//save the tmp link head to real rule link.
+				if (s_rule == NULL)
+					s_rule = rule_tmp;
+			}
+
+			//check next rule
+			rulestr = strsep(&buff, " ");
+		}
+	}
+
+	parallelsearch_files(fsbuf, &start_off, end_off, name_offs, &count, s_rule, query);
+	{
+		char path[PATH_MAX] = {'0'};
+		uint32_t min_count = reqcount < count ? reqcount : count;
+		for (uint32_t i = 0; i < min_count; i++)
+		{
+			char *p = get_path_by_name_off(fsbuf, name_offs[i], path, sizeof(path));
+			printf("\t%'u: %c %'u %s\n", i + 1, is_file(fsbuf, name_offs[i]) ? 'F' : 'D', name_offs[i], p);
+		}
+		total += count;
+	}
+	return total;
+}
+
 static int get_short_query(char *cmd, char *short_cmd)
 {
 	if (strlen(cmd) == 0)
@@ -142,13 +197,13 @@ static uint32_t search_by_index(fs_index *fsi, fs_buf *fsbuf, char *query)
 		return 0;
 	}
 
-	char short_query[NAME_MAX + 1];
+	char short_query[NAME_MAX + 1] = {'0'};
 	int ret = get_short_query(query, short_query);
 	if (ret != 0)
 		return 0;
 
 	int truncated = strlen(short_query) < strlen(query);
-	char path[PATH_MAX];
+	char path[PATH_MAX] = {'0'};
 	index_keyword *inkw = get_index_keyword(fsi, short_query);
 	uint32_t n = 1;
 	for (uint32_t i = 0; inkw && i < inkw->len; i++)
@@ -158,7 +213,7 @@ static uint32_t search_by_index(fs_index *fsi, fs_buf *fsbuf, char *query)
 			if (truncated && strstr(get_name(fsbuf, inkw->fsbuf_offsets[i]), query) == 0)
 				continue;
 			char *p = get_path_by_name_off(fsbuf, inkw->fsbuf_offsets[i], path, sizeof(path));
-			printf("\t%'d: %c %'u %s\n", n, is_file(fsbuf, inkw->fsbuf_offsets[i]) ? 'F' : 'D', inkw->fsbuf_offsets[i], p);
+			printf("\t%'u: %c %'u %s\n", n, is_file(fsbuf, inkw->fsbuf_offsets[i]) ? 'F' : 'D', inkw->fsbuf_offsets[i], p);
 		}
 		n++;
 	}
@@ -172,6 +227,7 @@ void console_test(fs_buf *fsbuf, fs_index *fsi)
 	char cmd[1024];
 	struct timeval s, e;
 	printf("*** input any string to query, or s/XXX to search XXX with index, if/XXX to insert file /XXX, id/XXX to insert directory /XXX, d/XXX to remove path /XXX, r/XXX /YYY to rename path /XXX to /YYY ***\n");
+	printf("*** search by multi thread:m/XXX 0x*** 0x**** to search XXX with filter rule(detail rule in fs_buf.h) ***\n");
 	while (1)
 	{
 		printf(" $ ");
@@ -188,6 +244,7 @@ void console_test(fs_buf *fsbuf, fs_index *fsi)
 
 		int cmd_type = 0;
 		char *src = 0, *dst = 0;
+		char *filter = 0;
 		if (strstr(r, "s/") == r)
 		{
 			cmd_type = 1;
@@ -216,6 +273,18 @@ void console_test(fs_buf *fsbuf, fs_index *fsi)
 		else if (strstr(r, "p/") == r)
 		{
 			cmd_type = 5;
+		}
+		else if (strstr(r, "m/") == r)
+		{
+			src = r + 1;
+			filter = strstr(src, " 0x");
+			if (filter != 0)
+			{
+				*filter = 0;
+				filter += 1;
+				printf("search with some searching rules!\n");
+			}
+			cmd_type = 6;
 		}
 		else
 		{
@@ -247,6 +316,9 @@ void console_test(fs_buf *fsbuf, fs_index *fsi)
 		case 5:
 			get_path_range(fsbuf, r + 1, &path_off, &start_off, &end_off);
 			break;
+		case 6:
+			n = search_by_fsbuf_parallel(fsbuf, r + 2, filter);
+			break;
 		}
 		gettimeofday(&e, 0);
 		uint64_t dur = (e.tv_usec + e.tv_sec * 1000000) - (s.tv_usec + s.tv_sec * 1000000);
@@ -254,17 +326,17 @@ void console_test(fs_buf *fsbuf, fs_index *fsi)
 		switch (cmd_type)
 		{
 		case 0:
-			printf("    found %'u entries for %s in %'lu ms\n", n, r, dur / 1000);
+			printf("    found %'u entries for %s in %'lu us\n", n, r, dur);
 			break;
 		case 1:
-			printf("    found %'u entries for %s in %'lu ms\n", n, r + 2, dur / 1000);
+			printf("    found %'u entries for %s in %'lu us\n", n, r + 2, dur);
 			break;
 		case 2:
-			printf("    %s insertion for %s in %'lu ms with result: %d, start: %'u, delta: %'d\n",
-				   r[1] == 'd' ? "dir" : "file", r + 2, dur / 1000, result, changes[0].start_off, changes[0].delta);
+			printf("    %s insertion for %s in %'lu us with result: %d, start: %'u, delta: %'d\n",
+				   r[1] == 'd' ? "dir" : "file", r + 2, dur, result, changes[0].start_off, changes[0].delta);
 			break;
 		case 3:
-			printf("    path %s removed in %'lu ms with result %d, changes:\n", r + 1, dur / 1000, result);
+			printf("    path %s removed in %'lu us with result %d, changes:\n", r + 1, dur, result);
 			if (result == 0)
 			{
 				for (int i = 0; i < change_count; i++)
@@ -282,6 +354,9 @@ void console_test(fs_buf *fsbuf, fs_index *fsi)
 		case 5:
 			printf("    path %s info: start %'u, kids-start %'u, kids-end %'u\n", r + 1,
 				   path_off, start_off, end_off);
+			break;
+		case 6:
+			printf("  found %'u entries for %s in %'lu us\n", n, r + 2, dur);
 			break;
 		}
 	}

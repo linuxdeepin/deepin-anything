@@ -36,8 +36,45 @@ typedef struct __fs_buf__ fs_buf;
 typedef struct __fs_change__ {
 	uint32_t start_off;
 	// delta < 0 means some file/folder has been removed, delta > 0 means some file/folder has been added
-	int delta;  
+	int delta;
 } fs_change;
+
+/* the search rule defines */
+#define RULE_NONE 0x00 //not use
+/* 0x01-0x3F: search related defines */
+// search with RegExp, don't use regexp if without this rule in search API.
+#define RULE_SEARCH_REGX 0x01
+// search with request max count.
+#define RULE_SEARCH_MAX_COUNT 0x02
+// ignore case while compare string.
+#define RULE_SEARCH_ICASE 0x03
+// search from the start offset in index.
+#define RULE_SEARCH_STARTOFF 0x04
+// search with a end offset in index.
+#define RULE_SEARCH_ENDOFF 0x05
+// search pinyin index.
+#define RULE_SEARCH_PINYIN 0x06
+
+/* 0x40-0x7F: exclude these results */
+// exclude the substring in the name of the directory or file: SUB_S startwith; SUB_D endwith.
+#define RULE_EXCLUDE_SUB_S 0x40
+#define RULE_EXCLUDE_SUB_D 0x41
+// ignore sepcial absolute path or file for match
+#define RULE_EXCLUDE_PATH 0x42
+
+/* 0x80-0xAF: include these results */
+// include the substring in the name of the directory or file: SUB_S startwith; SUB_D endwith.
+#define RULE_INCLUDE_SUB_S 0x80
+#define RULE_INCLUDE_SUB_D 0x81
+
+
+// define the search rule link to record the rules.
+typedef struct __search_rule__
+{
+	uint8_t flag;
+	char target[255]; //Linux max name length
+	struct __search_rule__ *next;
+} search_rule;
 
 uint32_t get_capacity(fs_buf* fsbuf);
 uint32_t first_name(fs_buf* fsbuf);
@@ -69,6 +106,8 @@ typedef int (*progress_fn)(uint32_t count, const char* cur_file, void* param);
 typedef int (*comparator_fn)(const char *file_name, void* param);
 void search_files(fs_buf* fsbuf, uint32_t* start_off, uint32_t end_off, uint32_t* results, uint32_t* count,
 		comparator_fn comparator, void *comparator_param, progress_fn pcf, void *pcf_param);
+void parallelsearch_files(fs_buf* fsbuf, uint32_t* start_off, uint32_t end_off, uint32_t* results, uint32_t* count,
+		search_rule *rule, const char *query);
 
 // functions below are used internally
 void set_kids_off(fs_buf* fsbuf, uint32_t name_off, uint32_t kids_off);

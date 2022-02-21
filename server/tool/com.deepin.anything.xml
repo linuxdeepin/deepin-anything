@@ -52,7 +52,7 @@
     </method>
     <method name='search'>
         <arg type='i' name='maxCount' direction='in'/>
-        <arg type='x' name='maxTime' direction='in'/>
+        <arg type='x' name='icase' direction='in'/>
         <arg type='u' name='startOffset' direction='in'/>
         <arg type='u' name='endOffset' direction='in'/>
         <arg type='s' name='path' direction='in'/>
@@ -61,6 +61,12 @@
         <arg type='as' name='results' direction='out'/>
         <arg type='u' name='startOffset' direction='out'/>
         <arg type='u' name='endOffset' direction='out'/>
+    </method>
+    <method name='parallelsearch'>
+        <arg type='s' name='path' direction='in'/>
+        <arg type='s' name='keyword' direction='in'/>
+        <arg type='as' name='rules' direction='in'/>
+        <arg type='as' name='results' direction='out'/>
     </method>
     <method name='insertFileToLFTBuf'>
         <arg type='ay' name='filePath' direction='in'/>

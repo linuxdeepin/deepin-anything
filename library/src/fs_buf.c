@@ -28,10 +28,14 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
-#include <regex.h>
+// #include <regex.h>
+#include <limits.h>
+#include <pcre.h>
 
 #include "fs_buf.h"
 #include "utils.h"
+#include "thread_pool.h"
+#include "chinese/pinyin.h"
 
 #define DATA_START 8
 #define FS_NEW_BLK_SIZE (1 << 20)
@@ -45,6 +49,13 @@
 #define FS_TAG_FILE 0
 #define FS_TAG_DIR 1
 
+
+#define streq(a, b) (strcmp(a, b) == 0)
+#define strneq(a, b, n) (strncmp(a, b, n) == 0)
+
+#define strstartwith(a, b) (strncmp(a, b, strlen(b)) == 0)
+#define strendwith(a, b) (strncmp(a + strlen(a) - strlen(b), b, strlen(b)) == 0)
+
 struct __fs_buf__
 {
 	char *head;
@@ -53,6 +64,36 @@ struct __fs_buf__
 	uint32_t first_name_off;
 	pthread_rwlock_t lock;
 };
+
+// name offset jump link. record which directory should be ignored.
+struct jump_off
+{
+	uint32_t start; //directory first kid start offset.
+	uint32_t end; //directory last kid end offset.
+	uint8_t hitted;
+	struct jump_off *next;
+};
+
+enum rule_type {
+	INVALID_RULE = -1,
+	SEARCH_RULE = 1,
+	EXCLUDE_RULE = 2,
+	INCLUDE_RULE = 4
+};
+
+typedef struct search_context_s {
+    fs_buf *fsbuf;
+	comparator_fn compara_fn;
+    uint32_t *results;
+    void *query;
+	search_rule *search_rules;
+    uint32_t num_results;
+	uint32_t req_results;
+    uint32_t start_pos;
+    uint32_t end_pos;
+} search_thread_context_t;
+
+static FsearchThreadPool *search_pool;
 
 // Linear File Tree
 static const char fsbuf_magic[] = "LFT";
@@ -893,4 +934,563 @@ __attribute__((visibility("default"))) void search_files(fs_buf *fsbuf, uint32_t
 	}
 	pthread_rwlock_unlock(&fsbuf->lock);
 	*start_off = name_off;
+}
+
+/** get especial rule from the search rules: search, exclude, include.
+ * return -1: rule invalid.
+ **/
+int get_rules(search_rule *rules, int type, search_rule **specrule)
+{
+	if (rules == NULL)
+		return INVALID_RULE;
+
+	int re_rule = 0;
+	search_rule *rule = rules; // get the  head of rules pointer
+	search_rule *tmp = NULL;
+	search_rule *p = NULL;
+
+	while (rule != NULL) {
+		int find = -1;
+		switch (rule->flag)
+		{
+		case RULE_SEARCH_REGX:
+		case RULE_SEARCH_MAX_COUNT:
+		case RULE_SEARCH_ICASE:
+		case RULE_SEARCH_STARTOFF:
+		case RULE_SEARCH_ENDOFF:
+		case RULE_SEARCH_PINYIN:
+			re_rule |= SEARCH_RULE;
+			find = SEARCH_RULE == type;
+			break;
+		case RULE_EXCLUDE_SUB_S:
+		case RULE_EXCLUDE_SUB_D:
+		case RULE_EXCLUDE_PATH:
+			re_rule |= EXCLUDE_RULE;
+			find = EXCLUDE_RULE == type;
+			break;
+		case RULE_INCLUDE_SUB_S:
+		case RULE_INCLUDE_SUB_D:
+			re_rule |= INCLUDE_RULE;
+			find = INCLUDE_RULE == type;
+			break;
+		default:
+			// other undefine rules
+			printf("unkown rule tag:%d, target:%s\n", rule->flag, rule->target);
+			break;
+		}
+
+		// save the sepcial rule into new link.
+		if (find) {
+			search_rule *srule = (search_rule*)malloc(sizeof(search_rule));
+			if (srule == NULL) {
+				printf("panic, malloc search_rule failed!\n");
+				return re_rule;
+			}
+
+			memset(srule, 0, sizeof(search_rule)); //clear values
+			srule->flag = rule->flag;
+			strcpy(srule->target, rule->target);
+			srule->next = NULL;
+
+			if (tmp)
+				tmp->next = srule;
+			tmp = srule;
+
+			// record this rule list header
+			if (p == NULL)
+				p = tmp;
+		}
+
+		rule = rule->next; // check next rule
+	}
+
+    *specrule = p;
+	return re_rule;
+}
+
+char* get_rule_value(search_rule *rules, uint8_t flag)
+{
+	if (rules == NULL || RULE_NONE == rules->flag)
+		return "0";
+
+	search_rule *rule = rules; // get the  head of rules pointer
+	while (rule != NULL) {
+		if (rule->flag == flag) {
+			return rule->target;
+		}
+		rule = rule->next; // check next rule
+	}
+
+    return "0";
+}
+
+int check_name(fs_buf *fsbuf, char *name, search_rule *rules)
+{
+	if (rules == NULL || RULE_NONE == rules->flag)
+		return -1;
+
+	search_rule *rule = rules; // get the  head of rules pointer
+	while (rule != NULL) {
+		switch (rule->flag)
+		{
+		case RULE_EXCLUDE_PATH:
+			if (streq(name, rule->target))
+				return 0;
+			break;
+		case RULE_EXCLUDE_SUB_S:
+		case RULE_INCLUDE_SUB_S:
+			if (strstartwith(name, rule->target))
+				return 0;
+			break;
+		case RULE_EXCLUDE_SUB_D:
+		case RULE_INCLUDE_SUB_D:
+			if (strendwith(name, rule->target))
+				return 0;
+			break;
+		default:
+			// other undefine rules
+			break;
+		}
+		rule = rule->next; // check next rule
+	}
+
+	return -1;
+}
+
+void add_jump(struct jump_off **list, uint32_t start, uint32_t end)
+{
+	struct jump_off *link = (struct jump_off*)malloc(sizeof(struct jump_off));
+	if (link == NULL)
+		return;
+
+	memset(link, 0, sizeof(struct jump_off)); //clear values
+	link->start = start;
+	link->end = end;
+	link->next = NULL;
+
+	if (*list)
+		(*list)->next = link;
+	*list = link;
+}
+
+// jump to the kids's end offset if current name_off come to the ignore dir kids.
+int should_jump(struct jump_off *jump_list, uint32_t name_off, uint32_t *jump_off)
+{
+	if (jump_list == NULL)
+		return -1;
+
+	struct jump_off *temp = jump_list;
+	struct jump_off *hitjump = NULL;
+	uint32_t min_jump = name_off;
+	while (temp != NULL)
+	{
+		// try to find the min jumping offset and record it.
+		if (!temp->hitted && temp->start <= min_jump) {
+			min_jump = temp->start;
+			hitjump = temp;
+		}
+		temp = temp->next;
+	}
+
+	//jump to record min offset's end and mark it is hitted..
+	if (hitjump != NULL) {
+		*jump_off = hitjump->end;
+		hitjump->hitted = 1;
+		return 0;
+	}
+
+	return -1;
+}
+
+static search_thread_context_t *search_thread_context_new(fs_buf *fsbuf,
+						   comparator_fn comparator,
+                           void *query,
+						   search_rule *rules,
+						   uint32_t req_results,
+                           uint32_t start_pos,
+                           uint32_t end_pos)
+{
+    search_thread_context_t *ctx = calloc(1, sizeof(search_thread_context_t));
+	if (ctx == NULL || end_pos < start_pos)
+		return NULL;
+
+    ctx->fsbuf = fsbuf;
+	ctx->compara_fn = comparator;
+    ctx->query = query;
+	ctx->search_rules = rules;
+    ctx->results = calloc(req_results, sizeof (uint32_t));
+	if (ctx->results == NULL) {
+		g_free(ctx);
+		return NULL;
+	}
+
+    ctx->num_results = 0;
+	ctx->req_results = req_results;
+    ctx->start_pos = start_pos;
+    ctx->end_pos = end_pos;
+    return ctx;
+}
+
+static int do_match_str(const char *haystack, const char *needle, bool icase)
+{
+	if (icase) {
+		return strcasestr(haystack, needle) ? 0 : 1;
+	} else {
+		return strstr(haystack, needle) ? 0 : 1;
+	}
+}
+
+static int match_str(const char *name, void *query)
+{
+	// not ignore case
+	int notmatch = do_match_str(name, (char *)query, false);
+	// if not match the query, then check it includes chinese word first and convert them, try to match pinyin words at last.
+	if (notmatch) {
+		// try to convert chinese to pinyin and compare with name
+		char *pinyin = cat_pinyin(name);
+		if (pinyin != NULL) {
+			notmatch = do_match_str(pinyin, (char *)query, false);
+			free(pinyin);
+		}
+	}
+	return notmatch;
+}
+
+static int match_str_icase(const char *name, void *query)
+{
+	// ignore case
+	int notmatch = do_match_str(name, (char *)query, true);
+	// if not match the query, then check it includes chinese word first and convert them, try to match pinyin words at last.
+	if (notmatch) {
+		// try to convert chinese to pinyin and compare with name
+		char *pinyin = cat_pinyin(name);
+		if (pinyin != NULL) {
+			notmatch = do_match_str(pinyin, (char *)query, true);
+			free(pinyin);
+		}
+	}
+	return notmatch;
+}
+
+static int is_regex (const char *query)
+{
+    char regex_chars[] = {
+        '$',
+        '(',
+        ')',
+        '*',
+        '+',
+        '.',
+        '?',
+        '[',
+        '\\',
+        '^',
+        '{',
+        '|',
+        '\0'
+    };
+
+    return (strpbrk(query, regex_chars) != NULL);
+}
+
+static int do_regex(pcre *regex, const char *haystack)
+{
+	size_t haystack_len = strlen(haystack);
+	int ovector[3]; // set number as 3n
+
+	return pcre_exec(regex, NULL, haystack, haystack_len, 0, 0, ovector, 3) >= 0 ? 0 : 1;
+}
+
+static int pcre_regex(const char *name, void *query)
+{
+	pcre *regex = (pcre *)query;
+
+	int notmatch = do_regex(regex, name);
+	// if not match the query, then check it includes chinese word first and convert them, try to match pinyin words at last.
+	if (notmatch) {
+		// try to convert chinese to pinyin and compare with name
+		char *pinyin = cat_pinyin(name);
+		if (pinyin != NULL) {
+			notmatch = do_regex(regex, pinyin);
+			free(pinyin);
+		}
+	}
+	return notmatch;
+}
+
+static void *search_thread(void * user_data)
+{
+    search_thread_context_t *ctx = (search_thread_context_t *)user_data;
+    if(ctx == NULL || ctx->results == NULL)
+        return NULL;
+
+    const uint32_t start = ctx->start_pos;
+    const uint32_t end = ctx->end_pos;
+    const uint32_t save_results = ctx->req_results;
+    uint32_t *results = ctx->results;
+	fs_buf *fsbuf = ctx->fsbuf;
+	comparator_fn compara_fn = ctx->compara_fn;
+
+    uint32_t num_results = 0;
+    for (uint32_t name_off = start; name_off <= end;) {
+		char *name = fsbuf->head + name_off;
+		// skip these empty name(a end flag of directory) in this search index.
+		if (*name == 0 || strlen(name) < 1) {
+			name_off = next_name(fsbuf, name_off);
+			continue;
+		}
+
+		if (*name != 0 && (*compara_fn)(name, ctx->query) == 0) {
+			if (num_results < save_results)
+				results[num_results] = name_off; // save this offset as result.
+			num_results++;
+		}
+		name_off = next_name(fsbuf, name_off);
+    }
+	// save the total number.
+    ctx->num_results = num_results;
+    return NULL;
+}
+
+static void *rulesearch_thread(void * user_data)
+{
+    search_thread_context_t *ctx = (search_thread_context_t *)user_data;
+    if(ctx == NULL || ctx->results == NULL || ctx->search_rules == NULL)
+        return NULL;
+
+    const uint32_t start = ctx->start_pos;
+    const uint32_t end = ctx->end_pos;
+    const uint32_t save_results = ctx->req_results;
+    uint32_t *results = ctx->results;
+	fs_buf *fsbuf = ctx->fsbuf;
+	comparator_fn compara_fn = ctx->compara_fn;
+	search_rule *rule = ctx->search_rules;
+
+	search_rule *ex_rule = NULL;
+	search_rule *in_rule = NULL;
+	get_rules(rule, INCLUDE_RULE, &in_rule);
+	int rule_val = get_rules(rule, EXCLUDE_RULE, &ex_rule); //get the rule's total value once
+
+	/* declare three lists are same jump link:
+	   *jump_list: for free link when searching end.
+	   *list_p: temp link, which create the jump link, alway point the link end.
+	*/
+	struct jump_off *jump_list = NULL;
+	struct jump_off *list_p = NULL;
+
+    uint32_t num_results = 0;
+    for (uint32_t name_off = start; name_off <= end;) {
+		char *name = fsbuf->head + name_off;
+		// skip these empty name(a end flag of directory) in this search index.
+		if (*name == 0 || strlen(name) < 1) {
+			name_off = next_name(fsbuf, name_off);
+			continue;
+		}
+
+		if (should_jump(jump_list, name_off, &name_off) == 0)
+			continue;
+
+		// check exclude rule for directory and save to jump list.
+		if (rule_val & EXCLUDE_RULE)
+		{
+			uint32_t startoff = get_kids_offset(fsbuf, name_off);
+			//it checks name type(dir or file) in get_kids_offset.
+			if (startoff) {
+				if (check_name(fsbuf, name, ex_rule) == 0) {
+					uint32_t endoff = get_tree_end_offset(fsbuf, startoff);
+
+					// append start and end to the list
+					add_jump(&list_p, startoff, endoff);
+					if (jump_list == NULL)
+						jump_list = list_p; //take the jump list head for free
+
+					// skip this directory name and go to next name
+					name_off = next_name(fsbuf, name_off);
+					continue;
+				}
+			}
+		}
+
+		// if (match_str_icase(name, keyword) == 0) {
+		if (*name != 0 && (*compara_fn)(name, ctx->query) == 0) {
+			// no any result filter rule has been define.
+			if (rule_val <= SEARCH_RULE) {
+				if (num_results < save_results)
+					results[num_results] = name_off; // save this offset as result.
+				num_results++;
+			} else {
+				// the result should be included
+				if (rule_val & INCLUDE_RULE) {
+					if (check_name(fsbuf, name, in_rule) == 0) {
+						if (rule_val & EXCLUDE_RULE) {
+							// for both include and exclude
+							if (check_name(fsbuf, name, ex_rule) != 0) {
+								if (num_results < save_results)
+									results[num_results] = name_off; // save this offset as result.
+								num_results++;
+							}
+						} else {
+							// for include only
+							if (num_results < save_results)
+								results[num_results] = name_off; // save this offset as result.
+							num_results++;
+						}
+					}
+				} else if (rule_val & EXCLUDE_RULE) {
+					// for exclude only
+					if (check_name(fsbuf, name, ex_rule) != 0) {
+						if (num_results < save_results)
+							results[num_results] = name_off; // save this offset as result.
+						num_results++;
+					}
+				}
+			}
+		}
+		name_off = next_name(fsbuf, name_off);
+    }
+	// save the total number.
+    ctx->num_results = num_results;
+
+	// free the whole jump list
+	while (jump_list != NULL) {
+		struct jump_off *tmp = jump_list->next;
+		free(jump_list);
+		jump_list = tmp;
+	}
+
+	// free include and exclude rule list
+	while (ex_rule != NULL) {
+		search_rule *tmp = ex_rule->next;
+		free(ex_rule);
+		ex_rule = tmp;
+	}
+	while (in_rule != NULL) {
+		search_rule *tmp = in_rule->next;
+		free(in_rule);
+		in_rule = tmp;
+	}
+
+    return NULL;
+}
+
+__attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, uint32_t *start_off, uint32_t end_off, uint32_t *results, uint32_t *count,
+							search_rule *rule, const char *query)
+{
+	pthread_rwlock_rdlock(&fsbuf->lock);
+	uint32_t s_off = *start_off, min_off = fsbuf->tail > end_off ? end_off : fsbuf->tail;
+
+	if (search_pool == NULL) {
+		search_pool = fsearch_thread_pool_init();
+	}
+
+	int reg_enable = atoi(get_rule_value(rule, RULE_SEARCH_REGX));
+	int icase = atoi(get_rule_value(rule, RULE_SEARCH_ICASE));
+
+	const bool is_reg = reg_enable && is_regex(query);
+	pcre *regex = NULL;
+
+	if (is_reg) {
+		const char *error;
+		int erroffset;
+		regex = pcre_compile(query, PCRE_CASELESS, &error, &erroffset, NULL);
+	}
+
+	const bool is_rule = (rule != NULL) ? 1 : 0;
+
+    const uint32_t num_threads = fsearch_thread_pool_get_num_threads(search_pool);
+    const uint32_t num_items_per_thread = MAX((min_off - s_off) / num_threads, 1);
+
+    search_thread_context_t *thread_data[num_threads];
+    memset(thread_data, 0, num_threads * sizeof(search_thread_context_t *));
+
+    const uint32_t max_results = *count;
+    const bool limit_results = max_results ? true : false;
+
+    uint32_t start_pos = s_off;
+	// get intact name and set its offset as end pos of this piece
+    uint32_t end_pos = num_items_per_thread - 1;
+	if (end_pos > min_off) {
+		end_pos = min_off; // make sure the end pos within tail or search end offset
+	} else {
+		end_pos = next_name(fsbuf, end_pos);
+	}
+
+	bool error_occur = false; // mark error occured by something.
+	void *compare_query = regex ? (void*)regex : (void*)query;
+    GList *temp = fsearch_thread_pool_get_threads(search_pool);
+    for (uint32_t i = 0; i < num_threads; i++) {
+        thread_data[i] = search_thread_context_new(fsbuf,
+				regex ? pcre_regex : icase ? match_str_icase : match_str,
+				compare_query,
+				rule,
+				max_results,
+                start_pos,
+                i == num_threads - 1 ? min_off : end_pos);
+		if (thread_data[i] == NULL) {
+			printf("error occur -> create thread_data[%d] FAILED!\n", i);
+			error_occur = true;
+			break;
+		}
+
+		// start with next name which near by current end pos.
+        start_pos = next_name(fsbuf, end_pos);
+		// get next piece end pos.
+        end_pos += num_items_per_thread;
+		if (end_pos > min_off) {
+			end_pos = min_off; // make sure the end pos within tail or search end offset
+		} else {
+			end_pos = next_name(fsbuf, end_pos);
+		}
+
+        fsearch_thread_pool_push_data(search_pool,
+                                       temp,
+                                       is_rule ? rulesearch_thread : search_thread,
+                                       thread_data[i]);
+        temp = temp->next;
+    }
+	// wait for all threads finished
+    temp = fsearch_thread_pool_get_threads(search_pool);
+    while (temp) {
+        fsearch_thread_pool_wait_for_thread(search_pool, temp);
+        temp = temp->next;
+    }
+	pthread_rwlock_unlock(&fsbuf->lock);
+
+	if (regex)
+		pcre_free(regex);
+
+	// append the results into request number of result array.
+	uint32_t total_results = 0;
+    uint32_t pos = 0;
+    for (uint32_t i = 0; i < num_threads; i++) {
+        search_thread_context_t *ctx = thread_data[i];
+        if (!ctx) {
+            break;
+        }
+		// get total number of entries found
+		total_results += ctx->num_results;
+        for (uint32_t j = 0; j < ctx->num_results; ++j) {
+            if (limit_results) {
+                if (pos >= max_results) {
+                    break;
+                }
+            }
+
+			uint32_t result_val = ctx->results[j];
+			results[pos] = result_val;
+            pos++;
+        }
+        if (ctx->results) {
+            g_free (ctx->results);
+            ctx->results = NULL;
+        }
+        if (ctx) {
+            g_free (ctx);
+            ctx = NULL;
+        }
+    }
+
+	// return the found entries and update start_off
+	*count = total_results;
+	*start_off = error_occur? s_off : min_off; // start offset not changed if error. maybe search again.
 }

@@ -56,7 +56,7 @@ public:
     QStringList sync(const QString &mountPoint = QString());
 
     QStringList search(const QString &path, const QString &keyword, bool useRegExp = false) const;
-    QStringList search(int maxCount, qint64 maxTime, quint32 startOffset, quint32 endOffset,
+    QStringList search(int maxCount, qint64 icase, quint32 startOffset, quint32 endOffset,
                        const QString &path, const QString &keyword, bool useRegExp,
                        quint32 &startOffsetReturn, quint32 &endOffsetReturn) const;
 
@@ -70,6 +70,7 @@ public:
     bool autoIndexInternal() const;
 
     int logLevel() const;
+    QStringList parallelsearch(const QString &path, const QString &keyword, const QStringList &rules) const;
 
 public Q_SLOTS:
     void setAutoIndexExternal(bool autoIndexExternal);
@@ -100,6 +101,14 @@ private:
     void onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint);
     void onFSAdded(const QString &blockDevicePath);
     void onFSRemoved(const QString &blockDevicePath);
+
+    // search related private implementations.
+    int _prepareBuf(quint32 *startOffset, quint32 *endOffset, const QString &path, void **buf, QString *newpath) const;
+    int _separateSearchArgs(const QStringList &rules, bool *useRegExp, quint32 *startOffset, quint32 *endOffset, qint64 *maxTime, qint64 *maxCount) const;
+    bool _getRuleArgs(const QStringList &rules, int searchFlag, quint32 &valueReturn) const;
+    bool _parseRules(void **prules, const QStringList &rules) const;
+    QStringList _enterSearch(const QString &path, const QString &keyword, const QStringList &rules, quint32 &startOffsetReturn, quint32 &endOffsetReturn) const;
+    int _doSearch(void *vbuf, quint32 maxCount, const QString &keyword, quint32 *startOffset, quint32 *endOffset, QStringList *results, const QStringList &rules = {}) const;
 };
 
 #endif // LFTMANAGER_H
