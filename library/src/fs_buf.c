@@ -1434,6 +1434,9 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 			break;
 		}
 
+		fsearch_thread_pool_push_data(search_pool, temp, is_rule ? rulesearch_thread : search_thread, thread_data[i]);
+		temp = temp->next;
+
 		// start with next name which near by current end pos.
 		start_pos = next_name(fsbuf, end_pos);
 		// get next piece end pos.
@@ -1443,9 +1446,11 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 		} else {
 			end_pos = next_name(fsbuf, end_pos);
 		}
-
-		fsearch_thread_pool_push_data(search_pool, temp, is_rule ? rulesearch_thread : search_thread, thread_data[i]);
-		temp = temp->next;
+		if (start_pos >= end_pos) {
+			//not need more thread, refresh actual thread number.
+			// printf("no more need -> total thread:%u\n", i + 1);
+			break;
+		}
 	}
 	// wait for all threads finished
 	temp = fsearch_thread_pool_get_threads(search_pool);
