@@ -925,28 +925,16 @@ int LFTManager::logLevel() const
 QStringList LFTManager::parallelsearch(const QString &path, const QString &keyword, const QStringList &rules) const
 {
     quint32 start, end;
-    QStringList nRules;
-    //check the all search rules (0x01 - 0x05), set them with default value if isn't setted by user.
-    quint32 orgval = 0;
-    if (!_getRuleArgs(rules, RULE_SEARCH_REGX, orgval)) {
-        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_REGX, 2, 16, QLatin1Char('0')).arg(0));
-    }
-    if (!_getRuleArgs(rules, RULE_SEARCH_MAX_COUNT, orgval)) {
-        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_MAX_COUNT, 2, 16, QLatin1Char('0')).arg(0));
-    }
-    if (!_getRuleArgs(rules, RULE_SEARCH_ICASE, orgval)) {
-        // default not ignoring the case(UP and LOW) of the characters in this API
-        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_ICASE, 2, 16, QLatin1Char('0')).arg(0));
-    }
-    if (!_getRuleArgs(rules, RULE_SEARCH_STARTOFF, orgval)) {
-        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_STARTOFF, 2, 16, QLatin1Char('0')).arg(0));
-    }
-    if (!_getRuleArgs(rules, RULE_SEARCH_ENDOFF, orgval)) {
-        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_ENDOFF, 2, 16, QLatin1Char('0')).arg(0));
-    }
-
-    nRules.append(rules);
+    QStringList nRules = _setRulesByDefault(rules, 0, 0);
     return _enterSearch(path, keyword, nRules, start, end);
+}
+
+QStringList LFTManager::parallelsearch(const QString &path, quint32 startOffset, quint32 endOffset,
+                                       const QString &keyword, const QStringList &rules,
+                                       quint32 &startOffsetReturn, quint32 &endOffsetReturn) const
+{
+    QStringList nRules = _setRulesByDefault(rules, startOffset, endOffset);
+    return _enterSearch(path, keyword, nRules, startOffsetReturn, endOffsetReturn);
 }
 
 void LFTManager::setAutoIndexExternal(bool autoIndexExternal)
@@ -1374,6 +1362,32 @@ bool LFTManager::_parseRules(void **prules, const QStringList &rules) const
     }
     *prules = p;
     return p && (p->flag != RULE_NONE);
+}
+
+QStringList LFTManager::_setRulesByDefault(const QStringList &rules, quint32 startOffset, quint32 endOffset) const
+{
+    QStringList nRules;
+    //check the all search rules (0x01 - 0x05), set them with default value if isn't setted by user.
+    quint32 orgval = 0;
+    if (!_getRuleArgs(rules, RULE_SEARCH_REGX, orgval)) {
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_REGX, 2, 16, QLatin1Char('0')).arg(0));
+    }
+    if (!_getRuleArgs(rules, RULE_SEARCH_MAX_COUNT, orgval)) {
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_MAX_COUNT, 2, 16, QLatin1Char('0')).arg(0));
+    }
+    if (!_getRuleArgs(rules, RULE_SEARCH_ICASE, orgval)) {
+        // default not ignoring the case(UP and LOW) of the characters in this API
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_ICASE, 2, 16, QLatin1Char('0')).arg(0));
+    }
+    if (!_getRuleArgs(rules, RULE_SEARCH_STARTOFF, orgval)) {
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_STARTOFF, 2, 16, QLatin1Char('0')).arg(startOffset));
+    }
+    if (!_getRuleArgs(rules, RULE_SEARCH_ENDOFF, orgval)) {
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_ENDOFF, 2, 16, QLatin1Char('0')).arg(endOffset));
+    }
+
+    nRules.append(rules);
+    return nRules;
 }
 
 QStringList LFTManager::_enterSearch(const QString &path, const QString &keyword, const QStringList &rules,

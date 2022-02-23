@@ -71,6 +71,9 @@ public:
 
     int logLevel() const;
     QStringList parallelsearch(const QString &path, const QString &keyword, const QStringList &rules) const;
+    QStringList parallelsearch(const QString &path, quint32 startOffset, quint32 endOffset,
+                               const QString &keyword, const QStringList &rules,
+                               quint32 &startOffsetReturn, quint32 &endOffsetReturn) const;
 
 public Q_SLOTS:
     void setAutoIndexExternal(bool autoIndexExternal);
@@ -107,6 +110,7 @@ private:
     int _separateSearchArgs(const QStringList &rules, bool *useRegExp, quint32 *startOffset, quint32 *endOffset, qint64 *maxTime, qint64 *maxCount) const;
     bool _getRuleArgs(const QStringList &rules, int searchFlag, quint32 &valueReturn) const;
     bool _parseRules(void **prules, const QStringList &rules) const;
+    QStringList _setRulesByDefault(const QStringList &rules, quint32 startOffset, quint32 endOffset) const;
     QStringList _enterSearch(const QString &path, const QString &keyword, const QStringList &rules, quint32 &startOffsetReturn, quint32 &endOffsetReturn) const;
     int _doSearch(void *vbuf, quint32 maxCount, const QString &keyword, quint32 *startOffset, quint32 *endOffset, QStringList *results, const QStringList &rules = {}) const;
 };
