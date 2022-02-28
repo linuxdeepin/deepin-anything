@@ -320,7 +320,7 @@ static void removeBuf(fs_buf *buf, bool &removeLFTFile)
     free_fs_buf(buf);
 }
 
-bool LFTManager::addPath(QString path, bool autoIndex)
+bool LFTManager::AddPath(QString path, bool autoIndex)
 {
     nDebug() << path << autoIndex;
 
@@ -391,7 +391,7 @@ bool LFTManager::addPath(QString path, bool autoIndex)
 
             _global_fsWatcherMap->remove(path);
 
-            Q_EMIT addPathFinished(path, buf);
+            Q_EMIT AddPathFinished(path, buf);
         }
 
         if (buf) {
@@ -610,7 +610,7 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 
         if (!checkFSBuf(buf)) {
             // 重新生成fs buf
-            addPath(QString::fromLocal8Bit(get_root_path(buf)), dir_iterator.fileName().endsWith(".lft"));
+            AddPath(QString::fromLocal8Bit(get_root_path(buf)), dir_iterator.fileName().endsWith(".lft"));
             free_fs_buf(buf);
 
             nWarning() << "Failed on check fs buf of: " << lft_file;
@@ -1137,7 +1137,7 @@ void LFTManager::_indexAll()
             continue;
 
         if (!hasLFT(QString::fromLocal8Bit(device->mountPoints().first())))
-            _addPathByPartition(device);
+            _AddPathByPartition(device);
         else
             nDebug() << "Exist index data:" << device->mountPoints().first() << ", block:" << block;
     }
@@ -1169,7 +1169,7 @@ void LFTManager::_cleanAllIndex()
     }
 }
 
-void LFTManager::_addPathByPartition(const DBlockDevice *block)
+void LFTManager::_AddPathByPartition(const DBlockDevice *block)
 {
     nDebug() << block->device() << block->id() << block->drive();
 
@@ -1187,7 +1187,7 @@ void LFTManager::_addPathByPartition(const DBlockDevice *block)
         nDebug() << "can index:" << index;
 
         if (index) // 建立索引时一切以第一个挂载点为准
-            addPath(QString::fromLocal8Bit(block->mountPoints().first()), true);
+            AddPath(QString::fromLocal8Bit(block->mountPoints().first()), true);
 
         device->deleteLater();
     }
@@ -1213,7 +1213,7 @@ void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &
 
     if (DBlockDevice *block = LFTDiskTool::diskManager()->createBlockPartitionByMountPoint(mountPoint)) {
         if (!block->isLoopDevice()) {
-            _addPathByPartition(block);
+            _AddPathByPartition(block);
         }
 
         block->deleteLater();

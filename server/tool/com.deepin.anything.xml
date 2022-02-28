@@ -12,7 +12,7 @@
     <method name='allPath'>
         <arg type='as' name='pathList' direction='out'/>
     </method>
-    <method name='addPath'>
+    <method name='AddPath'>
         <arg type='s' name='path' direction='in'/>
         <arg type='b' name='success' direction='out'/>
     </method>
@@ -93,7 +93,7 @@
     </method>
     <method name='quit'>
     </method>
-    <signal name="addPathFinished">
+    <signal name="AddPathFinished">
       <arg type="s" name="path"/>
       <arg type="b" name="success"/>
     </signal>
