@@ -112,7 +112,7 @@ private:
     bool _parseRules(void **prules, const QStringList &rules) const;
     QStringList _setRulesByDefault(const QStringList &rules, quint32 startOffset, quint32 endOffset) const;
     QStringList _enterSearch(const QString &path, const QString &keyword, const QStringList &rules, quint32 &startOffsetReturn, quint32 &endOffsetReturn) const;
-    int _doSearch(void *vbuf, quint32 maxCount, const QString &keyword, quint32 *startOffset, quint32 *endOffset, QStringList *results, const QStringList &rules = {}) const;
+    int _doSearch(void *vbuf, quint32 maxCount, const QString &keyword, quint32 *startOffset, quint32 *endOffset, QList<uint32_t> &results, const QStringList &rules = {}) const;
 };
 
 #endif // LFTMANAGER_H

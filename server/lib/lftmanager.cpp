@@ -1309,6 +1309,10 @@ int LFTManager::_prepareBuf(quint32 *startOffset, quint32 *endOffset, const QStr
 
 bool LFTManager::_getRuleArgs(const QStringList &rules, int searchFlag, quint32 &valueReturn) const
 {
+    if (searchFlag >= RULE_EXCLUDE_SUB_S) {
+        nDebug() << "this rule value will return a string!";
+        return false;
+    }
     for (const QString &rule : rules) {
         if (rule.size() < 4 || !rule.startsWith("0x")) //incorrect format rule, not start with "0x01" "0x10" e.
             continue;
@@ -1373,7 +1377,8 @@ QStringList LFTManager::_setRulesByDefault(const QStringList &rules, quint32 sta
         nRules.append(QString("0x%1%2").arg(RULE_SEARCH_REGX, 2, 16, QLatin1Char('0')).arg(0));
     }
     if (!_getRuleArgs(rules, RULE_SEARCH_MAX_COUNT, orgval)) {
-        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_MAX_COUNT, 2, 16, QLatin1Char('0')).arg(0));
+        //default not set request max count, it will search all index and return DEFAULT_RESULT_COUNT results.
+        nRules.append(QString("0x%1%2").arg(RULE_SEARCH_MAX_COUNT, 2, 16, QLatin1Char('0')).arg(-1));
     }
     if (!_getRuleArgs(rules, RULE_SEARCH_ICASE, orgval)) {
         // default not ignoring the case(UP and LOW) of the characters in this API
@@ -1418,30 +1423,31 @@ QStringList LFTManager::_enterSearch(const QString &path, const QString &keyword
     }
 
     QStringList list;
-    QStringList results;
+    QList<uint32_t> offset_results;
 
     struct timeval s, e;
     gettimeofday(&s, nullptr);
 
     int total = 0;
     // get the search result, note the @startOffset and @endOffset both are in and out, which will record the real searching offsets.
-    total += _doSearch(buf, maxCount, keyword, &startOffset, &endOffset, &results, rules);
+    total += _doSearch(buf, maxCount, keyword, &startOffset, &endOffset, offset_results, rules);
+
+    fs_buf *fsbuf = static_cast<fs_buf*>(buf);
+    if (fsbuf) {
+        char tmp_path[PATH_MAX] = {0};
+        bool reset_path = path != newpath;
+        // get the full path by the file/dir name, and append to list.
+        for(uint32_t offset : offset_results) {
+            const char *name_path = get_path_by_name_off(fsbuf, offset, tmp_path, sizeof(tmp_path));
+            const QString &origin_path = QString::fromLocal8Bit(name_path);
+            list.append(reset_path ? path + origin_path.mid(newpath.size()) : origin_path);
+        }
+    }
 
     gettimeofday(&e, nullptr);
     long dur = (e.tv_usec + e.tv_sec * 1000000) - (s.tv_usec + s.tv_sec * 1000000);
     // set this log as special start, it may be used to take result from log.
     nDebug() << "anything-GOOD: found " << total << " entries for " << keyword << "in " << dur << " us\n";
-
-    bool reset_path = path != newpath;
-    if (reset_path) {
-        nDebug() << "need reset root path:" << path;
-        for (QString &spath : results) {
-            // root_path 以/结尾，所以此处需要多忽略一个字符
-            list << path + spath.mid(newpath.size());
-        }
-    } else {
-        list << results;
-    }
 
     startOffsetReturn = startOffset;
     endOffsetReturn = endOffset;
@@ -1449,7 +1455,7 @@ QStringList LFTManager::_enterSearch(const QString &path, const QString &keyword
 }
 
 int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &keyword,
-                          quint32 *startOffset, quint32 *endOffset, QStringList *results, const QStringList &rules) const
+                          quint32 *startOffset, quint32 *endOffset, QList<uint32_t> &results, const QStringList &rules) const
 {
     fs_buf *buf = static_cast<fs_buf*>(vbuf);
     if (buf == nullptr)
@@ -1465,7 +1471,6 @@ int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &keyword,
     if (!rules.isEmpty() && _parseRules(&p, rules))
         searc_rule = static_cast<search_rule*>(p);
 
-    char tmp_path[PATH_MAX] = {0};
     //if unlimit count (maxCount = -1 or 0), only append first DEFAULT_RESULT_COUNT results.
     uint32_t req_count = maxCount > 0 ? maxCount : count;
     uint32_t req_number = req_count;
@@ -1481,13 +1486,11 @@ int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &keyword,
     // save request count of result.
     uint32_t mincount = qMin(req_number, req_count);
 
-    // get the full path by the file/dir name, and append to list.
+    // append the offset values
     for (uint32_t i = 0; i < mincount; ++i) {
-        const char *name_path = get_path_by_name_off(buf, name_offsets[i], tmp_path, sizeof(tmp_path));
-        const QString &origin_path = QString::fromLocal8Bit(name_path);
-        *results << origin_path;
+        results << name_offsets[i];
     }
-    total += req_count;
+    total += req_count; // append the match number in this range, it allways more than the size of name_offsets.
 
     *startOffset = start;
     *endOffset = end;

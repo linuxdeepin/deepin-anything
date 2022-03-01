@@ -91,6 +91,7 @@ typedef struct search_context_s {
 	uint32_t req_results;
 	uint32_t start_pos;
 	uint32_t end_pos;
+	int max_count;
 } search_thread_context_t;
 
 static FsearchThreadPool *search_pool;
@@ -1103,12 +1104,13 @@ int should_jump(struct jump_off *jump_list, uint32_t name_off, uint32_t *jump_of
 }
 
 static search_thread_context_t *search_thread_context_new(fs_buf *fsbuf,
-						   comparator_fn comparator,
-                           void *query,
-						   search_rule *rules,
-						   uint32_t req_results,
-                           uint32_t start_pos,
-                           uint32_t end_pos)
+							comparator_fn comparator,
+							void *query,
+							search_rule *rules,
+							uint32_t req_results,
+							uint32_t start_pos,
+							uint32_t end_pos,
+							int max_count)
 {
 	if (end_pos < start_pos)
 		return NULL;
@@ -1130,6 +1132,7 @@ static search_thread_context_t *search_thread_context_new(fs_buf *fsbuf,
 	ctx->req_results = req_results;
 	ctx->start_pos = start_pos;
 	ctx->end_pos = end_pos;
+	ctx->max_count = max_count;
 	return ctx;
 }
 
@@ -1222,19 +1225,21 @@ static int pcre_regex(const char *name, void *query)
 
 static void *search_thread(void * user_data)
 {
-    search_thread_context_t *ctx = (search_thread_context_t *)user_data;
-    if (ctx == NULL || ctx->results == NULL)
-        return NULL;
+	search_thread_context_t *ctx = (search_thread_context_t *)user_data;
+	if (ctx == NULL || ctx->results == NULL)
+		return NULL;
 
-    const uint32_t start = ctx->start_pos;
-    const uint32_t end = ctx->end_pos;
-    const uint32_t save_results = ctx->req_results;
-    uint32_t *results = ctx->results;
+	const uint32_t start = ctx->start_pos;
+	const uint32_t end = ctx->end_pos;
+	const uint32_t save_results = ctx->req_results;
+	uint32_t *results = ctx->results;
 	fs_buf *fsbuf = ctx->fsbuf;
 	comparator_fn compara_fn = ctx->compara_fn;
+	const int max_count = ctx->max_count;
+	const bool limit_count = max_count > 0 ? true : false;
 
-    uint32_t num_results = 0;
-    for (uint32_t name_off = start; name_off <= end;) {
+	uint32_t num_results = 0;
+	for (uint32_t name_off = start; name_off <= end;) {
 		char *name = fsbuf->head + name_off;
 		// skip these empty name(a end flag of directory) in this search index.
 		if (*name == 0 || strlen(name) < 1) {
@@ -1248,22 +1253,28 @@ static void *search_thread(void * user_data)
 			num_results++;
 		}
 		name_off = next_name(fsbuf, name_off);
-    }
+
+		if (limit_count && num_results >= max_count) {
+			// if current result count equal to request max_count, break and update the start_pos as next search offset.
+			ctx->start_pos = name_off;
+			break;
+		}
+	}
 	// save the total number.
-    ctx->num_results = num_results;
-    return NULL;
+	ctx->num_results = num_results;
+	return NULL;
 }
 
 static void *rulesearch_thread(void * user_data)
 {
-    search_thread_context_t *ctx = (search_thread_context_t *)user_data;
-    if (ctx == NULL || ctx->results == NULL || ctx->search_rules == NULL)
-        return NULL;
+	search_thread_context_t *ctx = (search_thread_context_t *)user_data;
+	if (ctx == NULL || ctx->results == NULL || ctx->search_rules == NULL)
+		return NULL;
 
-    const uint32_t start = ctx->start_pos;
-    const uint32_t end = ctx->end_pos;
-    const uint32_t save_results = ctx->req_results;
-    uint32_t *results = ctx->results;
+	const uint32_t start = ctx->start_pos;
+	const uint32_t end = ctx->end_pos;
+	const uint32_t save_results = ctx->req_results;
+	uint32_t *results = ctx->results;
 	fs_buf *fsbuf = ctx->fsbuf;
 	comparator_fn compara_fn = ctx->compara_fn;
 	search_rule *rule = ctx->search_rules;
@@ -1272,6 +1283,8 @@ static void *rulesearch_thread(void * user_data)
 	search_rule *in_rule = NULL;
 	get_rules(rule, INCLUDE_RULE, &in_rule);
 	int rule_val = get_rules(rule, EXCLUDE_RULE, &ex_rule); //get the rule's total value once
+	const int max_count = ctx->max_count;
+	const bool limit_count = max_count > 0 ? true : false;
 
 	/* declare three lists are same jump link:
 	   *jump_list: for free link when searching end.
@@ -1280,8 +1293,8 @@ static void *rulesearch_thread(void * user_data)
 	struct jump_off *jump_list = NULL;
 	struct jump_off *list_p = NULL;
 
-    uint32_t num_results = 0;
-    for (uint32_t name_off = start; name_off <= end;) {
+	uint32_t num_results = 0;
+	for (uint32_t name_off = start; name_off <= end;) {
 		char *name = fsbuf->head + name_off;
 		// skip these empty name(a end flag of directory) in this search index.
 		if (*name == 0 || strlen(name) < 1) {
@@ -1349,9 +1362,15 @@ static void *rulesearch_thread(void * user_data)
 			}
 		}
 		name_off = next_name(fsbuf, name_off);
-    }
+
+		if (limit_count && num_results >= max_count) {
+			// if current result count equal to request max_count, break and update the start_pos as next search offset.
+			ctx->start_pos = name_off;
+			break;
+		}
+	}
 	// save the total number.
-    ctx->num_results = num_results;
+	ctx->num_results = num_results;
 
 	// free the whole jump list
 	while (jump_list != NULL) {
@@ -1372,7 +1391,7 @@ static void *rulesearch_thread(void * user_data)
 		in_rule = tmp;
 	}
 
-    return NULL;
+	return NULL;
 }
 
 __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, uint32_t *start_off, uint32_t end_off, uint32_t *results, uint32_t *count,
@@ -1387,6 +1406,7 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 
 	int reg_enable = atoi(get_rule_value(rule, RULE_SEARCH_REGX));
 	int icase = atoi(get_rule_value(rule, RULE_SEARCH_ICASE));
+	int max_count = atoi(get_rule_value(rule, RULE_SEARCH_MAX_COUNT));
 
 	const bool is_reg = reg_enable && is_regex(query);
 	pcre *regex = NULL;
@@ -1399,18 +1419,18 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 
 	const bool is_rule = (rule != NULL) ? 1 : 0;
 
-    const uint32_t num_threads = fsearch_thread_pool_get_num_threads(search_pool);
-    const uint32_t num_items_per_thread = MAX((min_off - s_off) / num_threads, 1);
+	const uint32_t num_threads = fsearch_thread_pool_get_num_threads(search_pool);
+	const uint32_t num_items_per_thread = MAX((min_off - s_off) / num_threads, 1);
 
-    search_thread_context_t *thread_data[num_threads];
-    memset(thread_data, 0, num_threads * sizeof(search_thread_context_t *));
+	search_thread_context_t *thread_data[num_threads];
+	memset(thread_data, 0, num_threads * sizeof(search_thread_context_t *));
 
-    const uint32_t max_results = *count;
-    const bool limit_results = max_results ? true : false;
+	const uint32_t max_results = *count;
+	const bool limit_results = max_count > 0 ? true : false;
 
-    uint32_t start_pos = s_off;
+	uint32_t start_pos = s_off;
 	// get intact name and set its offset as end pos of this piece
-    uint32_t end_pos = start_pos + num_items_per_thread - 1;
+	uint32_t end_pos = start_pos + num_items_per_thread - 1;
 	if (end_pos > min_off) {
 		end_pos = min_off; // make sure the end pos within tail or search end offset
 	} else {
@@ -1427,7 +1447,8 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 				rule,
 				max_results,
 				start_pos,
-				i == num_threads - 1 ? min_off : end_pos);
+				i == num_threads - 1 ? min_off : end_pos,
+				max_count);
 		if (thread_data[i] == NULL) {
 			printf("error occur -> create thread_data[%u] for [%u, %u] FAILED!\n", i, start_pos, end_pos);
 			error_occur = true;
@@ -1465,34 +1486,49 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 
 	// append the results into request number of result array.
 	uint32_t total_results = 0;
-    uint32_t pos = 0;
-    for (uint32_t i = 0; i < num_threads; i++) {
-        search_thread_context_t *ctx = thread_data[i];
-        if (!ctx) {
-            break;
-        }
+	uint32_t pos = 0;
+	bool limit_return = false;
+	for (uint32_t i = 0; i < num_threads; i++) {
+		search_thread_context_t *ctx = thread_data[i];
+		if (!ctx) {
+			break;
+		}
 		// get total number of entries found
 		total_results += ctx->num_results;
-        for (uint32_t j = 0; j < ctx->num_results; ++j) {
-            if (limit_results) {
-                if (pos >= max_results) {
-                    break;
-                }
-            }
+		if (limit_results && total_results >= max_count) {
+			// if max_count has reached in current thread, mark next seach offset which would expect.
+			min_off = ctx->start_pos;
+			limit_return = true;
+		}
 
-			uint32_t result_val = ctx->results[j];
-			results[pos] = result_val;
-            pos++;
-        }
-        if (ctx->results) {
-            g_free (ctx->results);
-            ctx->results = NULL;
-        }
-        if (ctx) {
-            g_free (ctx);
-            ctx = NULL;
-        }
-    }
+		for (uint32_t j = 0; j < ctx->num_results; ++j) {
+			if (pos < max_results) {
+				uint32_t result_val = ctx->results[j];
+				results[pos] = result_val;
+				pos++;
+			} else {
+				if (limit_return && total_results > max_count) {
+					// cut the next offset in this thread result as next search start pos.
+					min_off = ctx->results[j];
+					total_results = max_count;
+				}
+				break;
+			}
+		}
+		if (ctx->results) {
+			g_free (ctx->results);
+			ctx->results = NULL;
+		}
+		if (ctx) {
+			g_free (ctx);
+			ctx = NULL;
+		}
+
+		if (limit_return) {
+			// return now if user sets max_count > 0
+			break;
+		}
+	}
 
 	// return the found entries and update start_off
 	*count = total_results;
