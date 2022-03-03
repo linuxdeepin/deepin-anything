@@ -109,10 +109,11 @@ private:
     int _prepareBuf(quint32 *startOffset, quint32 *endOffset, const QString &path, void **buf, QString *newpath) const;
     int _separateSearchArgs(const QStringList &rules, bool *useRegExp, quint32 *startOffset, quint32 *endOffset, qint64 *maxTime, qint64 *maxCount) const;
     bool _getRuleArgs(const QStringList &rules, int searchFlag, quint32 &valueReturn) const;
+    bool _getRuleStrings(const QStringList &rules, int searchFlag, QStringList &valuesReturn) const;
     bool _parseRules(void **prules, const QStringList &rules) const;
     QStringList _setRulesByDefault(const QStringList &rules, quint32 startOffset, quint32 endOffset) const;
     QStringList _enterSearch(const QString &path, const QString &keyword, const QStringList &rules, quint32 &startOffsetReturn, quint32 &endOffsetReturn) const;
-    int _doSearch(void *vbuf, quint32 maxCount, const QString &keyword, quint32 *startOffset, quint32 *endOffset, QList<uint32_t> &results, const QStringList &rules = {}) const;
+    int _doSearch(void *vbuf, quint32 maxCount, const QString &path, const QString &keyword, quint32 *startOffset, quint32 *endOffset, QList<uint32_t> &results, const QStringList &rules = {}) const;
 };
 
 #endif // LFTMANAGER_H

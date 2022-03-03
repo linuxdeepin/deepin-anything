@@ -51,6 +51,8 @@ Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, changesLog, ("manager.changes", QtWa
 #define cDebug(...) qCDebug((*changesLog), __VA_ARGS__)
 #define cWarning(...) qCWarning((*changesLog), __VA_ARGS__)
 #define DEFAULT_RESULT_COUNT 100
+// set default timeout(ms) for search function return.
+#define DEFAULT_TIMEOUT 200
 
 static QString _getCacheDir()
 {
@@ -1331,6 +1333,31 @@ bool LFTManager::_getRuleArgs(const QStringList &rules, int searchFlag, quint32 
     return false;
 }
 
+bool LFTManager::_getRuleStrings(const QStringList &rules, int searchFlag, QStringList &valuesReturn) const
+{
+    if (searchFlag < RULE_EXCLUDE_SUB_S) {
+        nDebug() << "this rule value is not a string!";
+        return false;
+    }
+    bool ret = false;
+    for (const QString &rule : rules) {
+        if (rule.size() < 4 || !rule.startsWith("0x")) //incorrect format rule, not start with "0x40" e.
+            continue;
+
+        int flag = 0;
+        bool ok;
+        flag = rule.left(4).toInt(&ok, 0);
+        if (ok && flag == searchFlag) {
+            QString value = rule.mid(4);
+            valuesReturn << value;
+            ret = true;
+        }
+    }
+
+    // not find the special flag in rules
+    return ret;
+}
+
 bool LFTManager::_parseRules(void **prules, const QStringList &rules) const
 {
     search_rule *p = nullptr; //the header of filter rule list;
@@ -1395,7 +1422,7 @@ QStringList LFTManager::_setRulesByDefault(const QStringList &rules, quint32 sta
     return nRules;
 }
 
-QStringList LFTManager::_enterSearch(const QString &path, const QString &keyword, const QStringList &rules,
+QStringList LFTManager::_enterSearch(const QString &opath, const QString &keyword, const QStringList &rules,
                    quint32 &startOffsetReturn, quint32 &endOffsetReturn) const
 {
     quint32 maxCount = 0;
@@ -1407,6 +1434,11 @@ QStringList LFTManager::_enterSearch(const QString &path, const QString &keyword
     _getRuleArgs(rules, RULE_SEARCH_STARTOFF, startOffset);
     _getRuleArgs(rules, RULE_SEARCH_ENDOFF, endOffset);
 
+    QString path = opath;
+    if (path.length() > 1 && path.endsWith("/")) {
+        // make sure this search path not end with '/' if it's not the root /
+        path.chop(1);
+    }
     nDebug() << maxCount << startOffset << endOffset << path << keyword << rules;
 
     void *buf = nullptr;
@@ -1430,7 +1462,7 @@ QStringList LFTManager::_enterSearch(const QString &path, const QString &keyword
 
     int total = 0;
     // get the search result, note the @startOffset and @endOffset both are in and out, which will record the real searching offsets.
-    total += _doSearch(buf, maxCount, keyword, &startOffset, &endOffset, offset_results, rules);
+    total += _doSearch(buf, maxCount, path, keyword, &startOffset, &endOffset, offset_results, rules);
 
     fs_buf *fsbuf = static_cast<fs_buf*>(buf);
     if (fsbuf) {
@@ -1454,7 +1486,7 @@ QStringList LFTManager::_enterSearch(const QString &path, const QString &keyword
     return list;
 }
 
-int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &keyword,
+int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &path, const QString &keyword,
                           quint32 *startOffset, quint32 *endOffset, QList<uint32_t> &results, const QStringList &rules) const
 {
     fs_buf *buf = static_cast<fs_buf*>(vbuf);
@@ -1465,6 +1497,7 @@ int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &keyword,
     uint32_t start = *startOffset; //the search start offset in data index
     uint32_t end = *endOffset;  //the search end offset in data index
     uint32_t count = DEFAULT_RESULT_COUNT;
+    uint32_t maxTimeout = DEFAULT_TIMEOUT;
 
     search_rule *searc_rule = nullptr;
     void *p = nullptr;
@@ -1480,17 +1513,90 @@ int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &keyword,
         return 0;
     }
 
+    // 获取“以什么开头”的所有过滤条件，可能是多种条件！
+    QStringList excludeStartStrs;
+    bool hasExclude = _getRuleStrings(rules, RULE_EXCLUDE_SUB_S, excludeStartStrs);
+
+    // 开始计时，默认超时200ms，防止搜索出错进入无限循环或过长时间无返回。
+    QElapsedTimer et;
+    et.start();
+
+    bool next = false; // 标记是否需要进行再次搜索
     QByteArray keyArray = keyword.toLocal8Bit();
     const char *queryword = keyArray.data();
-    parallelsearch_files(buf, &start, end, name_offsets, &req_count, searc_rule, queryword);
-    // save request count of result.
-    uint32_t mincount = qMin(req_number, req_count);
+    do {
+        // 搜索 -> 过滤 (1.结果数不满足或小于默认100个； 2.区间未搜索到任何结果) -> 循环搜索
+        parallelsearch_files(buf, &start, end, name_offsets, &req_count, searc_rule, queryword);
+        // save request count of result.
+        uint32_t mincount = qMin(req_number, req_count);
 
-    // append the offset values
-    for (uint32_t i = 0; i < mincount; ++i) {
-        results << name_offsets[i];
-    }
-    total += req_count; // append the match number in this range, it allways more than the size of name_offsets.
+        // 计算总是，如果有过滤则减除。然后重置请求数，防止用返回的值去下次请求，但保存结果的数组过小导致崩溃。
+        total += req_count; // append the match number in this range, it allways more than the size of name_offsets.
+        req_count = maxCount > 0 ? maxCount : count; // reset the request count, the name_offsets has been malloced with it.
+
+        // append the offset values
+        char tmp_path[PATH_MAX] = {0};
+        for (uint32_t i = 0; i < mincount; ++i) {
+            if (name_offsets[i] >= end) {
+                // 搜索结果偏移量超出索引区间范围
+                total--;
+                continue;
+            }
+            if (uint32_t(results.count()) >= req_number) {
+                start = name_offsets[i];
+                if (maxCount > 0) //如果设置请求数，返回的应该是返回数据的实际数量
+                    total = req_number;
+                break;
+            }
+
+            // 从结果中排除过滤。
+            // check exclude path which start with a filter setting string.
+            bool should_filter = false;
+            if (hasExclude) {
+                const char *name_path = get_path_by_name_off(buf, name_offsets[i], tmp_path, sizeof(tmp_path));
+                //should cut off the searching path start string.
+                const QString &origin_path = QString::fromLocal8Bit(name_path).mid(path.length());
+                for (QString &startStr : excludeStartStrs) {
+                    QString subStr("/" + startStr);
+                    if (origin_path.indexOf(subStr, 0, Qt::CaseSensitive) >= 0) {
+                        total--;
+                        should_filter = true;
+                        break;
+                    }
+                }
+            }
+            if (!should_filter)
+                results << name_offsets[i];
+        }
+
+        if (mincount > 0) {
+            // 此次搜索有结果
+            if (req_number > uint32_t(results.count())) {
+                // 结果数未达到请求数，无论搜索是否已经结束（start=end)，都需设置下次起点，进入下一次搜索
+                start = next_name(buf, name_offsets[mincount - 1]);
+                next = true;
+            } else {
+                // 结果数已达到请求数，但一次搜索完成，由于多线程切片，最后一个结果并未是真正的结束点，重置起点，以方便用户进行下次搜索
+                if (start == end) {
+                    // search once and there are request number, need to return the last pos for next requestion.
+                    start = next_name(buf, name_offsets[mincount - 1]);
+                }
+                // 搜索满足，结束
+                next = false;
+            }
+        } else {
+            // 此次搜索无结果，进入下一个区间，或已搜索完则结束
+            next = start < end ? true : false;
+        }
+
+        if (next && et.elapsed() >= maxTimeout) {
+            nDebug() << "break loop search by timeout! " << maxTimeout;
+            // 本来是需要进入下一次循环请求，但由于超时，所以返回的结果数应该是实际结果数。
+            total = results.count(); //set the actual result number.
+            break;
+        }
+
+    } while (next);
 
     *startOffset = start;
     *endOffset = end;
