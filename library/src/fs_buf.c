@@ -1239,7 +1239,7 @@ static void *search_thread(void * user_data)
 	const bool limit_count = max_count > 0 ? true : false;
 
 	uint32_t num_results = 0;
-	for (uint32_t name_off = start; name_off <= end;) {
+	for (uint32_t name_off = start; name_off < end;) {
 		char *name = fsbuf->head + name_off;
 		// skip these empty name(a end flag of directory) in this search index.
 		if (*name == 0 || strlen(name) < 1) {
@@ -1294,7 +1294,7 @@ static void *rulesearch_thread(void * user_data)
 	struct jump_off *list_p = NULL;
 
 	uint32_t num_results = 0;
-	for (uint32_t name_off = start; name_off <= end;) {
+	for (uint32_t name_off = start; name_off < end;) {
 		char *name = fsbuf->head + name_off;
 		// skip these empty name(a end flag of directory) in this search index.
 		if (*name == 0 || strlen(name) < 1) {
@@ -1418,8 +1418,10 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 	}
 
 	const bool is_rule = (rule != NULL) ? 1 : 0;
-
-	const uint32_t num_threads = fsearch_thread_pool_get_num_threads(search_pool);
+	// define the min range which lenght less than max_count * name_max, it should plus one because it includes tags. 
+	const uint32_t min_range = (max_count + 1) * NAME_MAX;
+	//it only need one thread if this is a short range.
+	const uint32_t num_threads = (min_off - s_off) <= min_range ? 1 : fsearch_thread_pool_get_num_threads(search_pool);
 	const uint32_t num_items_per_thread = MAX((min_off - s_off) / num_threads, 1);
 
 	search_thread_context_t *thread_data[num_threads];
@@ -1430,8 +1432,8 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 
 	uint32_t start_pos = s_off;
 	// get intact name and set its offset as end pos of this piece
-	uint32_t end_pos = start_pos + num_items_per_thread - 1;
-	if (end_pos > min_off) {
+	uint32_t end_pos = start_pos + num_items_per_thread;
+	if (end_pos >= min_off) {
 		end_pos = min_off; // make sure the end pos within tail or search end offset
 	} else {
 		end_pos = next_name(fsbuf, end_pos);
@@ -1501,7 +1503,9 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 			limit_return = true;
 		}
 
-		for (uint32_t j = 0; j < ctx->num_results; ++j) {
+		// the number of results always more than the result array size. It causes crash if overy array size.
+		uint32_t save_num = MIN(ctx->req_results, ctx->num_results);
+		for (uint32_t j = 0; j < save_num; ++j) {
 			if (pos < max_results) {
 				uint32_t result_val = ctx->results[j];
 				results[pos] = result_val;
