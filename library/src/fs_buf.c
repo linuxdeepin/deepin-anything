@@ -81,6 +81,19 @@ enum rule_type {
 	INCLUDE_RULE = 4
 };
 
+// compare language support defines.
+enum compare_lang {
+	LANG_NONE = 0,
+	LANG_PINYIN = 0x01
+};
+
+// take the string comparator related parameters into one pointer, it will be parsed in the callback funcation.
+typedef struct compare_query_s {
+	void *query;
+	bool icase;
+	uint8_t lang;
+} compare_query_t;
+
 typedef struct search_context_s {
 	fs_buf *fsbuf;
 	comparator_fn compara_fn;
@@ -1147,31 +1160,20 @@ static int do_match_str(const char *haystack, const char *needle, bool icase)
 
 static int match_str(const char *name, void *query)
 {
-	// not ignore case
-	int notmatch = do_match_str(name, (char *)query, false);
-	// if not match the query, then check it includes chinese word first and convert them, try to match pinyin words at last.
-	if (notmatch) {
-		// try to convert chinese to pinyin and compare with name
-		char *pinyin = cat_pinyin(name);
-		if (pinyin != NULL) {
-			notmatch = do_match_str(pinyin, (char *)query, false);
-			free(pinyin);
-		}
-	}
-	return notmatch;
-}
+	compare_query_t *comquery = (compare_query_t *)query; // do not check it at here, make sure it fast.
 
-static int match_str_icase(const char *name, void *query)
-{
-	// ignore case
-	int notmatch = do_match_str(name, (char *)query, true);
-	// if not match the query, then check it includes chinese word first and convert them, try to match pinyin words at last.
+	// do string compare with whether ignore up down char or not.
+	int notmatch = do_match_str(name, (char *)(comquery->query), comquery->icase);
+	// if not match the query, then check it whether need to convert the name string.
 	if (notmatch) {
-		// try to convert chinese to pinyin and compare with name
-		char *pinyin = cat_pinyin(name);
-		if (pinyin != NULL) {
-			notmatch = do_match_str(pinyin, (char *)query, true);
-			free(pinyin);
+		// check language support first and then parse the words as the compare string.
+		if (comquery->lang & LANG_PINYIN) {
+			// try to convert chinese to pinyin and compare with name
+			char *pinyin = cat_pinyin(name);
+			if (pinyin != NULL) {
+				notmatch = do_match_str(pinyin, (char *)(comquery->query), comquery->icase);
+				free(pinyin);
+			}
 		}
 	}
 	return notmatch;
@@ -1208,16 +1210,20 @@ static int do_regex(pcre *regex, const char *haystack)
 
 static int pcre_regex(const char *name, void *query)
 {
-	pcre *regex = (pcre *)query;
+	compare_query_t *comquery = (compare_query_t *)query; // do not check it at here, make sure it fast.
+	pcre *regex = (pcre *)(comquery->query);
 
 	int notmatch = do_regex(regex, name);
-	// if not match the query, then check it includes chinese word first and convert them, try to match pinyin words at last.
+	// if not match the query, then check it whether need to convert the name string.
 	if (notmatch) {
-		// try to convert chinese to pinyin and compare with name
-		char *pinyin = cat_pinyin(name);
-		if (pinyin != NULL) {
-			notmatch = do_regex(regex, pinyin);
-			free(pinyin);
+		// check language support first and then parse the words as the compare string.
+		if (comquery->lang & LANG_PINYIN) {
+			// try to convert chinese to pinyin and compare with name
+			char *pinyin = cat_pinyin(name);
+			if (pinyin != NULL) {
+				notmatch = do_regex(regex, pinyin);
+				free(pinyin);
+			}
 		}
 	}
 	return notmatch;
@@ -1326,7 +1332,6 @@ static void *rulesearch_thread(void * user_data)
 			}
 		}
 
-		// if (match_str_icase(name, keyword) == 0) {
 		if (*name != 0 && (*compara_fn)(name, ctx->query) == 0) {
 			// no any result filter rule has been define.
 			if (rule_val <= SEARCH_RULE) {
@@ -1407,6 +1412,19 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 	int reg_enable = atoi(get_rule_value(rule, RULE_SEARCH_REGX));
 	int icase = atoi(get_rule_value(rule, RULE_SEARCH_ICASE));
 	int max_count = atoi(get_rule_value(rule, RULE_SEARCH_MAX_COUNT));
+	int pinyin_enable = atoi(get_rule_value(rule, RULE_SEARCH_PINYIN));
+
+	// init the compare query struct, which includes keyword, icase and language support.
+	compare_query_t *comquery = calloc(1, sizeof(compare_query_t));
+	if (comquery == NULL)
+		return; // make sure the comparator related would be setted correctly.
+
+	comquery->icase = icase > 0;
+	if (pinyin_enable > 0) {
+		comquery->lang = LANG_PINYIN;
+	} else {
+		comquery->lang = LANG_NONE;
+	}
 
 	const bool is_reg = reg_enable && is_regex(query);
 	pcre *regex = NULL;
@@ -1415,6 +1433,9 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 		const char *error;
 		int erroffset;
 		regex = pcre_compile(query, PCRE_CASELESS, &error, &erroffset, NULL);
+		comquery->query = (void*)regex;
+	} else {
+		comquery->query = (void*)query;
 	}
 
 	const bool is_rule = (rule != NULL) ? 1 : 0;
@@ -1440,12 +1461,11 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 	}
 
 	bool error_occur = false; // mark error occured by something.
-	void *compare_query = regex ? (void*)regex : (void*)query;
 	GList *temp = fsearch_thread_pool_get_threads(search_pool);
 	for (uint32_t i = 0; i < num_threads; i++) {
 		thread_data[i] = search_thread_context_new(fsbuf,
-				regex ? pcre_regex : icase ? match_str_icase : match_str,
-				compare_query,
+				regex ? pcre_regex : match_str,
+				(void*)comquery,
 				rule,
 				max_results,
 				start_pos,
@@ -1485,6 +1505,8 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 
 	if (regex)
 		pcre_free(regex);
+	if (comquery)
+		free(comquery);
 
 	// append the results into request number of result array.
 	uint32_t total_results = 0;
