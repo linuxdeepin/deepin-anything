@@ -43,7 +43,7 @@ public:
     static QStringList logCategoryList();
     static QByteArray setCodecNameForLocale(const QByteArray &codecName);
 
-    bool addPath(QString path, bool autoIndex = false);
+    bool AddPath(QString path, bool autoIndex = false);
     bool removePath(const QString &path);
     bool hasLFT(const QString &path) const;
     bool lftBuinding(const QString &path) const;
@@ -82,7 +82,7 @@ public Q_SLOTS:
     void setLogLevel(int logLevel);
 
 Q_SIGNALS:
-    void addPathFinished(const QString &path, bool success);
+    void AddPathFinished(const QString &path, bool success);
     void autoIndexExternalChanged(bool autoIndexExternal);
     void autoIndexInternalChanged(bool autoIndexInternal);
 
@@ -99,7 +99,7 @@ private:
     void _indexAll();
     void _indexAllDelay(int time = 10 * 60 * 1000);
     void _cleanAllIndex();
-    void _addPathByPartition(const DBlockDevice *block);
+    void _AddPathByPartition(const DBlockDevice *block);
     void onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint);
     void onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint);
     void onFSAdded(const QString &blockDevicePath);
