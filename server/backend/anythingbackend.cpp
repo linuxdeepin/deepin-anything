@@ -20,24 +20,47 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
+#include <signal.h>
 #include <sys/utsname.h>
 
 #include <QCoreApplication>
-#include <QThread>
-#include <QLoggingCategory>
-#include <QFile>
+#include <QDebug>
+#include <QTimer>
+#include <QCommandLineOption>
+#include <QCommandLineParser>
+#include <QDBusConnection>
+#include <QDBusConnectionInterface>
 
+#include <DLog>
+
+#include "anythingbackend.h"
 #include "server.h"
 #include "dasfactory.h"
 #include "dasinterface.h"
 #include "daspluginloader.h"
 
-using namespace DAS_NAMESPACE;
+#include "lftmanager.h"
+#include "anything_adaptor.h"
+
+DCORE_USE_NAMESPACE
+
+DAS_BEGIN_NAMESPACE
 
 static QList<QPair<QString, DASInterface*>> interfaceList;
+static QString logFormat = "[%{time}{yyyy-MM-dd, HH:mm:ss.zzz}] [%{type:-7}] [%{file}=>%{function}: %{line}] %{message}\n";
 
-void addPlugin(const QString &key, Server *server)
+AnythingBackend::AnythingBackend(QObject *parent) : QObject(parent)
+{
+
+    this->init_connection();
+}
+
+AnythingBackend::~AnythingBackend()
+{
+
+}
+
+void AnythingBackend::addPlugin(const QString &key, Server *server)
 {
     DASInterface *interface = DASFactory::create(key);
 
@@ -58,7 +81,7 @@ void addPlugin(const QString &key, Server *server)
     QObject::connect(server, &Server::fileRenamed, interface, &DASInterface::onFileRename);
 }
 
-void removePlugins(const QStringList &keys, Server *server)
+void AnythingBackend::removePlugins(const QStringList &keys, Server *server)
 {
     for (int i = 0; i < interfaceList.count(); ++i) {
         const QPair<QString, DASInterface*> &value = interfaceList.at(i);
@@ -93,7 +116,7 @@ enum WriteMountInfoError
 };
 
 // write mountinfo for vfs_monitor when kernel version >= 5.10
-WriteMountInfoError writeMountInfo()
+int AnythingBackend::writeMountInfo()
 {
     struct utsname uts;
     if (uname(&uts) != 0) {
@@ -141,13 +164,20 @@ WriteMountInfoError writeMountInfo()
     return WriteMountInfoError::Success;
 }
 
-int main(int argc, char *argv[])
+void AnythingBackend::init_connection()noexcept
+{
+    monitorStart();
+    backendRun();
+}
+
+int AnythingBackend::monitorStart()
 {
     qSetMessagePattern("[%{time yyyy-MM-dd, HH:mm:ss.zzz}] [%{category}-%{type}] [%{function}: %{line}]: %{message}");
 
-    writeMountInfo();
-
-    QCoreApplication app(argc, argv);
+    int mount_ret = writeMountInfo();
+    if (mount_ret != WriteMountInfoError::Success) {
+        qDebug() << "write mountinfo failed, should try again latter.";
+    }
 
 #ifdef QT_NO_DEBUG
     QLoggingCategory::setFilterRules("vfs.info=false");
@@ -160,12 +190,12 @@ int main(int argc, char *argv[])
         addPlugin(key, server);
     }
 
-    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginRemoved, [server] (QPluginLoader *loader, const QStringList &keys) {
+    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginRemoved, [this, server] (QPluginLoader *loader, const QStringList &keys) {
         removePlugins(keys, server);
         DASFactory::loader()->removeLoader(loader);
     });
 
-    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginModified, [server] (QPluginLoader *loader, const QStringList &keys) {
+    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginModified, [this, server] (QPluginLoader *loader, const QStringList &keys) {
         removePlugins(keys, server);
         loader = DASFactory::loader()->reloadLoader(loader);
 
@@ -176,11 +206,52 @@ int main(int argc, char *argv[])
         }
     });
 
-    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginAdded, server, [server] (const QString &key) {
+    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginAdded, server, [this, server] (const QString &key) {
         addPlugin(key, server);
     });
 
     server->start();
-
-    return app.exec();
+    return 0;
 }
+
+int AnythingBackend::backendRun()
+{
+    const QString anythingServicePath = "com.deepin.anything";
+    // init log
+    ConsoleAppender *consoleAppender = new ConsoleAppender;
+    consoleAppender->setFormat(logFormat);
+
+    RollingFileAppender *rollingFileAppender = new RollingFileAppender(LFTManager::cacheDir() + "/app.log");
+    rollingFileAppender->setFormat(logFormat);
+    rollingFileAppender->setLogFilesLimit(5);
+    rollingFileAppender->setDatePattern(RollingFileAppender::DailyRollover);
+
+    logger->registerAppender(consoleAppender);
+    logger->registerAppender(rollingFileAppender);
+
+    for (const QString &c : LFTManager::logCategoryList()) {
+        logger->registerCategoryAppender(c, consoleAppender);
+        logger->registerCategoryAppender(c, rollingFileAppender);
+    }
+
+     QDBusConnection connection = QDBusConnection::systemBus();
+     if (!connection.interface()->isServiceRegistered(anythingServicePath)) {
+         bool reg_result = connection.registerService(anythingServicePath);
+         if (!reg_result) {
+             qWarning("Cannot register the \"com.deepin.anything\" service.\n");
+             return 2;
+         }
+         Q_UNUSED(new AnythingAdaptor(LFTManager::instance()));
+         if (!connection.registerObject("/com/deepin/anything", LFTManager::instance())) {
+             qWarning("Cannot register to the D-Bus object: \"/com/deepin/anything\"\n");
+             return 3;
+         }
+     }else{
+         qDebug() << "deepin-anything-backend is running";
+     }
+
+    return 0;
+}
+
+DAS_END_NAMESPACE
+

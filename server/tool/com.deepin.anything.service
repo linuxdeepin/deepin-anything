@@ -1,4 +1,0 @@
-[D-BUS Service]
-Name=com.deepin.anything
-Exec=/usr/bin/deepin-anything-tool-ionice --dbus
-User=root
