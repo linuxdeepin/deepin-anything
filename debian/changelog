@@ -1,3 +1,9 @@
+deepin-anything (6.0.0-1) unstable; urgency=medium
+
+  * new version for tool and monitor are merged then release library, which will start as plugin in dde-file-manager-daemon.
+
+ -- Deepin Package Builder <packages@deepin.com>  Mon, 18 Apr 2022 01:26:45 +0800
+
 deepin-anything (20180315+1) unstable; urgency=medium
 
   * Initial release.

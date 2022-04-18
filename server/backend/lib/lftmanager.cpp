@@ -235,7 +235,7 @@ static fs_buf *buildFSBuf(QFutureWatcherBase *futureWatcher, const QString &path
     if (build_fstree(buf, false, handle_build_fs_buf_progress, futureWatcher) != 0) {
         free_fs_buf(buf);
 
-        nWarning() << "Failed on build fs buffer of path: " << path;
+        nWarning() << "[LFT] Failed on build fs buffer of path: " << path;
 
         return nullptr;
     }
@@ -243,7 +243,7 @@ static fs_buf *buildFSBuf(QFutureWatcherBase *futureWatcher, const QString &path
     if (!checkFSBuf(buf)) {
         free_fs_buf(buf);
 
-        nWarning() << "Failed on check fs buffer of path: " << path;
+        nWarning() << "[LFT] Failed on check fs buffer of path: " << path;
 
         return nullptr;
     }
@@ -370,7 +370,7 @@ bool LFTManager::addPath(QString path, bool autoIndex)
 
         // 已被取消构建或构建的结果不再需要时则忽略生成结果
         if (!_global_fsWatcherMap->contains(path) || (autoIndex && buf && !allowableBuf(this, buf))) {
-            nWarning() << "Discarded index data of path:" << path;
+            nWarning() << "[LFT] Discarded index data of path:" << path;
 
             free_fs_buf(buf);
             buf = nullptr;
@@ -601,12 +601,12 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
         fs_buf *buf = nullptr;
 
         if (load_fs_buf(&buf, lft_file.toLocal8Bit().constData()) != 0) {
-            nWarning() << "Failed on load:" << lft_file;
+            nWarning() << "[LFT] Failed on load:" << lft_file;
             continue;
         }
 
         if (!buf) {
-            nWarning() << "Failed on load:" << lft_file;
+            nWarning() << "[LFT] Failed on load:" << lft_file;
             continue;
         }
 
@@ -615,7 +615,7 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
             addPath(QString::fromLocal8Bit(get_root_path(buf)), dir_iterator.fileName().endsWith(".lft"));
             free_fs_buf(buf);
 
-            nWarning() << "Failed on check fs buf of: " << lft_file;
+            nWarning() << "[LFT] Failed on check fs buf of: " << lft_file;
             continue;
         }
 
@@ -682,7 +682,7 @@ QStringList LFTManager::sync(const QString &mountPoint)
         nDebug() << "lft file:" << lft_file;
 
         if (lft_file.isEmpty()) {
-            nWarning() << "Can't get the LFT file path of the fs_buf:" << get_root_path(buf);
+            nWarning() << "[LFT] Can't get the LFT file path of the fs_buf:" << get_root_path(buf);
 
             continue;
         }
@@ -695,7 +695,7 @@ QStringList LFTManager::sync(const QString &mountPoint)
         } else {
             path_list << QString("Failed: \"%1\"->\"%2\"").arg(buf_begin.key()).arg(lft_file);
 
-            nWarning() << path_list.last();
+            nWarning() << "[LFT] " << path_list.last();
         }
     }
 
@@ -1025,7 +1025,7 @@ static QStringList removeLFTFiles(const QByteArray &serialUriFilter = QByteArray
         if (QFile::remove(lft_file)) {
             path_list << lft_file;
         } else {
-            nWarning() << "Failed on remove:" << lft_file;
+            nWarning() << "[LFT] Failed on remove:" << lft_file;
         }
     }
 
@@ -1047,7 +1047,7 @@ LFTManager::LFTManager(QObject *parent)
         nDebug() << "app.runing:" << getAppRungingFile();
 
         if (file.exists()) {
-            nWarning() << "Last time not exiting normally";
+            nWarning() << "[LFT] Last time not exiting normally";
 
 #ifdef QT_NO_DEBUG
             // 说明进程上次未正常退出, 无法保证这些lft文件是正常的, 此处需要清理它们
@@ -1439,7 +1439,7 @@ QStringList LFTManager::_enterSearch(const QString &opath, const QString &keywor
         // make sure this search path not end with '/' if it's not the root /
         path.chop(1);
     }
-    nDebug() << maxCount << startOffset << endOffset << path << keyword << rules;
+    nInfo() << maxCount << startOffset << endOffset << path << keyword << rules;
 
     void *buf = nullptr;
     QString newpath;
@@ -1479,7 +1479,7 @@ QStringList LFTManager::_enterSearch(const QString &opath, const QString &keywor
     gettimeofday(&e, nullptr);
     long dur = (e.tv_usec + e.tv_sec * 1000000) - (s.tv_usec + s.tv_sec * 1000000);
     // set this log as special start, it may be used to take result from log.
-    nDebug() << "anything-GOOD: found " << total << " entries for " << keyword << "in " << dur << " us\n";
+    nInfo() << "anything-GOOD: found " << total << " entries for " << keyword << "in " << dur << " us\n";
 
     startOffsetReturn = startOffset;
     endOffsetReturn = endOffset;
@@ -1590,7 +1590,7 @@ int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &path, con
         }
 
         if (next && et.elapsed() >= maxTimeout) {
-            nDebug() << "break loop search by timeout! " << maxTimeout;
+            nInfo() << "break loop search by timeout! " << maxTimeout;
             // 本来是需要进入下一次循环请求，但由于超时，所以返回的结果数应该是实际结果数。
             total = results.count(); //set the actual result number.
             break;

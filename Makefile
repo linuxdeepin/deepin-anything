@@ -4,7 +4,7 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 all:
 	sed 's|@@VERSION@@|$(VERSION)|g' debian/deepin-anything-dkms.dkms.in | tee debian/deepin-anything-dkms.dkms
 	make -C library all
-	cd server && qmake -makefile -nocache QMAKE_STRIP=: PREFIX=/usr LIB_INSTALL_DIR=/usr/lib/$(DEB_HOST_MULTIARCH) deepin-anything-server.pro && make all
+	cd server && qmake -makefile -nocache QMAKE_STRIP=: PREFIX=/usr LIB_INSTALL_DIR=/usr/lib/$(DEB_HOST_MULTIARCH) deepin-anything-backend.pro && make all
 
 install:
 	mkdir -p $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)

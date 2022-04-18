@@ -1,9 +1,4 @@
-usr/lib/*/libdeepin-anything-server-lib.so.*
-usr/lib/*/deepin-anything-server-lib/plugins/*
-usr/bin/deepin-anything-monitor
-usr/bin/deepin-anything-tool
-usr/bin/deepin-anything-tool-ionice
+usr/lib/*/libdeepin-anything-backend.so.*
+usr/lib/*/deepin-anything-backend/plugins/*
 usr/share/dbus-1/interfaces
-usr/share/dbus-1/system-services
 etc/dbus-1/system.d
-lib/systemd/system
