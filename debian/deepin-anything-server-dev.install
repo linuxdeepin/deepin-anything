@@ -1,3 +1,2 @@
-usr/lib/*/libdeepin-anything-backend.so
-usr/include/deepin-anything-backend
-usr/lib/*/pkgconfig/deepin-anything-backend.pc
+usr/include/deepin-anything-server-lib
+usr/lib/*/pkgconfig/deepin-anything-server-lib.pc

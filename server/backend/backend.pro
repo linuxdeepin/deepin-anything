@@ -1,5 +1,5 @@
 TEMPLATE = lib
-TARGET = deepin-anything-backend
+TARGET = deepin-anything-server-lib
 QT += dbus concurrent dtkcore
 QT -= gui
 CONFIG += link_pkgconfig
@@ -30,7 +30,8 @@ HEADERS += \
     lib/lftmanager.h \
     lib/lftdisktool.h \
     server.h \
-    anythingbackend.h
+    anythingbackend.h \
+    anythingexport.h
 
 CONFIG(debug, debug|release) {
     LIBS += -L$$_PRO_FILE_PWD_/../../library/bin/debug -lanything
@@ -67,9 +68,9 @@ includes.files += \
     lib/dasplugin.h \
     lib/dasinterface.h \
     lib/lftmanager.h \
-    anythingbackend.h
+    anythingexport.h
 
-includes.path = $$PREFIX/include/deepin-anything-backend
+includes.path = $$PREFIX/include/deepin-anything-server-lib
 
 dbus.files = dbusservice/com.deepin.anything.xml
 dbus.header_flags += -l LFTManager -i $$PWD/lib/lftmanager.h

@@ -21,41 +21,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ANYTHINGBACKEND_H
-#define ANYTHINGBACKEND_H
+#ifndef ANYTHINGEXPORT_H
+#define ANYTHINGEXPORT_H
 
-#include <dasdefine.h>
-#include <QMap>
-#include <QList>
 #include <QObject>
 
-DAS_BEGIN_NAMESPACE
+#define ANYTHINGBACKEND_SHARED_EXPORT Q_DECL_EXPORT
+extern "C" ANYTHINGBACKEND_SHARED_EXPORT int fireAnything();
 
-class Server;
-class AnythingBackend : public QObject
-{
-    Q_OBJECT
-public:
-    ~AnythingBackend();
-
-    static AnythingBackend *instance();
-
-    int init_connection()noexcept;
-
-protected:
-
-
-private:
-    int monitorStart();
-    int backendRun();
-    void addPlugin(const QString &key, Server *server);
-    void removePlugins(const QStringList &keys, Server *server);
-    int writeMountInfo();
-
-    Server *server = nullptr;
-    bool hasconnected = false;
-};
-
-DAS_END_NAMESPACE
-
-#endif // ANYTHINGBACKEND_H
+#endif // ANYTHINGEXPORT_H

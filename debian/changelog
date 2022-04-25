@@ -1,3 +1,9 @@
+deepin-anything (6.0.1-1) unstable; urgency=medium
+
+  * Export entry function and change library name back for old dfm; The backend running with single instance.
+
+ -- Deepin Package Builder <packages@deepin.com>  Mon, 25 Apr 2022 15:50:45 +0800
+
 deepin-anything (6.0.0-1) unstable; urgency=medium
 
   * new version for tool and monitor are merged then release library, which will start as plugin in dde-file-manager-daemon.

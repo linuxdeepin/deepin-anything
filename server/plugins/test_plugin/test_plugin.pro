@@ -4,7 +4,7 @@ INCLUDEPATH += ../../backend/lib
 DESTDIR = $$_PRO_FILE_PWD_/../handlers
 QT -= gui
 
-LIBS += -L$$OUT_PWD/../../backend/ -ldeepin-anything-backend
+LIBS += -L$$OUT_PWD/../../backend/ -ldeepin-anything-server-lib
 
 CONFIG(debug, debug|release) {
     DEPENDPATH += $$OUT_PWD/../../backend/lib
