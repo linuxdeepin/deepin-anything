@@ -34,6 +34,7 @@
 #include <DLog>
 
 #include "anythingbackend.h"
+#include "anythingexport.h"
 #include "server.h"
 #include "dasfactory.h"
 #include "dasinterface.h"
@@ -46,18 +47,33 @@ DCORE_USE_NAMESPACE
 
 DAS_BEGIN_NAMESPACE
 
+
+class _AnythingBackend : public AnythingBackend {};
+Q_GLOBAL_STATIC(_AnythingBackend, _global_anybackend)
+
+extern "C" ANYTHINGBACKEND_SHARED_EXPORT int fireAnything()
+{
+    AnythingBackend *backend = AnythingBackend::instance();
+    if (backend) {
+        return backend->init_connection();
+    }
+    return -1;
+}
+
+
 static QList<QPair<QString, DASInterface*>> interfaceList;
 static QString logFormat = "[%{time}{yyyy-MM-dd, HH:mm:ss.zzz}] [%{type:-7}] [%{file}=>%{function}: %{line}] %{message}\n";
 
-AnythingBackend::AnythingBackend(QObject *parent) : QObject(parent)
-{
-
-    this->init_connection();
-}
-
 AnythingBackend::~AnythingBackend()
 {
+    if (server && server->isRunning()) {
+        server->terminate();
+    }
+}
 
+AnythingBackend *AnythingBackend::instance()
+{
+    return _global_anybackend;
 }
 
 void AnythingBackend::addPlugin(const QString &key, Server *server)
@@ -164,10 +180,16 @@ int AnythingBackend::writeMountInfo()
     return WriteMountInfoError::Success;
 }
 
-void AnythingBackend::init_connection()noexcept
+int AnythingBackend::init_connection()noexcept
 {
-    monitorStart();
-    backendRun();
+    if (hasconnected)
+        return 0;
+    if (backendRun() == 0) {
+        monitorStart();
+        hasconnected = true;
+        return 0;
+    }
+    return -1;
 }
 
 int AnythingBackend::monitorStart()
@@ -183,34 +205,37 @@ int AnythingBackend::monitorStart()
     QLoggingCategory::setFilterRules("vfs.info=false");
 #endif
 
-    Server *server = new Server();
+    if (!server)
+        server = new Server();
 
-    // init plugins
-    for (const QString &key : DASFactory::keys()) {
-        addPlugin(key, server);
-    }
-
-    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginRemoved, [this, server] (QPluginLoader *loader, const QStringList &keys) {
-        removePlugins(keys, server);
-        DASFactory::loader()->removeLoader(loader);
-    });
-
-    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginModified, [this, server] (QPluginLoader *loader, const QStringList &keys) {
-        removePlugins(keys, server);
-        loader = DASFactory::loader()->reloadLoader(loader);
-
-        if (loader) {
-            for (const QString &key : DASFactory::loader()->getKeysByLoader(loader)) {
-                addPlugin(key, server);
-            }
+    if (server && !server->isRunning()) {
+        // init plugins
+        for (const QString &key : DASFactory::keys()) {
+            addPlugin(key, server);
         }
-    });
 
-    QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginAdded, server, [this, server] (const QString &key) {
-        addPlugin(key, server);
-    });
+        QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginRemoved, [this] (QPluginLoader *loader, const QStringList &keys) {
+            removePlugins(keys, server);
+            DASFactory::loader()->removeLoader(loader);
+        });
 
-    server->start();
+        QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginModified, [this] (QPluginLoader *loader, const QStringList &keys) {
+            removePlugins(keys, server);
+            loader = DASFactory::loader()->reloadLoader(loader);
+
+            if (loader) {
+                for (const QString &key : DASFactory::loader()->getKeysByLoader(loader)) {
+                    addPlugin(key, server);
+                }
+            }
+        });
+
+        QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginAdded, server, [this] (const QString &key) {
+            addPlugin(key, server);
+        });
+
+        server->start();
+    }
     return 0;
 }
 
@@ -254,4 +279,3 @@ int AnythingBackend::backendRun()
 }
 
 DAS_END_NAMESPACE
-
