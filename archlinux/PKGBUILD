@@ -26,8 +26,8 @@ build() {
 
 package_deepin-anything-dkms-git() {
   depends=('dkms')
-  provides=('DEEPIN-ANYTHING-MODULE' 'deepin-anything-git')
-  conflicts=('DEEPIN-ANYTHING-MODULE' 'deepin-anything-git')
+  provides=('DEEPIN-ANYTHING-MODULE' 'deepin-anything-dkms')
+  conflicts=('DEEPIN-ANYTHING-MODULE' 'deepin-anything-dkms')
   cd $deepin_source_name
   install -dm 755 "$pkgdir"/usr/src
   cp -r kernelmod "$pkgdir"/usr/src/$deepin_source_name
@@ -36,6 +36,8 @@ package_deepin-anything-dkms-git() {
 
 package_deepin-anything-git() {
   depends=('DEEPIN-ANYTHING-MODULE' 'dtkcore-git' 'udisks2-qt5')
+  provides=('deepin-anything')
+  conflicts=('deepin-anything')
   cd $deepin_source_name
   make VERSION=$pkgver DESTDIR="$pkgdir" install
   rm -r "$pkgdir"/usr/src
