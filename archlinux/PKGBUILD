@@ -16,7 +16,7 @@ sha512sums=('SKIP'
             '0ff6a6de1fbfb0c33eaac511b989da321a9e43ece92708af88aee34ad1a05e55572713b1290bc2705d70b91dc7bec4fb4abd3dc664a0abe01de27d88bd9e9c85')
 
 prepare() {
-  cd $deepin_source_name
+ cd $deepin_source_name
 }
 
 build() {
@@ -30,8 +30,8 @@ package_deepin-anything-dkms-git() {
   conflicts=('DEEPIN-ANYTHING-MODULE' 'deepin-anything-git')
   cd $deepin_source_name
   install -dm 755 "$pkgdir"/usr/src
-  cp -r kernelmod "$pkgdir"/usr/src/$pkgbase
-  install -m644 debian/deepin-anything-dkms.dkms "$pkgdir"/usr/src/$pkgbase/dkms.conf
+  cp -r kernelmod "$pkgdir"/usr/src/$deepin_source_name
+  install -m644 debian/deepin-anything-dkms.dkms "$pkgdir"/usr/src/$deepin_source_name/dkms.conf
 }
 
 package_deepin-anything-git() {
