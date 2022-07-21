@@ -3,7 +3,7 @@
 export QT_SELECT=5
 
 %:
-	dh $@ --with dkms,systemd
+	dh $@ --with dkms
 
 override_dh_installinit:
 	true
