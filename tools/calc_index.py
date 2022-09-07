@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+# SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 mil = 8
 print 'Max Index Length: {0}'.format(mil)
 print '\tName-Len\tIndex-Count\tMem-(p8)\tMem-(p4)\n'

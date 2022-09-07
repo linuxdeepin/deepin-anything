@@ -1,0 +1,59 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: deepin-anything
+Upstream-Contact: wangrong <wangrong@uniontech.com>
+Source: https://github.com/linuxdeepin/deepin-anything
+
+# README
+Files: README.md CHANGELOG.md server/backend/lib/README.txt
+Copyright: None
+License: CC0-1.0
+
+# doc
+Files: docs/*
+Copyright: None
+License: CC0-1.0
+
+# Project file
+Files: *.pro
+Copyright: None
+License: CC0-1.0
+
+# Makefile
+Files: Makefile cli/Makefile kernelmod/Makefile library/Makefile
+Copyright: None
+License: CC0-1.0
+
+# ci
+Files: .github/*
+Copyright: None
+License: CC0-1.0
+
+# gitignore
+Files: .gitignore 
+Copyright: None
+License: CC0-1.0
+
+# xml toml json conf yaml
+Files: *.xml *.toml *.json *conf *.yaml
+Copyright: None
+License: CC0-1.0
+
+# rpm
+Files: rpm/*
+Copyright: None
+License: CC0-1.0
+
+# debian
+Files: debian/*
+Copyright: None
+License: CC0-1.0
+
+# Arch
+Files: archlinux/*
+Copyright: None
+License: CC0-1.0
+
+# third party
+Files: library/src/thread_pool.c library/src/thread_pool.h
+Copyright: None
+License: CC0-1.0
