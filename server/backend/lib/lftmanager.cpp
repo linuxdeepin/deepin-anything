@@ -1171,6 +1171,25 @@ void LFTManager::_cleanAllIndex()
     }
 }
 
+static QString getRootMountPoint(const DBlockDevice *block)
+{
+    const QByteArrayList &mount_points = block->mountPoints();
+    if(mount_points.size() == 1) {
+        return QString::fromLocal8Bit(mount_points.first());
+    }
+
+    const auto mount_point_infos = LFTDiskTool::getMountPointsInfos(mount_points);
+    for (QByteArray mount_point : mount_points) {
+        const LFTDiskTool::MountPointInfo info = mount_point_infos.value(mount_point);
+        if (info.sourcePath == "/") {
+            mount_point.chop(1);
+            return QString::fromLocal8Bit(mount_point);
+        }
+    }
+
+    return QString::fromLocal8Bit(mount_points.first());
+}
+
 void LFTManager::_addPathByPartition(const DBlockDevice *block)
 {
     nDebug() << block->device() << block->id() << block->drive();
@@ -1188,8 +1207,8 @@ void LFTManager::_addPathByPartition(const DBlockDevice *block)
 
         nDebug() << "can index:" << index;
 
-        if (index) // 建立索引时一切以第一个挂载点为准
-            addPath(QString::fromLocal8Bit(block->mountPoints().first()), true);
+        if (index) // 建立索引时尽量使用根挂载点，这样索引的范围最大，同时与内核模块发出的事件的文件路径一致
+            addPath(getRootMountPoint(block), true);
 
         device->deleteLater();
     }

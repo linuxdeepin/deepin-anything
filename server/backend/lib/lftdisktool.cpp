@@ -131,8 +131,12 @@ QByteArrayList fromSerialUri(const QByteArray &uri)
                     new_path = path.mid(info.sourcePath.size());
                 }
 
-                // 因为挂载点是以 '\0' 结尾的, 所以此处必须要分开转成QString;
-                pathList << mount_point.append(new_path);
+                if (new_path.isEmpty()) {
+                    pathList << mount_point;
+                } else {
+                    mount_point.append("/");
+                    pathList << mount_point.append(new_path);
+                }
             }
 
             return pathList;
