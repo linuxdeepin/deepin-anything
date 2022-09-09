@@ -4,7 +4,7 @@ Upstream-Contact: wangrong <wangrong@uniontech.com>
 Source: https://github.com/linuxdeepin/deepin-anything
 
 # README
-Files: README.md CHANGELOG.md server/backend/lib/README.txt
+Files: README.md README.zh_CN.md CHANGELOG.md server/backend/lib/README.txt
 Copyright: None
 License: CC0-1.0
 
