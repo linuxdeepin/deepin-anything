@@ -570,12 +570,12 @@ static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs
 
 static int on_vfs_rename_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    unsigned long retval = regs_return_value(regs);
-    if (retval != 0)
-        goto quit;
-
     vfs_rename_args *args = (vfs_rename_args *)ri->data;
     if (args == 0 || args->old_path == 0)
+        goto quit;
+
+    unsigned long retval = regs_return_value(regs);
+    if (retval != 0)
         goto quit;
 
     char root[NAME_MAX];
