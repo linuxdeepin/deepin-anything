@@ -1416,6 +1416,8 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 		const char *error;
 		int erroffset;
 		regex = pcre_compile(query, PCRE_CASELESS, &error, &erroffset, NULL);
+	}
+	if (regex) {
 		comquery->query = (void*)regex;
 	} else {
 		comquery->query = (void*)query;
