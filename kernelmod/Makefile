@@ -1,5 +1,5 @@
 obj-m += vfs_monitor.o
-vfs_monitor-objs := vfs_utils.o arg_extractor.o vfs_change.o vfs_kretprobes.o
+vfs_monitor-objs := vfs_partition.o arg_extractor.o vfs_change.o vfs_kprobe.o vfs_module.o
 ccflags-y := -std=gnu99 -Wno-declaration-after-statement -O3
 cwd := $(shell pwd)
 
