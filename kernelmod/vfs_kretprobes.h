@@ -3,9 +3,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef VFS_KRETPROBES_H
+#define VFS_KRETPROBES_H
 
-int init_vfs_changes(void) __init;
-void cleanup_vfs_changes(void);
+int init_vfs_kretprobes(void *vfs_changed_func);
+void cleanup_vfs_kretprobes(void);
 
-void vfs_changed(int act, const char* root, const char* src, const char* dst);
+#endif

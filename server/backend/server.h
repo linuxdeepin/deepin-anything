@@ -7,6 +7,7 @@
 #define SERVER_H
 
 #include "dasdefine.h"
+#include "eventsource.h"
 
 #include <QThread>
 
@@ -17,7 +18,7 @@ class Server : public QThread
     Q_OBJECT
 
 public:
-    explicit Server(QObject *parent = nullptr);
+    explicit Server(EventSource *eventsrc, QObject *parent = nullptr);
 
 signals:
     void fileCreated(QByteArrayList files);
@@ -26,6 +27,9 @@ signals:
 
 private:
     void run() override;
+
+private:
+    EventSource *eventsrc;
 };
 
 DAS_END_NAMESPACE

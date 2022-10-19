@@ -14,6 +14,7 @@
 DAS_BEGIN_NAMESPACE
 
 class Server;
+class EventSource_GENL;
 class AnythingBackend : public QObject
 {
     Q_OBJECT
@@ -36,6 +37,7 @@ private:
 
     Server *server = nullptr;
     bool hasconnected = false;
+    EventSource_GENL *eventsrc;
 };
 
 DAS_END_NAMESPACE

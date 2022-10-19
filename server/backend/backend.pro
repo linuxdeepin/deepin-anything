@@ -7,7 +7,7 @@ PKGCONFIG += udisks2-qt5 mount
 
 DEFINES += QT_MESSAGELOGCONTEXT
 
-INCLUDEPATH += $$PWD/../../kernelmod $$PWD/lib
+INCLUDEPATH += $$PWD/../../kernelmod $$PWD/lib /usr/include/libnl3
 INCLUDEPATH += $$PWD/../../library/inc
 INCLUDEPATH += dbusservice
 
@@ -19,7 +19,9 @@ SOURCES += \
     lib/lftmanager.cpp \
     lib/lftdisktool.cpp \
     server.cpp \
-    anythingbackend.cpp
+    anythingbackend.cpp \
+    eventsource.cpp \
+    eventsource_genl.cpp
 
 HEADERS += \
     lib/dasdefine.h \
@@ -31,14 +33,17 @@ HEADERS += \
     lib/lftdisktool.h \
     server.h \
     anythingbackend.h \
-    anythingexport.h
+    anythingexport.h \
+    eventsource.h \
+    eventsource_genl.h \
+    vfs_genl.h
 
 CONFIG(debug, debug|release) {
-    LIBS += -L$$_PRO_FILE_PWD_/../../library/bin/debug -lanything
+    LIBS += -L$$_PRO_FILE_PWD_/../../library/bin/debug -lanything -lnl-genl-3 -lnl-3
     DEPENDPATH += $$_PRO_FILE_PWD_/../../library/bin/debug
     unix:QMAKE_RPATHDIR += $$_PRO_FILE_PWD_/../../library/bin/debug
 } else {
-    LIBS += -L$$_PRO_FILE_PWD_/../../library/bin/release -lanything
+    LIBS += -L$$_PRO_FILE_PWD_/../../library/bin/release -lanything -lnl-genl-3 -lnl-3
 }
 
 isEmpty(LIB_INSTALL_DIR) {

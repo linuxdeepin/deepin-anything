@@ -15,7 +15,7 @@ install:
 	echo "" | tee $(DESTDIR)/usr/lib/modules-load.d/anything.conf
 	mkdir -p $(DESTDIR)/usr/include/deepin-anything
 	cp -r library/inc/* $(DESTDIR)/usr/include/deepin-anything
-	cp -r kernelmod/vfs_change_uapi.h $(DESTDIR)/usr/include/deepin-anything
+	cp -r kernelmod/vfs_genl.h $(DESTDIR)/usr/include/deepin-anything
 	cp -r kernelmod/vfs_change_consts.h $(DESTDIR)/usr/include/deepin-anything
 	make -C server install INSTALL_ROOT=$(DESTDIR)
 

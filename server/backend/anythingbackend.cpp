@@ -22,6 +22,7 @@
 #include "dasfactory.h"
 #include "dasinterface.h"
 #include "daspluginloader.h"
+#include "eventsource_genl.h"
 
 #include "lftmanager.h"
 #include "anything_adaptor.h"
@@ -104,71 +105,11 @@ void AnythingBackend::removePlugins(const QStringList &keys, Server *server)
     }
 }
 
-enum WriteMountInfoError
-{
-    Success = 0,
-    UnameFail,
-    UnrecognizedVersion,
-    OpenSrcFileFail,
-    OpenDstFileFail,
-    WriteDstFileFail
-};
-
-// write mountinfo for vfs_monitor when kernel version >= 5.10
-int AnythingBackend::writeMountInfo()
-{
-    struct utsname uts;
-    if (uname(&uts) != 0) {
-        qWarning() << "uname fail";
-        return WriteMountInfoError::UnameFail;
-    }
-    qDebug() << "the kernel version: " << uts.release;
-
-    QStringList ver_list = QString(uts.release).split(".");
-    if (ver_list.size() < 3) {
-        qWarning() << "unrecognized version format, expect x.y.z";
-        return WriteMountInfoError::UnrecognizedVersion;
-    }
-    int ver_x = ver_list[0].toInt();
-    int ver_y = ver_list[1].toInt();
-
-    // write when version >= 5.10
-    if (ver_x >= 6 || (5 == ver_x && ver_y >= 10)) {
-        QString file_mountinfo_path("/proc/self/mountinfo");
-        QFile file_mountinfo(file_mountinfo_path);
-        if (!file_mountinfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            qWarning() << "open file " << file_mountinfo_path << " failed";
-            return WriteMountInfoError::OpenSrcFileFail;
-        }
-        QByteArray mount_info;
-        mount_info = file_mountinfo.readAll();
-        file_mountinfo.close();
-
-        // driver_set_info is created by vfs_monitor and be used to receive mount information
-        QString file_drv_path("/dev/driver_set_info");
-        QFile file_drv(file_drv_path);
-        if (!file_drv.open(QIODevice::ExistingOnly | QIODevice::WriteOnly | QIODevice::Text)) {
-            qWarning() << "open file " << file_drv_path << " failed";
-            return WriteMountInfoError::OpenDstFileFail;
-        }
-        if (file_drv.write(mount_info.data(), mount_info.size()) != mount_info.size()) {
-            qWarning() << "write file " << file_drv_path << " failed";
-            return WriteMountInfoError::WriteDstFileFail;
-        }
-        file_drv.close();
-
-        qDebug() << "write mountinfo success";
-    }
-
-    return WriteMountInfoError::Success;
-}
-
 int AnythingBackend::init_connection()noexcept
 {
     if (hasconnected)
         return 0;
-    if (backendRun() == 0) {
-        monitorStart();
+    if (backendRun() == 0 && monitorStart() == 0) {
         hasconnected = true;
         return 0;
     }
@@ -179,17 +120,18 @@ int AnythingBackend::monitorStart()
 {
     qSetMessagePattern("[%{time yyyy-MM-dd, HH:mm:ss.zzz}] [%{category}-%{type}] [%{function}: %{line}]: %{message}");
 
-    int mount_ret = writeMountInfo();
-    if (mount_ret != WriteMountInfoError::Success) {
-        qDebug() << "write mountinfo failed, should try again latter.";
-    }
-
 #ifdef QT_NO_DEBUG
     QLoggingCategory::setFilterRules("vfs.info=false");
 #endif
 
+    if (!eventsrc)
+        eventsrc = new EventSource_GENL();
+
+    if (!eventsrc->isInited() && !eventsrc->init())
+        return -1;
+
     if (!server)
-        server = new Server();
+        server = new Server(eventsrc);
 
     if (server && !server->isRunning()) {
         // init plugins

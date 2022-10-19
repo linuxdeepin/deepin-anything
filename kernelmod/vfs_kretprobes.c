@@ -14,89 +14,57 @@
 #include <linux/uaccess.h>
 #include <linux/namei.h>
 #include <linux/version.h>
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-#include <linux/cdev.h>
-#include <linux/device.h>
-#define CHRDEV_NAME      "driver_set_info"
-#define CLASS_NAME       "class_set_info"    /* 表示在/system/class目录下创建的设备类别目录 */
-#define DEVICE_NAME      "driver_set_info"   /* 在/dev/目录和/sys/class/class_wrbuff目录下分别创建设备文件driver_wrbuff */
-static dev_t         devt_wrbuffer;  /* alloc_chrdev_region函数向内核申请下来的设备号 */
-static struct cdev  *cdev_wrbuffer;  /* 注册到驱动的字符设备 */
-static struct class *class_wrbuffer; /* 字符设备创建的设备节点 */
-int my_open(struct inode *inode, struct file *file); /* 字符设备打开函数 */
-int my_release(struct inode *inode, struct file *file); /* 字符设备释放函数 */
-ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f); /* 字符设备读函数 */
-ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f); /* 字符设备写函数 */
-
-struct file_operations fops_chrdriver = {
-open: my_open,
-release: my_release,
-read: my_read,
-write: my_write,
-};
-
-#endif
+#include <linux/atomic.h>
 
 #include "arg_extractor.h"
 #include "vfs_change_consts.h"
-#include "vfs_change.h"
-#include "vfs_utils.h"
+#include "event.h"
 
-typedef struct __do_mount_args__ {
-    char dir_name[NAME_MAX];
-    char dir_type[NAME_MAX];
-} do_mount_args;
+static int (*vfs_changed_entry)(struct vfs_event *event);
+static atomic_t event_sync_cookie = ATOMIC_INIT(0);
 
 #define _DECL_CMN_KRP(fn, symbol) static struct kretprobe fn##_krp = {\
         .entry_handler  = on_##fn##_ent,\
         .handler        = on_##fn##_ret,\
-        .data_size      = sizeof(fn##_args),\
+        .data_size      = sizeof(struct fn##_args),\
         .maxactive      = 64,\
         .kp.symbol_name = ""#symbol"",\
     };
 
 #define DECL_CMN_KRP(fn) _DECL_CMN_KRP(fn, fn)
 
-static DEFINE_SPINLOCK(sl_parts);
-static LIST_HEAD(partitions);
+static struct mnt_namespace *target_mnt_ns;
 
-static int is_registered_kretprobes = 0;
-
-#define mpr_info(fmt, ...) \
-    pr_info("vfs_monitor: " fmt, ##__VA_ARGS__)
-#define mpr_err(fmt, ...) \
-    pr_err("vfs_monitor: " fmt, ##__VA_ARGS__)
-
-static void get_root(char *root, unsigned char major, unsigned char minor)
+static inline int init_mnt_ns(void)
 {
-    *root = 0;
-    krp_partition *part;
-
-    spin_lock(&sl_parts);
-    list_for_each_entry(part, &partitions, list) {
-        if (part->major == major && part->minor == minor) {
-            strcpy(root, part->root);
-            break;
-        }
-    }
-    spin_unlock(&sl_parts);
-}
-
-static int is_mnt_ns_valid(void)
-{
-    static struct mnt_namespace *init_mnt_ns = 0;
-    if (init_mnt_ns == 0) {
-        if (current->nsproxy)
-            init_mnt_ns = current->nsproxy->mnt_ns;
-        return init_mnt_ns != 0;
+    /*
+     * workaround the addr is 0xFFF...FF(value: -1) for this case by unkown reason: upgrade kernel
+     * image to 5.10 and update this dkms module at the same time.
+     * this nsproxy's addr fill 'F' while load this module at first time and then tainted. Add value
+     * checking to workaround this issue.
+     */
+    if ((struct nsproxy*)-1 == current->nsproxy) {
+        mpr_err("current->nsproxy value is -1, return\n");
+        return -EINVAL;
     }
 
-    if (current->nsproxy && current->nsproxy->mnt_ns != init_mnt_ns)
-        return 0;
-
-    return 1;
+    if (0 == current->nsproxy || 0 == current->nsproxy->mnt_ns) {
+        mpr_err("init_mnt_ns fail\n");
+        return -EINVAL;
+    }
+    
+    target_mnt_ns = current->nsproxy->mnt_ns;
+    return 0;
 }
+
+static inline int is_mnt_ns_valid(void)
+{
+    return target_mnt_ns && current->nsproxy && current->nsproxy->mnt_ns == target_mnt_ns;
+}
+
+struct do_mount_args {
+    char dir_name[NAME_MAX];
+};
 
 static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
@@ -109,265 +77,190 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
      * long do_mount(const char *dev_name, const char __user *dir_name,
      *  const char *type_page, unsigned long flags, void *data_page)
      */
-    do_mount_args *args = (do_mount_args *)ri->data;
-    if (!is_mnt_ns_valid()) {
-        args->dir_name[0] = 0;
+    struct do_mount_args *args = (struct do_mount_args *)ri->data;
+    if (!is_mnt_ns_valid())
         return 1;
-    }
 
-    /* 存储mount的时候的type值，在后面on_do_mount_ret 进行使用 */
+    /*
+     * 解决ntfs文件系统挂载的时候开启了auditd以后，mount的时候会导致系统卡死问题
+     * 对挂载的ntfs等fuse类型的文件系统进行判断，如果是这类文件系统则退出
+     */
+    char dir_type[NAME_MAX];
     const char __user *type_name = (const char __user *)get_arg(regs, 3);
-    /* 解决bug69979，升级过程中type_name为空导致内核崩溃 */
     if (type_name == NULL) {
-        mpr_err("on_do_mount_ent type_name is null\n");
-        args->dir_name[0] = 0;
+        mpr_info("on_do_mount_ent type_name is null\n");
         return 1;
     }
-    if (strlen(type_name) == 0 || strlen(type_name) >= sizeof(args->dir_type)) {
-        mpr_err("on_do_mount_ent type is empty or too long\n");
-        args->dir_name[0] = 0;
+    if (strlen(type_name) == 0 || strlen(type_name) >= sizeof(dir_type)) {
         return 1;
     }
-    strcpy(args->dir_type, type_name);
+    strcpy(dir_type, type_name);
+    if (strstr(dir_type, "fuse")) {
+        mpr_info("This is the fuse filesytem，not handle\n");
+        return 1;
+    }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
     const char __user *dir_name = (const char __user *)get_arg(regs, 2);
     if (dir_name == NULL) {
-        mpr_err("on_do_mount_ent dir_name is null\n");
-        args->dir_name[0] = 0;
+        mpr_info("on_do_mount_ent dir_name is null\n");
         return 1;
     }
-    if (unlikely(strncpy_from_user(args->dir_name, dir_name, NAME_MAX) < 0)) {
-        args->dir_name[0] = 0;
+    if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0))
         return 1;
-    }
 #else
     struct path *path = (struct path *)get_arg(regs, 2);
     char *dir = d_path(path, args->dir_name, sizeof(args->dir_name));
     if (IS_ERR(dir)){
-        mpr_err("on_do_mount_ent get mount dir fail\n");
-        args->dir_name[0] = 0;
+        mpr_info("on_do_mount_ent get mount dir fail\n");
         return 1;
     }
     strcpy(args->dir_name, dir);
 #endif
 
-    if (is_special_mp(args->dir_name)) {
-        args->dir_name[0] = 0;
-        return 1;
-    }
-
     return 0;
 }
 
-static void add_partition(const char *dir_name, int major, int minor)
-{
-    krp_partition *part = kmalloc(sizeof(krp_partition) + strlen(dir_name) + 1, GFP_ATOMIC);
-    if (unlikely(part == 0)) {
-        mpr_err("kmalloc failed and thus cant add %s [%d, %d] to partitions\n",
-               dir_name, major, minor);
-        return;
-    }
-
-    part->major = major;
-    part->minor = minor;
-    strcpy(part->root, dir_name);
-    mpr_info("partition %s [%d, %d] added, comm[%d]: %s\n",
-            part->root, major, minor, current->pid, current->comm);
-    list_add_tail(&part->list, &partitions);
-}
-
-static int get_major_minor(const char *dir_name, unsigned char *major, unsigned char *minor)
-{
-    struct path path;
-    if (kern_path(dir_name, LOOKUP_FOLLOW, &path))
-        return 1;
-    *major = MAJOR(path.dentry->d_sb->s_dev);
-    *minor = MINOR(path.dentry->d_sb->s_dev);
-    path_put(&path);
-    return 0;
-}
-
-typedef struct __do_mount_work_stuct__ {
+struct do_mount_work_stuct {
     struct work_struct work;
-    char dir_name[NAME_MAX];
-} do_mount_work_stuct;
+    struct do_mount_args args;
+};
 
 void do_mount_work_handle(struct work_struct *work)
 {
-    do_mount_work_stuct *do_mount_work = (do_mount_work_stuct*)work;
+    struct path path;
+    dev_t dev;
+    struct do_mount_work_stuct *do_mount_work = (struct do_mount_work_stuct *)work;
+    struct vfs_event *event;
 
-    unsigned char major, minor;
-    if (get_major_minor(do_mount_work->dir_name, &major, &minor)) {
-        mpr_err("do_mount_work_handle get_major_minor failed for %s\n", do_mount_work->dir_name);
-        kfree(do_mount_work);
-        return;
+    if (unlikely(kern_path(do_mount_work->args.dir_name, LOOKUP_FOLLOW, &path))) {
+        mpr_info("do_mount_work_handle, kern_path fail for %s\n", do_mount_work->args.dir_name);
+        goto quit;
+    }
+    dev = path.dentry->d_sb->s_dev;
+    path_put(&path);
+
+    if (!MAJOR(dev))
+        goto quit;
+
+    if (unlikely(strlen(do_mount_work->args.dir_name) >= sizeof(event->buf))){
+        mpr_info("do_mount_work_handle, mountpoint is too long, %s\n", do_mount_work->args.dir_name);
+        goto quit;
     }
 
-    char root[NAME_MAX];
-    get_root(root, major, minor);
-    if (*root != 0 && strcmp(root, do_mount_work->dir_name) == 0) {
-        mpr_info("do_mount_work_handle partition(%s) alread exist\n", do_mount_work->dir_name);
-        kfree(do_mount_work);
-        return;
+    event = vfs_event_alloc_atomic();
+    if (unlikely(!event)) {
+        mpr_info("do_mount_work_handle, vfs_event_alloc_atomic fail\n");
+        goto quit;
     }
 
-    spin_lock(&sl_parts);
-    add_partition(do_mount_work->dir_name, major, minor);
-    spin_unlock(&sl_parts);
+    strcpy(event->buf, do_mount_work->args.dir_name);
+    event->path = event->buf;
+    event->action = ACT_MOUNT;
+    event->cookie = 0;
+    event->dev = dev;
 
-    mpr_info("do_mount_work_handle quit for %s\n", do_mount_work->dir_name);
+    vfs_changed_entry(event);
+
+quit:
     kfree(do_mount_work);
 }
 
 static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    do_mount_args *args = (do_mount_args *)ri->data;
-    if (args == 0 || args->dir_name[0] == 0)
+    struct do_mount_args *args = (struct do_mount_args *)ri->data;
+    if (regs_return_value(regs))
         return 0;
-
-    /* 解决ntfs文件系统挂载的时候开启了auditd以后，mount的时候会导致系统卡死问题 */
-    /* 对挂载的ntfs等fuse类型的文件系统进行判断，如果是这类文件系统则退出 */
-    if (args->dir_type[0] == 0) {
-        mpr_err("dir_type is null");
-        return 0;
-    }
-
-    if (strstr(args->dir_type, "fuse")) {
-        mpr_info("This is the fuse filesytem，so return\n");
-        return 0;
-    }
-
-    unsigned long retval = regs_return_value(regs);
-    if (retval != 0)
-        return 0;
-    /*增加工作队列处理*/
-    do_mount_work_stuct *do_mount_work = kmalloc(sizeof(do_mount_work_stuct), GFP_ATOMIC);
+    
+    struct do_mount_work_stuct *do_mount_work = kmalloc(sizeof(struct do_mount_work_stuct), GFP_ATOMIC);
     if (unlikely(0 == do_mount_work)) {
-        mpr_err("do_mount_work kmalloc failed\n");
+        mpr_info("do_mount_work kmalloc failed\n");
         return 0;
     }
-
-    if (unlikely(strlen(args->dir_name) >= sizeof(do_mount_work->dir_name))) {
-        mpr_err("on_do_mount_ret: dir_name is too long\n");
-        kfree(do_mount_work);
-        return 0;
-    }
-    strcpy(do_mount_work->dir_name, args->dir_name);
+    strcpy(do_mount_work->args.dir_name, args->dir_name);
     INIT_WORK(&(do_mount_work->work), do_mount_work_handle);
     schedule_work(&do_mount_work->work);
 
-    mpr_info("on_do_mount_ret: %s\n", args->dir_name);
     return 0;
 }
 
-typedef struct __sys_umount_args__ {
+struct sys_umount_args {
     char dir_name[NAME_MAX];
-    unsigned char major, minor;
-} sys_umount_args;
+};
 
 static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    sys_umount_args *args = (sys_umount_args *)ri->data;
-    if (!is_mnt_ns_valid()) {
-        args->dir_name[0] = 0;
+    struct sys_umount_args *args = (struct sys_umount_args *)ri->data;
+    if (!is_mnt_ns_valid())
         return 1;
-    }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
     //char __user* dir_name, int flags
     const char __user *dir_name = (const char __user *)get_arg(regs, 1);
-    if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0)) {
-        args->dir_name[0] = 0;
+    if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0))
         return 1;
-    }
 #else
     /* int path_umount(struct path *path, int flags) */
     struct path *path = (struct path *)get_arg(regs, 1);
     char *dir = d_path(path, args->dir_name, sizeof(args->dir_name));
     if (IS_ERR(dir)){
-        mpr_err("on_sys_umount_ent get umount dir fail\n");
-        args->dir_name[0] = 0;
+        mpr_info("on_sys_umount_ent get umount dir fail\n");
         return 1;
     }
     strcpy(args->dir_name, dir);
 #endif
 
-    // we must get all the info before umount, otherwise, they will be lost after umount returns
-    if (is_special_mp(args->dir_name)) {
-        args->dir_name[0] = 0;
-        return 1;
-    }
-
-    if (get_major_minor(args->dir_name, &args->major, &args->minor)) {
-        args->dir_name[0] = 0;
-        return 1;
-    }
-
-    mpr_info("sys_umount: %s, %d, %d\n", args->dir_name, args->major, args->minor);
     return 0;
 }
 
-typedef struct __sys_umount_work_stuct__ {
+struct sys_umount_work_stuct {
     struct work_struct work;
-    sys_umount_args args;
-} sys_umount_work_stuct;
+    struct sys_umount_args args;
+};
 
 void sys_umount_work_handle(struct work_struct *work)
 {
-    sys_umount_work_stuct *sys_umount_work = (sys_umount_work_stuct*)work;
+    struct sys_umount_work_stuct *sys_umount_work = (struct sys_umount_work_stuct *)work;
+    struct vfs_event *event;
 
-    spin_lock(&sl_parts);
-    struct list_head *p, *next;
-    struct list_head *target = NULL;
-    list_for_each_safe(p, next, &partitions) {
-        krp_partition *part = list_entry(p, krp_partition, list);
-        if (strcmp(part->root, sys_umount_work->args.dir_name))
-            continue;
-        target = p;
+    if (unlikely(strlen(sys_umount_work->args.dir_name) >= sizeof(event->buf))){
+        mpr_info("on_mount, mountpoint is too long, %s\n", sys_umount_work->args.dir_name);
+        goto quit;
     }
-    if (target)
-    {
-        krp_partition *part = list_entry(target, krp_partition, list);
-        mpr_info("partition %s [%d, %d] umounted\n", part->root, part->major, part->minor);
-        list_del(target);
-        kfree(part);
+
+    event = vfs_event_alloc_atomic();
+    if (unlikely(!event)) {
+        mpr_info("on_mount, vfs_event_alloc_atomic fail\n");
+        goto quit;
     }
-    spin_unlock(&sl_parts);
-    mpr_info("sys_umount_work_handle quit for %s\n", sys_umount_work->args.dir_name);
+
+    strcpy(event->buf, sys_umount_work->args.dir_name);
+    event->path = event->buf;
+    event->action = ACT_UNMOUNT;
+    event->cookie = 0;
+    event->dev = 0;
+
+    vfs_changed_entry(event);
+
+quit:
     kfree(sys_umount_work);
 }
 
 static int on_sys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    sys_umount_args *args = (sys_umount_args *)ri->data;
-    if (args == 0 || args->dir_name[0] == 0)
+    struct sys_umount_args *args = (struct sys_umount_args *)ri->data;
+    if (regs_return_value(regs))
         return 0;
 
-    unsigned long retval = regs_return_value(regs);
-    if (retval != 0)
-        return 0;
-
-    /*增加工作队列处理方式*/
-    sys_umount_work_stuct *sys_umount_work = kmalloc(sizeof(sys_umount_work_stuct), GFP_ATOMIC);
+    struct sys_umount_work_stuct *sys_umount_work = kmalloc(sizeof(struct sys_umount_work_stuct), GFP_ATOMIC);
     if (unlikely(0 == sys_umount_work)) {
-        mpr_err("on_sys_umount_ret kmalloc failed\n");
-        return 0;
-    }
-
-    if (unlikely(strlen(args->dir_name) >= sizeof(sys_umount_work->args.dir_name))) {
-        mpr_err("on_sys_umount_ret dir_name is too long\n");
-        kfree(sys_umount_work);
+        mpr_info("on_sys_umount_ret kmalloc failed\n");
         return 0;
     }
     strcpy(sys_umount_work->args.dir_name, args->dir_name);
-    sys_umount_work->args.major = args->major;
-    sys_umount_work->args.minor = args->minor;
-
     INIT_WORK(&(sys_umount_work->work), sys_umount_work_handle);
     schedule_work(&sys_umount_work->work);
 
-    mpr_info("on_sys_umount_ret: %s\n", args->dir_name);
     return 0;
 }
 
@@ -385,74 +278,71 @@ _DECL_CMN_KRP(sys_umount, ksys_umount);
 _DECL_CMN_KRP(sys_umount, path_umount);
 #endif
 
-#define VFS_OP_ARGS_PART char *path; \
-    unsigned char major, minor;
 
-struct __vfs_op_args_part__ {
-	VFS_OP_ARGS_PART
-};
-
-typedef struct __vfs_op_args__ {
-    VFS_OP_ARGS_PART
-#ifdef KRETPROBE_MAX_DATA_SIZE
-    char buf[KRETPROBE_MAX_DATA_SIZE - sizeof(struct __vfs_op_args_part__)];
-#else
-    char buf[PATH_MAX];
-#endif
-} vfs_op_args;
 
 #define DECL_VFS_KRP(fn, act, de_i) static int on_##fn##_ent(struct kretprobe_instance *ri, struct pt_regs *regs)\
     {\
-        return common_vfs_ent((vfs_op_args *)ri->data, (struct dentry *)get_arg(regs, de_i));\
+        return common_vfs_ent((struct vfs_event **)&(ri->data), (struct dentry *)get_arg(regs, de_i));\
     }\
     \
     static int on_##fn##_ret(struct kretprobe_instance *ri, struct pt_regs *regs)\
     {\
-        return common_vfs_ret(ri, regs, act);\
+        return common_vfs_ret((struct vfs_event **)&(ri->data), regs, act);\
     }\
     \
     static struct kretprobe fn##_krp = {\
         .entry_handler  = on_##fn##_ent,\
         .handler        = on_##fn##_ret,\
-        .data_size      = sizeof(vfs_op_args),\
+        .data_size      = sizeof(struct vfs_event *),\
         .maxactive      = 64,\
         .kp.symbol_name = ""#fn"",\
     };
 
-static int common_vfs_ent(vfs_op_args *args, struct dentry *de)
+/*
+ * if kretprobe entry-handler returns a non-zero error,
+ * then the handler will not be called.
+ * 
+ * https://www.kernel.org/doc/Documentation/kprobes.txt
+ */
+static int common_vfs_ent(struct vfs_event **event, struct dentry *de)
 {
-    args->path = 0;
     if (de == 0 || de->d_sb == 0)
         return 1;
-
-    args->major = MAJOR(de->d_sb->s_dev);
-    args->minor = MINOR(de->d_sb->s_dev);
-    char *path = dentry_path_raw(de, args->buf, sizeof(args->buf));
-    if (IS_ERR(path))
+    if (!MAJOR(de->d_sb->s_dev) || !is_mnt_ns_valid())
         return 1;
 
-    args->path = path;
-    return 0;
-}
-
-static int common_vfs_ret(struct kretprobe_instance *ri, struct pt_regs *regs, int action)
-{
-    unsigned long retval = regs_return_value(regs);
-    if (retval != 0)
-        return 0;
-
-    vfs_op_args *args = (vfs_op_args *)ri->data;
-    if (args == 0 || args->path == 0) {
-        mpr_info("action %d args->path null? in proc[%d]: %s\n", action, current->pid, current->comm);
-        return 0;
+    *event = vfs_event_alloc_atomic();
+    if (unlikely(!*event)) {
+        mpr_info("vfs_event_alloc_atomic fail\n");
+        return 1;
     }
 
-    char root[NAME_MAX];
-    get_root(root, args->major, args->minor);
-    if (*root == 0)
-        return 0;
+    (*event)->dev = de->d_sb->s_dev;
+    (*event)->path = dentry_path_raw(de, (*event)->buf, sizeof((*event)->buf));
+    if (IS_ERR((*event)->path))
+        goto fail;
+    (*event)->cookie = 0;
 
-    vfs_changed(action, strlen(root) == 1 ? 0 : root, args->path, 0);
+    return 0;
+
+fail:
+    if (*event)
+        vfs_event_free(*event);
+    return 1;
+}
+
+static int common_vfs_ret(struct vfs_event **event, struct pt_regs *regs, int action)
+{
+    if (regs_return_value(regs))
+        goto fail;
+
+    (*event)->action = action;    
+    vfs_changed_entry(*event);
+    return 0;
+
+fail:
+    if (*event)
+        vfs_event_free(*event);
     return 0;
 }
 
@@ -494,28 +384,13 @@ DECL_VFS_KRP(security_inode_create, ACT_NEW_FILE, 2);
 DECL_VFS_KRP(vfs_link, ACT_NEW_LINK, 4);
 #endif
 
-#define VFS_RENAME_ARGS_PART char *old_path; \
-    char *new_path; \
-    char *ext_buf; \
-    unsigned char major, minor, is_dir; 
-
-struct __vfs_rename_args_part__ {
-	VFS_RENAME_ARGS_PART
+struct vfs_rename_args {
+    struct vfs_event *fe;
+    struct vfs_event *te;
 };
-
-typedef struct __vfs_rename_args__ {
-    VFS_RENAME_ARGS_PART
-#ifdef KRETPROBE_MAX_DATA_SIZE
-    char buf[KRETPROBE_MAX_DATA_SIZE - sizeof(struct __vfs_rename_args_part__)];
-#else
-    char buf[PATH_MAX];
-#endif
-} vfs_rename_args;
 
 static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    vfs_rename_args *args = (vfs_rename_args *)ri->data;
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
     // vfs-rename: struct inode*, struct dentry*, struct inode*, struct dentry*, struct inode**, unsigned int
     struct dentry *de_old = (struct dentry *)get_arg(regs, 2);
@@ -537,286 +412,103 @@ static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs
     struct dentry *de_new = renamedata->new_dentry;
 #endif
 
-    if (de_old == 0 || de_old->d_sb == 0 || de_new == 0) {
-        args->old_path = 0;
+    if (de_old == 0 || de_old->d_sb == 0 || de_new == 0) 
+        return 1;
+    if (!MAJOR(de_old->d_sb->s_dev) || !is_mnt_ns_valid())
+        return 1;
+    
+    struct vfs_event **fe = &((struct vfs_rename_args *)ri->data)->fe;
+    struct vfs_event **te = &((struct vfs_rename_args *)ri->data)->te;
+    unsigned char is_dir;
+    *fe = 0;
+    *te = 0;
+
+    *fe = vfs_event_alloc_atomic();
+    if (unlikely(!*fe)) {
+        mpr_info("vfs_event_alloc_atomic fail\n");
         return 1;
     }
-    args->major = MAJOR(de_old->d_sb->s_dev);
-    args->minor = MINOR(de_old->d_sb->s_dev);
-    args->ext_buf = 0;
-    args->old_path = dentry_path_raw(de_old, args->buf, sizeof(args->buf));
-    if (IS_ERR(args->old_path)) {
-        args->old_path = 0;
-        return 1;
+    *te = vfs_event_alloc_atomic();
+    if (unlikely(!*te)) {
+        mpr_info("vfs_event_alloc_atomic fail\n");
+        goto fail;
     }
-    args->new_path = dentry_path_raw(de_new, args->buf, sizeof(args->buf) - strlen(args->old_path) - 1);
-    if (IS_ERR(args->new_path)) {
-        args->ext_buf = kmalloc(PATH_MAX, GFP_ATOMIC);
-        if (!args->ext_buf) {
-            args->old_path = 0;
-            return 1;
-        }
-        args->new_path = dentry_path_raw(de_new, args->ext_buf, PATH_MAX);
-        if (IS_ERR(args->new_path)) {
-            kfree(args->ext_buf);
-            args->ext_buf = 0;
-            args->old_path = 0;
-            return 1;
-        }
-    }
-    args->is_dir = d_is_dir(de_old);
+
+    (*fe)->path = dentry_path_raw(de_old, (*fe)->buf, sizeof((*fe)->buf));
+    if (IS_ERR((*fe)->path))
+        goto fail;
+    (*fe)->dev = de_old->d_sb->s_dev;
+    is_dir = d_is_dir(de_old);
+    (*fe)->action = is_dir ? ACT_RENAME_FROM_FOLDER : ACT_RENAME_FROM_FILE;
+
+    (*te)->path = dentry_path_raw(de_new, (*te)->buf, sizeof((*te)->buf));
+    if (IS_ERR((*te)->path))
+        goto fail;
+    (*te)->dev = (*fe)->dev;
+    (*te)->action = is_dir ? ACT_RENAME_TO_FOLDER : ACT_RENAME_TO_FILE;
+
     return 0;
+    
+fail:
+    if (*fe)
+        vfs_event_free(*fe);
+    if (*te)
+        vfs_event_free(*te);
+    return 1;
 }
 
 static int on_vfs_rename_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    vfs_rename_args *args = (vfs_rename_args *)ri->data;
-    if (args == 0 || args->old_path == 0)
-        goto quit;
+    struct vfs_event **fe = &((struct vfs_rename_args *)ri->data)->fe;
+    struct vfs_event **te = &((struct vfs_rename_args *)ri->data)->te;
 
-    unsigned long retval = regs_return_value(regs);
-    if (retval != 0)
-        goto quit;
+    if (regs_return_value(regs))
+        goto fail;
 
-    char root[NAME_MAX];
-    get_root(root, args->major, args->minor);
-    if (*root != 0)
-        vfs_changed(args->is_dir ? ACT_RENAME_FOLDER : ACT_RENAME_FILE,
-                    strlen(root) == 1 ? 0 : root, args->old_path, args->new_path);
+    (*fe)->cookie = atomic_inc_return(&event_sync_cookie);
+    (*te)->cookie = (*fe)->cookie;
 
-quit:
-    if (args && args->ext_buf) {
-        kfree(args->ext_buf);
-        args->ext_buf = 0;
-    }
+    vfs_changed_entry(*fe);
+    vfs_changed_entry(*te);
+
+    return 0;
+
+fail:
+    if (*fe)
+        vfs_event_free(*fe);
+    if (*te)
+        vfs_event_free(*te);
     return 0;
 }
 
 DECL_CMN_KRP(vfs_rename);
 
-static struct kretprobe *vfs_krps[] = {&do_mount_krp, &vfs_create_krp, &vfs_unlink_krp,
-           &vfs_mkdir_krp, &vfs_rmdir_krp, &vfs_symlink_krp, &vfs_link_krp, &vfs_rename_krp,
-           &sys_umount_krp, &security_inode_create_krp
+static struct kretprobe *vfs_krps[] = {&do_mount_krp, &sys_umount_krp, &vfs_create_krp,
+    &vfs_unlink_krp, &vfs_mkdir_krp, &vfs_rmdir_krp, &vfs_symlink_krp, &vfs_link_krp,
+    &vfs_rename_krp, &security_inode_create_krp
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-/* 打开 */
-int my_open(struct inode *inode, struct file *file)
+int init_vfs_kretprobes(void *vfs_changed_func)
 {
-    if (!try_module_get(THIS_MODULE)) {
-        return -ENODEV;
-    }
-    return 0;
-}
-/* 关闭 */
-int my_release(struct inode *inode, struct file *file)
-{
-    module_put(THIS_MODULE);
-    return 0;
-}
-/* 读设备里的信息 */
-ssize_t my_read(struct file *file, char __user *user, size_t t, loff_t *f)
-{
-    return 0;
-}
-/* 向设备里写信息 */
-ssize_t my_write(struct file *file, const char __user *user, size_t t, loff_t *f)
-{
-    /* 不使用大的栈空间，以避免模块构建报错 */
-    int ret = -1;
-    char *buff = kmalloc(t+1, GFP_KERNEL);
-    if (!buff)
+    int ret;
+
+    ret = init_mnt_ns();
+    if (ret)
         return ret;
 
-    if (copy_from_user(buff, user, t)) {
-        mpr_err("copy_from_user failed\n");
-        goto out;
-    } else {
-        f += t;
-        buff[t] = 0;
-        if (!is_mnt_ns_valid()) {
-            mpr_err("is_mnt_ns_valid failed\n");
-            goto out;
-        }
-        int size = 0;
-
-        size = 0;
-        int parts_count = 0;
-        if (is_registered_kretprobes) {
-            mpr_info("my_write already init\n");
-            ret = 1;
-            goto out;
-        }
-        /* init vfs_change */
-        krp_partition *part;
-        unsigned int major, minor;
-        char mp[NAME_MAX], *line = buff;
-        while (sscanf(line, "%*d %*d %d:%d %*s %250s %*s %*s %*s %*s %*s %*s\n", &major, &minor, mp) == 3) {
-            line = strchr(line, '\n') + 1;
-
-            if (is_special_mp(mp))
-                continue;
-
-            krp_partition *part = kmalloc(sizeof(krp_partition) + strlen(mp) + 1, GFP_KERNEL);
-            if (unlikely(part == 0)) {
-                mpr_err("krp-partition kmalloc failed for %s\n", mp);
-                continue;
-            }
-            part->major = major;
-            part->minor = minor;
-            strcpy(part->root, mp);
-            list_add_tail(&part->list, &partitions);
-        }
-
-        list_for_each_entry(part, &partitions, list) {
-            parts_count++;
-            mpr_info("mp: %s, major: %d, minor: %d\n", part->root, part->major, part->minor);
-        }
-        
-        ret = register_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
-        if (ret < 0) {
-            mpr_err("register_kretprobes failed, returned %d\n", ret);
-            cleanup_vfs_changes();
-            goto out;
-        }
-        is_registered_kretprobes = 1;
-        mpr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
-        ret = 0;
-    }
-
-out:
-    kfree(buff);
-    return ret;
-}
-#else
-static void __init init_mounts_info(void)
-{
-    if (!is_mnt_ns_valid())
-        return;
-
-    char *cur_path = 0, *path_buf = kmalloc(PATH_MAX, GFP_KERNEL);
-    if (path_buf)
-        cur_path = file_path(get_task_exe_file(current), path_buf, PATH_MAX);
-    int size = 0;
-    char *cmdline = read_file_content("/proc/self/cmdline", &size);
-    if (cmdline)
-        for (int i = 0; i < size; i++) {
-            if (cmdline[i] != 0) continue;
-            if (cmdline[i + 1] == 0) break;
-            cmdline[i] = ' ';
-        }
-
-    size = 0;
-    char *buf = read_file_content("/proc/self/mountinfo", &size);
-
-    int parts_count = 0;
-
-    /* get mounts info */
-    krp_partition *part;
-    parse_mounts_info(buf, &partitions);
-    list_for_each_entry(part, &partitions, list) {
-        parts_count++;
-        mpr_info("mp: %s, major: %d, minor: %d\n", part->root, part->major, part->minor);
-    }
-
-    if (buf)
-        kfree(buf);
-
-    mpr_info("partition count: %d, comm[%d]: %s, path: %s, cmdline: %s\n",
-            parts_count, current->pid, current->comm, cur_path, cmdline);
-    if (path_buf)
-        kfree(path_buf);
-    if (cmdline)
-        kfree(cmdline);
-}
-#endif
-int __init init_module()
-{
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-    int ret = 0;
-
-    /* 申请设备号 */
-    ret = alloc_chrdev_region(&devt_wrbuffer, 0, 1, CHRDEV_NAME);
-    if (ret) {
-        mpr_err("alloc char driver error!\n");
-        return ret;
-    }
-
-    /* 注册字符设备 */
-    cdev_wrbuffer = cdev_alloc();
-    if (!cdev_wrbuffer) {
-        return ENOMEM;
-    }
-    cdev_init(cdev_wrbuffer, &fops_chrdriver);
-    cdev_wrbuffer->owner = THIS_MODULE;
-    ret = cdev_add(cdev_wrbuffer, devt_wrbuffer, 1);
-    if (ret) {
-        mpr_err("cdev create error!\n");
-        unregister_chrdev_region(devt_wrbuffer, 1);
-        cdev_del(cdev_wrbuffer);
-        return ret;
-    }
-
-    /* 创建设备节点 */
-    class_wrbuffer = class_create(THIS_MODULE, CLASS_NAME);
-    if (IS_ERR(class_wrbuffer)) {
-        cdev_del(cdev_wrbuffer);
-        return ENOMEM;
-    }
-    struct device *dev=device_create(class_wrbuffer, NULL, devt_wrbuffer, NULL, DEVICE_NAME);
-    if (IS_ERR(dev)) {
-        /* 删除设备节点 */
-        device_destroy(class_wrbuffer, devt_wrbuffer);
-        class_destroy(class_wrbuffer);
-        return ENOMEM;
-    }
-
-    ret = init_vfs_changes();
-    if (ret != 0) {
-        mpr_err("init_vfs_changes failed, returned %d\n", ret);
-        return ret;
-    }
-#else
-    init_mounts_info();
-    int ret = init_vfs_changes();
-    if (ret != 0) {
-        mpr_err("init_vfs_changes failed, returned %d\n", ret);
-        return ret;
-    }
+    vfs_changed_entry = vfs_changed_func;
 
     ret = register_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
     if (ret < 0) {
-        mpr_err("register_kretprobes failed, returned %d\n", ret);
-        cleanup_vfs_changes();
+        mpr_info("register_kretprobes failed, returned %d\n", ret);
         return ret;
     }
-    is_registered_kretprobes = 1;
     mpr_info("register_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
-#endif
-    mpr_info("vfs_monitor init ok\n");
+
     return 0;
 }
 
-void __exit cleanup_module()
+void cleanup_vfs_kretprobes(void)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-    /* 删除设备节点 */
-    device_destroy(class_wrbuffer, devt_wrbuffer);
-    class_destroy(class_wrbuffer);
-    /* 取消字符设备注册 */
-    cdev_del(cdev_wrbuffer);
-    /* 释放设备号 */
-    unregister_chrdev_region(devt_wrbuffer, 1);
-#endif
-    /* 仅当初始化成功，才进行资源的释放 */
-    if (is_registered_kretprobes) {
-        unregister_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
-        mpr_info("unregister_kretprobes %ld ok\n", sizeof(vfs_krps) / sizeof(void *));
-        cleanup_vfs_changes();
-    }
-    mpr_info("vfs_monitor clearup ok\n");
+    unregister_kretprobes(vfs_krps, sizeof(vfs_krps) / sizeof(void *));
 }
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Raphael");
-MODULE_DESCRIPTION("VFS change monitor");
