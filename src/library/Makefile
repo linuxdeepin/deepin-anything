@@ -1,14 +1,14 @@
 CC := gcc
 GLIB_INCL := $(shell pkg-config --cflags glib-2.0)
 GLIB_LIB := $(shell pkg-config --libs glib-2.0)
-CFLAGS := -std=gnu99 -Wall -Wl,--no-undefined -D_GNU_SOURCE -Iinc -Iinc/index ${GLIB_INCL} -shared -fPIC -fvisibility=hidden
+CFLAGS := -std=gnu99 -Wall -Wl,--no-undefined -D_GNU_SOURCE -Iinc -Iinc/index -I../../3rdparty/fsearch ${GLIB_INCL} -shared -fPIC -fvisibility=hidden
 LDFLAG := -lpthread -lpcre ${GLIB_LIB}
 
 all: release debug
 
 release: bin/release/libanything.so
 
-bin/release/libanything.so: src/*.c src/index/*.c src/chinese/*.c
+bin/release/libanything.so: src/*.c src/index/*.c src/chinese/*.c ../../3rdparty/fsearch/*.c
 	mkdir -p bin/release
 	rm bin/release/*.so*||true
 	$(CC) $(CFLAGS) -O3 -Wl,-soname,$(shell basename $@).1.0.0 $^ -o $@.1.0.0 $(LDFLAG)
@@ -18,7 +18,7 @@ bin/release/libanything.so: src/*.c src/index/*.c src/chinese/*.c
 
 debug: bin/debug/libanything.so
 
-bin/debug/libanything.so: src/*.c src/index/*.c src/chinese/*.c
+bin/debug/libanything.so: src/*.c src/index/*.c src/chinese/*.c ../../3rdparty/fsearch/*.c
 	mkdir -p bin/debug
 	rm bin/debug/*.so*||true
 	$(CC) $(CFLAGS) -g -DIDX_DEBUG -Wl,-soname,$(shell basename $@).1.0.0 $^ -o $@.1.0.0 $(LDFLAG)
