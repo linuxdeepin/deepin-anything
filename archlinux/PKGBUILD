@@ -30,7 +30,7 @@ package_deepin-anything-dkms-git() {
   conflicts=('DEEPIN-ANYTHING-MODULE' 'deepin-anything-dkms')
   cd $deepin_source_name
   install -dm 755 "$pkgdir"/usr/src
-  cp -r kernelmod "$pkgdir"/usr/src/$deepin_source_name
+  cp -r src/kernelmod "$pkgdir"/usr/src/$deepin_source_name
   install -m644 debian/deepin-anything-dkms.dkms "$pkgdir"/usr/src/$deepin_source_name/dkms.conf
 }
 
