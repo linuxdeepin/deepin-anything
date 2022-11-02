@@ -1424,7 +1424,7 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 	}
 
 	const bool is_rule = (rule != NULL) ? 1 : 0;
-	// define the min range which lenght less than max_count * name_max, it should plus one because it includes tags. 
+	// define the min range which lenght less than max_count * name_max, it should plus one because it includes tags.
 	const uint32_t min_range = (max_count + 1) * NAME_MAX;
 	//it only need one thread if this is a short range.
 	const uint32_t num_threads = (min_off - s_off) <= min_range ? 1 : fsearch_thread_pool_get_num_threads(search_pool);

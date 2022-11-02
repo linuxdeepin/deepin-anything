@@ -86,7 +86,7 @@ static void free_fs_index_allmem(fs_index* fsi)
 			free_index_keyword(&ami->indice[i].keywords[j], 0);
 		free(ami->indice[i].keywords);
 	}
-	
+
 	free(ami->indice);
 	free(ami);
 }
@@ -198,7 +198,7 @@ int load_allmem_index(fs_index** pfsi, int fd, uint32_t count)
 	if (ami->indice == 0) {
 		free(ami);
 		close(fd);
-		return 11; 
+		return 11;
 	}
 
 	inkw_count_off* icos = load_inkw_count_offs(fd, count);

@@ -52,7 +52,7 @@ static inline int init_mnt_ns(void)
         mpr_err("init_mnt_ns fail\n");
         return -EINVAL;
     }
-    
+
     target_mnt_ns = current->nsproxy->mnt_ns;
     return 0;
 }
@@ -68,11 +68,14 @@ struct do_mount_args {
 
 static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
+    char dir_type[NAME_MAX];
+    const char __user *type_name;
+    const char *dir_name;
     /*
      * >= 5.9
      * int path_mount(const char *dev_name, struct path *path,
      *  const char *type_page, unsigned long flags, void *data_page)
-     * 
+     *
      * < 5.9
      * long do_mount(const char *dev_name, const char __user *dir_name,
      *  const char *type_page, unsigned long flags, void *data_page)
@@ -85,8 +88,7 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
      * 解决ntfs文件系统挂载的时候开启了auditd以后，mount的时候会导致系统卡死问题
      * 对挂载的ntfs等fuse类型的文件系统进行判断，如果是这类文件系统则退出
      */
-    char dir_type[NAME_MAX];
-    const char __user *type_name = (const char __user *)get_arg(regs, 3);
+    type_name = (const char __user *)get_arg(regs, 3);
     if (type_name == NULL) {
         mpr_info("on_do_mount_ent type_name is null\n");
         return 1;
@@ -101,7 +103,7 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
     }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
-    const char __user *dir_name = (const char __user *)get_arg(regs, 2);
+    dir_name = (const char*)get_arg(regs, 2);
     if (dir_name == NULL) {
         mpr_info("on_do_mount_ent dir_name is null\n");
         return 1;
@@ -109,13 +111,12 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0))
         return 1;
 #else
-    struct path *path = (struct path *)get_arg(regs, 2);
-    char *dir = d_path(path, args->dir_name, sizeof(args->dir_name));
-    if (IS_ERR(dir)){
+    dir_name = d_path((struct path *)get_arg(regs, 2), args->dir_name, sizeof(args->dir_name));
+    if (IS_ERR(dir_name)){
         mpr_info("on_do_mount_ent get mount dir fail\n");
         return 1;
     }
-    strcpy(args->dir_name, dir);
+    strcpy(args->dir_name, dir_name);
 #endif
 
     return 0;
@@ -168,11 +169,12 @@ quit:
 
 static int on_do_mount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
+    struct do_mount_work_stuct *do_mount_work;
     struct do_mount_args *args = (struct do_mount_args *)ri->data;
     if (regs_return_value(regs))
         return 0;
-    
-    struct do_mount_work_stuct *do_mount_work = kmalloc(sizeof(struct do_mount_work_stuct), GFP_ATOMIC);
+
+    do_mount_work = kmalloc(sizeof(struct do_mount_work_stuct), GFP_ATOMIC);
     if (unlikely(0 == do_mount_work)) {
         mpr_info("do_mount_work kmalloc failed\n");
         return 0;
@@ -190,24 +192,24 @@ struct sys_umount_args {
 
 static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
+    const char *dir_name;
     struct sys_umount_args *args = (struct sys_umount_args *)ri->data;
     if (!is_mnt_ns_valid())
         return 1;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
     //char __user* dir_name, int flags
-    const char __user *dir_name = (const char __user *)get_arg(regs, 1);
+    dir_name = (const char *)get_arg(regs, 1);
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0))
         return 1;
 #else
     /* int path_umount(struct path *path, int flags) */
-    struct path *path = (struct path *)get_arg(regs, 1);
-    char *dir = d_path(path, args->dir_name, sizeof(args->dir_name));
-    if (IS_ERR(dir)){
+    dir_name = d_path((struct path *)get_arg(regs, 1), args->dir_name, sizeof(args->dir_name));
+    if (IS_ERR(dir_name)){
         mpr_info("on_sys_umount_ent get umount dir fail\n");
         return 1;
     }
-    strcpy(args->dir_name, dir);
+    strcpy(args->dir_name, dir_name);
 #endif
 
     return 0;
@@ -248,11 +250,12 @@ quit:
 
 static int on_sys_umount_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
+    struct sys_umount_work_stuct *sys_umount_work;
     struct sys_umount_args *args = (struct sys_umount_args *)ri->data;
     if (regs_return_value(regs))
         return 0;
 
-    struct sys_umount_work_stuct *sys_umount_work = kmalloc(sizeof(struct sys_umount_work_stuct), GFP_ATOMIC);
+    sys_umount_work = kmalloc(sizeof(struct sys_umount_work_stuct), GFP_ATOMIC);
     if (unlikely(0 == sys_umount_work)) {
         mpr_info("on_sys_umount_ret kmalloc failed\n");
         return 0;
@@ -301,7 +304,7 @@ _DECL_CMN_KRP(sys_umount, path_umount);
 /*
  * if kretprobe entry-handler returns a non-zero error,
  * then the handler will not be called.
- * 
+ *
  * https://www.kernel.org/doc/Documentation/kprobes.txt
  */
 static int common_vfs_ent(struct vfs_event **event, struct dentry *de)
@@ -336,7 +339,7 @@ static int common_vfs_ret(struct vfs_event **event, struct pt_regs *regs, int ac
     if (regs_return_value(regs))
         goto fail;
 
-    (*event)->action = action;    
+    (*event)->action = action;
     vfs_changed_entry(*event);
     return 0;
 
@@ -348,7 +351,7 @@ fail:
 
 // select dentry from vfs api by different kernel
 // If the vfs api in the subsequent kernel changes, please define a new macro branch.
-// The main work of the definition is to specify the position number (starting from 1) of 
+// The main work of the definition is to specify the position number (starting from 1) of
 // the dentry parameter according to the definition of vfs api.
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
 // vfs-create: struct inode*, struct dentry*, umode_t, bool
@@ -391,6 +394,8 @@ struct vfs_rename_args {
 
 static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
+    unsigned char is_dir;
+    struct vfs_event **fe, **te;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
     // vfs-rename: struct inode*, struct dentry*, struct inode*, struct dentry*, struct inode**, unsigned int
     struct dentry *de_old = (struct dentry *)get_arg(regs, 2);
@@ -412,14 +417,13 @@ static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs
     struct dentry *de_new = renamedata->new_dentry;
 #endif
 
-    if (de_old == 0 || de_old->d_sb == 0 || de_new == 0) 
+    if (de_old == 0 || de_old->d_sb == 0 || de_new == 0)
         return 1;
     if (!MAJOR(de_old->d_sb->s_dev) || !is_mnt_ns_valid())
         return 1;
-    
-    struct vfs_event **fe = &((struct vfs_rename_args *)ri->data)->fe;
-    struct vfs_event **te = &((struct vfs_rename_args *)ri->data)->te;
-    unsigned char is_dir;
+
+    fe = &((struct vfs_rename_args *)ri->data)->fe;
+    te = &((struct vfs_rename_args *)ri->data)->te;
     *fe = 0;
     *te = 0;
 
@@ -448,7 +452,7 @@ static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs
     (*te)->action = is_dir ? ACT_RENAME_TO_FOLDER : ACT_RENAME_TO_FILE;
 
     return 0;
-    
+
 fail:
     if (*fe)
         vfs_event_free(*fe);

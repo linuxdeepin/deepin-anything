@@ -55,6 +55,6 @@ void collect_print_statistics(fs_buf* fsbuf, fs_index* fsi)
 		get_stats(fsi, &mem, &keywords, &offsets);
 
 	total_alloced += mem;
-	printf("file-count: %'lu, mem: %'lu (%'lu KB), fs-buf-off: %'u, keywords: %'u, indice: %'u\n", 
+	printf("file-count: %'lu, mem: %'lu (%'lu KB), fs-buf-off: %'u, keywords: %'u, indice: %'u\n",
 		files_count, total_alloced, total_alloced >> 10, get_tail(fsbuf), keywords, offsets);
 }

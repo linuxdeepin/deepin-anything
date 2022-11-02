@@ -27,7 +27,7 @@ int set_cs_string(composite_str* cs, const char* s)
 		cs->short_str.flag = KW_WORD_TAG;
 		strcpy(cs->short_str.s, s);
 	}
-	
+
 	if (cs->p == 0)
 		return CS_SET_STR_FAIL;
 
