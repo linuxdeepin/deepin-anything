@@ -21,23 +21,27 @@ int __init init_module()
     char *events_source;
     void *vfs_changed_func;
 
-    ret = init_vfs_event_cache();
-    if (ret) 
-        goto quit;
-    
     notify_solution = "genl";
+#ifdef CONFIG_FSNOTIFY_BROADCAST
+    events_source = "fsnotify_broadcast";
+#else
+    events_source = "kretprobes";
+#endif
+
+    ret = init_vfs_event_cache();
+    if (ret)
+        goto quit;
+
     vfs_changed_func = vfs_notify_dentry_event;
     ret = init_vfs_genl();
-    if (ret) 
+    if (ret)
         goto init_vfs_genl_fail;
 
 #ifdef CONFIG_FSNOTIFY_BROADCAST
-    events_source = "fsnotify_broadcast";
     ret = init_vfs_fsnotify(get_event_merge_entry(vfs_changed_func));
-    if (ret) 
+    if (ret)
         goto init_event_source_fail;
 #else
-    events_source = "kretprobes";
     ret = init_vfs_kretprobes(get_event_merge_entry(vfs_changed_func));
     if (ret)
         goto init_event_source_fail;

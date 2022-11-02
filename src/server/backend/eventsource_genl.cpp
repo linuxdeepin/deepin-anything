@@ -47,7 +47,7 @@ EventSource_GENL::EventSource_GENL()
     nlsock = nullptr;
     cb = nl_cb_alloc(NL_CB_DEFAULT);
     updatePartitions();
- 
+
     buf[0] = 0;
     new_msg = false;
     act = (unsigned char)-1;
@@ -193,7 +193,7 @@ int EventSource_GENL::handleMsg(struct nl_msg *msg)
         genlInfo("print_msg fail: %d\n", ret);
         return 0;
     }
-    
+
     unsigned char _act;
     char *_root, *_src, *_dst;
     unsigned int _cookie;

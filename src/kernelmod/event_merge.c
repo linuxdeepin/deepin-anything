@@ -28,7 +28,7 @@ typedef int (*merge_action_fn_t)(struct list_head* entry, struct vfs_event *cur)
  * ren_fr will send after paired
  * ren_fr which already be moved, will unpaired with ren_to
  * unpaired ren_to will not join merge
- * 
+ *
  * the event that will be removed, will serve as a match
  */
 
@@ -48,7 +48,7 @@ typedef int (*merge_action_fn_t)(struct list_head* entry, struct vfs_event *cur)
  *
  * del(X) + new(X)                                 => remove del(X)
  * ren_fr(X) + ren_to(Y) + new(X)                  => update ren_to(Y) to new(Y), remove ren_fr(X)
- * 
+ *
  * merge success, remove cur, else add to list
  */
 static int merge_new_file(struct list_head* p, struct vfs_event *cur)
@@ -62,7 +62,7 @@ static int merge_new_file(struct list_head* p, struct vfs_event *cur)
     } else if (ACT_RENAME_FROM_FILE == e->action) {
         if (cmp_event_path(e, cur))
             return MERGE_FAIL;
-        /* 
+        /*
          * if ren_fr alread paired, then update ren_to
          * else, it means ren_to still not insert, it will be update when it enter do_event_merge function
          */
@@ -81,7 +81,7 @@ static int merge_new_file(struct list_head* p, struct vfs_event *cur)
  *
  * new(X) + del(X)                                 => remove new(X)
  * ren_fr(X) + ren_to(Y) + del(Y)                  => update ren_fr(X) to del(X), remove ren_to(Y)
- * 
+ *
  * merge success, remove cur, else add to list
  */
 static int merge_del_file(struct list_head* p, struct vfs_event *cur)
@@ -93,7 +93,7 @@ static int merge_del_file(struct list_head* p, struct vfs_event *cur)
         REMOVE_ENTRY(p, e);
         return MERGE_OK;
     } else if (ACT_RENAME_TO_FILE == e->action) {
-        /* 
+        /*
          * new ren_to will be paired, or update to new event
          * if ren_to is unpaired, which means it will not join merge
          */
@@ -103,7 +103,7 @@ static int merge_del_file(struct list_head* p, struct vfs_event *cur)
         }
         if (cmp_event_path(e, cur))
             return MERGE_FAIL;
-        
+
         ((struct vfs_event *)e->pair)->action = ACT_DEL_FILE;
         ((struct vfs_event *)e->pair)->cookie = 0;
 
@@ -118,7 +118,7 @@ static int merge_del_file(struct list_head* p, struct vfs_event *cur)
  *
  * new(X) + ren_fr(X) + ren_to(Y)                  => update ren_to(Y) to new(Y), remove new(X)
  * ren_fr(X) + ren_to(Y) + ren_fr(Y) + ren_to(Z)   => update ren_fr(X) to del(X), update ren_to(Z) to new(Z), remove ren_to(Y)
- * 
+ *
  * merge success, remove cur, else add to list
  */
 static int merge_rename_from_file(struct list_head* p, struct vfs_event *cur)
@@ -135,7 +135,7 @@ static int merge_rename_from_file(struct list_head* p, struct vfs_event *cur)
         REMOVE_ENTRY(p, e);
         return MERGE_OK;
     } else if (ACT_RENAME_TO_FILE == e->action) {
-        /* 
+        /*
          * new ren_to will be paired, or update to new event
          * if ren_to is unpaired, which means it will not join merge
          *
@@ -147,7 +147,7 @@ static int merge_rename_from_file(struct list_head* p, struct vfs_event *cur)
         }
         if (cmp_event_path(e, cur))
             return MERGE_FAIL;
-        
+
         ((struct vfs_event *)e->pair)->action = ACT_DEL_FILE;
         ((struct vfs_event *)e->pair)->cookie = 0;
 
@@ -161,14 +161,14 @@ static int merge_rename_from_file(struct list_head* p, struct vfs_event *cur)
  * merge rules
  *
  * del(X) + ren_fr(Y) + ren_to(X)                  => update ren_fr(Y) to del(Y), remove del(X)
- * 
+ *
  * merge success, remove cur, else add to list
  */
 static int merge_rename_to_file(struct list_head* p, struct vfs_event *cur)
 {
     struct vfs_event *e = list_entry(p, struct vfs_event, list);
     if (ACT_DEL_FILE == e->action) {
-        /* 
+        /*
          * new ren_to will be paired, or update to new event
          * if ren_to is unpaired, which means it will not join merge
          */
@@ -178,7 +178,7 @@ static int merge_rename_to_file(struct list_head* p, struct vfs_event *cur)
         }
         if (cmp_event_path(e, cur))
             return MERGE_FAIL;
-        
+
         ((struct vfs_event *)cur->pair)->action = ACT_DEL_FILE;
         ((struct vfs_event *)cur->pair)->cookie = 0;
 
@@ -194,12 +194,12 @@ static merge_action_fn_t action_merge_fns[] = {merge_new_file, merge_new_file, m
  * notify policy
  *      time limit, maximum time a single event is cached
  *      space limit, maximum number of event buffers
- * 
+ *
  * check events after merge
  *      if event number == 0, new event already be merged, del_timer
  *      if event number == 1, mod_timer
  *      if event number > limit, del_timer and move event to local list which will be notify when level lock
- * 
+ *
  * timer trigger, move event to local list which will be notify when level lock
  *
  */
@@ -318,7 +318,7 @@ static int do_event_merge(struct vfs_event *event)
     event->pair = 0;
 
     mpr_log("do_event_merge, %p, %u, %u, %s, %u\n", event, event->action, event->dev, event->path, event->cookie);
-    
+
     /* disable timer softirq*/
     spin_lock_bh(&sl_vfs_events);
     /* ren_to event pairing */

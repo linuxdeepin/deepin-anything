@@ -14,7 +14,7 @@ int init_vfs_event_cache(void)
     vfs_event_cachep = KMEM_CACHE(vfs_event, 0);
     if (unlikely(!vfs_event_cachep))
         return -ENOMEM;
-    
+
     return 0;
 }
 
