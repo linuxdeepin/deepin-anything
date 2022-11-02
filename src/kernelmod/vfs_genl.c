@@ -33,7 +33,7 @@ static struct genl_family vfsmonitor_gnl_family = {
     .n_mcgrps = ARRAY_SIZE(vfsmonitor_mcgs),
 };
 
-// static const char* action_names[] = {"file-created", "link-created", "symlink-created", "dir-created", "file-deleted", "dir-deleted", 
+// static const char* action_names[] = {"file-created", "link-created", "symlink-created", "dir-created", "file-deleted", "dir-deleted",
 //     "file-renamed", "dir-renamed", "file-renamed-from", "file-renamed-to", "dir-renamed-from", "dir-renamed-to"};
 
 int vfs_notify_dentry_event(struct vfs_event *event)

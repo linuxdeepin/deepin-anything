@@ -1049,8 +1049,8 @@ LFTManager::LFTManager(QObject *parent)
      const QStringList &list = this->refresh();
      if(!list.isEmpty()){
         refresh_timer.stop();
-     } 
-       
+     }
+
    });
    refresh_timer.setInterval(10*1000);
    refresh_timer.start();

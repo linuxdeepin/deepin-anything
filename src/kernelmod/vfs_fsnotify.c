@@ -42,7 +42,7 @@ static inline int init_mnt_ns(void)
         mpr_err("init_mnt_ns fail\n");
         return -EINVAL;
     }
-    
+
     target_mnt_ns = current->nsproxy->mnt_ns;
     return 0;
 }
@@ -130,9 +130,9 @@ static void on_dentry_op(int action, struct dentry *p_dentry, const unsigned cha
         return;
     }
 
-    /* 
+    /*
      * write '\0' at `/` pos first, then update to '/'
-     * 
+     *
      * p_dentry_str + '\0'
      * p_dentry_str + '/' + file_name + '\0'
      */
@@ -214,7 +214,7 @@ static inline void fsnotify_event_handler(struct inode *to_tell, __u32 mask, con
 static void fsnotify_broadcast_listener(struct inode *to_tell, __u32 mask, const void *data, int data_is,
     const unsigned char *file_name, u32 cookie)
 {
-    if (!to_tell || FSNOTIFY_EVENT_INODE != data_is || !file_name 
+    if (!to_tell || FSNOTIFY_EVENT_INODE != data_is || !file_name
         || !MAJOR(to_tell->i_sb->s_dev) || !(mask & TARGET_EVENT) || !is_mnt_ns_valid())
         return;
 
@@ -246,7 +246,7 @@ static void fsnotify_parent_broadcast_listener(const struct path *path,
 int init_vfs_fsnotify(void *vfs_changed_func)
 {
     int ret;
-    
+
     ret = init_mnt_ns();
     if (ret)
         return ret;
@@ -255,7 +255,7 @@ int init_vfs_fsnotify(void *vfs_changed_func)
     ret = fsnotify_reg_listener(fsnotify_broadcast_listener, fsnotify_parent_broadcast_listener);
     if (ret)
         mpr_info("fsnotify_reg_listener fail\n");
-    
+
     return ret;
 }
 

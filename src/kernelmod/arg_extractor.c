@@ -44,7 +44,7 @@ unsigned long get_arg(struct pt_regs* regs, int n)
 
 #elif defined(CONFIG_ARM64)
 
-		/*修改ARM上anything不能使用的问题,寄存器地址不正确*/	
+		/*修改ARM上anything不能使用的问题,寄存器地址不正确*/
 		case 1: return regs->regs[0];
 		case 2: return regs->regs[1];
 		case 3: return regs->regs[2];
