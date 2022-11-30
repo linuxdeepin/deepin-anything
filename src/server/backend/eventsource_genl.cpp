@@ -154,16 +154,16 @@ void EventSource_GENL::updatePartitions()
     file_mountinfo.close();
 
     unsigned int major, minor;
-    char mp[256], *line = mount_info.data();
+    char mp[256], root[256], *line = mount_info.data();
     partitions.clear();
     genlInfo("updatePartitions start");
-    while (sscanf(line, "%*d %*d %u:%u %*s %250s %*s %*s %*s %*s %*s %*s\n", &major, &minor, mp) == 3) {
+    while (sscanf(line, "%*d %*d %u:%u %250s %250s %*s %*s %*s %*s %*s %*s\n", &major, &minor, root, mp) == 4) {
         line = strchr(line, '\n') + 1;
 
         if (!major)
             continue;
 
-        if (!partitions.contains(MKDEV(major, minor))) {
+        if (!strcmp(root, "/") && !partitions.contains(MKDEV(major, minor))) {
             partitions.insert(MKDEV(major, minor), QByteArray(mp));
             genlInfo("%u:%u, %s", major, minor, mp);
         }
