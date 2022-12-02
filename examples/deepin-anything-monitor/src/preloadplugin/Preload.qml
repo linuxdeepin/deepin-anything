@@ -26,9 +26,9 @@ import "."
 ApplicationWindow {
     id: window
     visible: true
-    width: 900
-    height: 700
-    title: qsTr("qml-demo")
+    width: 1280
+    height: 800
+    title: qsTr("Deepin Anything Monitor")
     flags: Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint
     header: TitleBar {}
 

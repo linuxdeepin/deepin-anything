@@ -12,12 +12,16 @@ set(MAINCOMPONENT_LIB_NAME dtkqml-${CMAKE_PROJECT_NAME})
 set(MAINCOMPONENNT_SRC
     maincomponentplugin.cpp
     dagenlclient.cpp
-    vfs_event.cpp
+    vfsevent.cpp
+    blockdevicemodel.cpp
+    blockdeviceitem.cpp
+    vfseventmodel.cpp
     )
 
 # Find the Qt5Quick library
 find_package(Qt5Quick CONFIG REQUIRED)
 find_package(Qt5QuickCompiler REQUIRED)
+find_package(Qt5 COMPONENTS Test REQUIRED)
 
 # Find libnl-genl-3.0
 find_package(PkgConfig REQUIRED)
@@ -39,6 +43,7 @@ add_library(${MAINCOMPONENT_LIB_NAME} SHARED
 # 由于 LIB 程序为本项目的功能实现部分，需要用到的第三方库都需要在此处添加。
 target_link_libraries(${MAINCOMPONENT_LIB_NAME}
     Qt5::Quick
+    Qt5::Test
     ${DtkDeclarative_LIBRARIES}
     ${NL_GENL_LIBRARIES}
     )

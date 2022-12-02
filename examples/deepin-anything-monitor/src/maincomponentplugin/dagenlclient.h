@@ -8,12 +8,15 @@
 #include <deepin-anything/vfs_change_consts.h>
 #include <netlink/genl/ctrl.h>
 #include <netlink/genl/genl.h>
+#include <QMap>
 
-#include "vfs_genl.h"
-#include "vfs_event.h"
+
+#include "vfsgenl.h"
+#include "vfsevent.h"
 
 class DAGenlClient : public QThread, public Dtk::Core::DSingleton<DAGenlClient>
 {
+    Q_OBJECT
     friend class DSingleton<DAGenlClient>;
 
 public:
@@ -21,13 +24,14 @@ public:
     /// @param parent
     DAGenlClient();
 
-    ~DAGenlClient();
+    ~DAGenlClient() override;
 
     /// @brief init deepin anything genl client
     int init();
 
 signals:
     void onVfsEvent(VfsEvent);
+    void onPartitionUpdate();
 
 protected:
     void run() override;
@@ -35,8 +39,10 @@ protected:
 private:
     struct nl_cb *cb_;
     struct nl_sock *sock_;
-
     static int handleMsgFromGenl(struct nl_msg *msg, void *arg);
+
+    QMap<unsigned int, QByteArray> rename_from_;
+
 
     int handleMsg(struct nl_msg* msg);
 };

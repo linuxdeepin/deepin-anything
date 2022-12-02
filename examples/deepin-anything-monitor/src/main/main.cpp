@@ -7,12 +7,13 @@
 
 DQUICK_USE_NAMESPACE
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
+  // workaround: fix popup menu
+  qputenv("D_POPUP_MODE", "embed");
 #ifdef PLUGINPATH
-    DAppLoader appLoader(APP_NAME, PLUGINPATH);
+  DAppLoader appLoader(APP_NAME, PLUGINPATH);
 #else
-    DAppLoader appLoader(APP_NAME);
+  DAppLoader appLoader(APP_NAME);
 #endif
-    return appLoader.exec(argc, argv);
+  return appLoader.exec(argc, argv);
 }

@@ -17,6 +17,8 @@ public:
     MainComponentPlugin(QObject *parent = nullptr);
     ~MainComponentPlugin() override;
 
+    void initialize(QQmlApplicationEngine *engine) override;
+
     QUrl mainComponentPath() const override;
 };
 
