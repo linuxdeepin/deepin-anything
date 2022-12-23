@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2022 Kingtous <me@kingtous.cn>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef DAGENLCLIENT_H
 #define DAGENLCLIENT_H
 
@@ -9,7 +13,6 @@
 #include <netlink/genl/ctrl.h>
 #include <netlink/genl/genl.h>
 #include <QMap>
-
 
 #include "vfsgenl.h"
 #include "vfsevent.h"
@@ -43,8 +46,7 @@ private:
 
     QMap<unsigned int, QByteArray> rename_from_;
 
-
-    int handleMsg(struct nl_msg* msg);
+    int handleMsg(struct nl_msg *msg);
 };
 
 #endif // DAGENLCLIENT_H

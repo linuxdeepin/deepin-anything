@@ -1,8 +1,9 @@
-Source: %{ProjectName}
+Source: deepin-anything-monitor
 Section: admin
 Priority: optional
 Maintainer: Deepin Packages Builder <packages@deepin.com>
 Build-Depends:
+ deepin-anything-dev,
  debhelper (>= 9),
  cmake,
  pkg-config,
@@ -11,8 +12,8 @@ Build-Depends:
 Standards-Version: 3.9.8
 Homepage: http://www.deepin.org
 
-Package: %{ProjectName}
-Architecture: any
+Package: deepin-anything-monitor
+Architecture: x86_64
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Simple description
  A detailed description.

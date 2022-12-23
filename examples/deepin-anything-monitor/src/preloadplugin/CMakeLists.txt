@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2022 Kingtous <me@kingtous.cn>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 cmake_minimum_required(VERSION 3.1)
 
 set(PRELOAD_LIB_NAME dtkqml-${CMAKE_PROJECT_NAME}-Preload)

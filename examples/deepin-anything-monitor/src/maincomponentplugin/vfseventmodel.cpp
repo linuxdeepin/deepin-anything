@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2022 Kingtous <me@kingtous.cn>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "vfseventmodel.h"
 
 #include <signal.h>
@@ -12,40 +16,47 @@
 #include "blockdeviceitem.h"
 #include "dagenlclient.h"
 
-VfsEventModel::VfsEventModel(QObject *parent) : QAbstractTableModel(parent) {
+VfsEventModel::VfsEventModel(QObject *parent) : QAbstractTableModel(parent)
+{
   connect(&DAGenlClient::ref(), SIGNAL(onVfsEvent(VfsEvent)), this,
           SLOT(insertVfsEvent(VfsEvent)));
   // currently has 14 events
-  filtered = QVector<bool>(14, true);
+  filtered_ = QVector<bool>(14, true);
 }
 
-int VfsEventModel::rowCount(const QModelIndex &parent) const {
+int VfsEventModel::rowCount(const QModelIndex &parent) const
+{
   return show_evts_.count();
 }
 
 int VfsEventModel::columnCount(const QModelIndex &parent) const { return 5; }
 
-QVariant VfsEventModel::data(const QModelIndex &index, int role) const {
+QVariant VfsEventModel::data(const QModelIndex &index, int role) const
+{
   if (!index.isValid())
     return QVariant();
   auto cols = index.column();
   auto rows = index.row();
 
-  if (role > Qt::UserRole) {
+  if (role > Qt::UserRole)
+  {
     auto s = show_evts_[rows].toVariant(role - VfsRole::IdRole);
     return s;
   }
-  if (role == Qt::DisplayRole) {
+  if (role == Qt::DisplayRole)
+  {
     auto s = show_evts_[rows].toVariant(cols);
     return s;
   }
-  if (role == Qt::TextAlignmentRole) {
+  if (role == Qt::TextAlignmentRole)
+  {
     return Qt::AlignLeft;
   }
   return QVariant();
 }
 
-void VfsEventModel::setRunning(bool running) {
+void VfsEventModel::setRunning(bool running)
+{
   running_ = running;
   qDebug() << "set running state:" << running;
   emit runningChanged();
@@ -53,16 +64,19 @@ void VfsEventModel::setRunning(bool running) {
 
 bool VfsEventModel::isRunning() { return running_; }
 
-bool VfsEventModel::isFiltered(int index) { return filtered[index]; }
+bool VfsEventModel::isFiltered(int index) { return filtered_[index]; }
 
-void VfsEventModel::filter(int index, bool checked) {
-  filtered[index] = checked;
+void VfsEventModel::filter(int index, bool checked)
+{
+  filtered_[index] = checked;
   emit filterChanged(index, checked);
   resetHitModel();
 }
 
-QString VfsEventModel::getReadableAction(int action) {
-  switch (action) {
+QString VfsEventModel::getReadableAction(int action)
+{
+  switch (action)
+  {
   case ACT_NEW_FILE:
     return tr("New file");
   case ACT_NEW_SYMLINK:
@@ -96,29 +110,39 @@ QString VfsEventModel::getReadableAction(int action) {
   }
 }
 
-void VfsEventModel::exportToFile(QUrl path) {
+void VfsEventModel::exportToFile(QUrl path)
+{
   auto url = path.toLocalFile();
-  if (!url.endsWith(".csv")) {
+  if (!url.endsWith(".csv"))
+  {
     url += ".csv";
   }
   QFile file(url);
   bool res = file.open(QIODevice::WriteOnly);
-  if (!res) {
+  if (!res)
+  {
     qDebug() << path << "not opened successfully";
   }
   file.write(VfsEvent::headerRow());
   int rows = rowCount();
   int columns = columnCount();
-  for (int i = 0; i < rows; i++) {
+  for (int i = 0; i < rows; i++)
+  {
     QString textData;
     textData += "\n";
-    for (int j = 0; j < columns; j++) {
-      if (j == 0) {
+    for (int j = 0; j < columns; j++)
+    {
+      if (j == 0)
+      {
         textData +=
-            block_device_model->getDeviceName(data(index(i, j)).toString());
-      } else if (j == 1) {
+            block_device_model_->getDeviceName(data(index(i, j)).toString());
+      }
+      else if (j == 1)
+      {
         textData += getReadableAction(data(index(i, j)).toInt());
-      } else {
+      }
+      else
+      {
         textData += data(index(i, j)).toString();
       }
       textData += ","; // for .csv file format
@@ -126,32 +150,39 @@ void VfsEventModel::exportToFile(QUrl path) {
     file.write(textData.toStdString().c_str(), textData.length());
   }
   file.close();
-  if (file.exists()) {
+  if (file.exists())
+  {
     QDesktopServices::openUrl(QUrl(url));
   }
 }
 
-void VfsEventModel::search(QString searchText) {
-  this->searchText = std::move(searchText);
+void VfsEventModel::search(QString searchText)
+{
+  this->searchText_ = std::move(searchText);
   qDebug() << "search ";
   resetHitModel();
 }
 
-void VfsEventModel::setBlockDeviceModel(BlockDeviceModel *model) {
-  this->block_device_model = model;
+void VfsEventModel::setBlockDeviceModel(BlockDeviceModel *model)
+{
+  this->block_device_model_ = model;
 }
 
-void VfsEventModel::clear() {
+void VfsEventModel::clear()
+{
   beginResetModel();
   show_evts_.clear();
   evts_.clear();
   endResetModel();
 }
 
-void VfsEventModel::insertVfsEvent(const VfsEvent &evt) {
-  if (isRunning()) {
+void VfsEventModel::insertVfsEvent(const VfsEvent &evt)
+{
+  if (isRunning())
+  {
     evts_.push_front(evt);
-    if (isHitFilter(evt)) {
+    if (isHitFilter(evt))
+    {
       beginInsertRows(QModelIndex(), 0, 0);
       show_evts_.push_front(std::move(evt));
       endInsertRows();
@@ -159,36 +190,46 @@ void VfsEventModel::insertVfsEvent(const VfsEvent &evt) {
   }
 }
 
-bool VfsEventModel::isHitFilter(const VfsEvent &evt) {
+bool VfsEventModel::isHitFilter(const VfsEvent &evt)
+{
   auto hit = true;
   // searchText
-  if (!searchText.isEmpty()) {
-    if (!evt.dst_.contains(searchText) && !evt.src_.contains(searchText)) {
+  if (!searchText_.isEmpty())
+  {
+    if (!evt.dst_.contains(searchText_) && !evt.src_.contains(searchText_))
+    {
       return false;
     }
   }
   // dev
-  if (block_device_model != nullptr) {
+  if (block_device_model_ != nullptr)
+  {
     hit = false;
-    for (auto &devItem : block_device_model->checkedItems()) {
+    for (auto &devItem : block_device_model_->checkedItems())
+    {
       if (devItem->getMajor() == evt.major_ &&
-          devItem->getMinor() == evt.minor_) {
+          devItem->getMinor() == evt.minor_)
+      {
         hit = true;
       }
     }
   }
   // event type
-  if (!filtered[evt.act_]) {
+  if (!filtered_[evt.act_])
+  {
     return false;
   }
   return hit;
 }
 
-void VfsEventModel::resetHitModel() {
+void VfsEventModel::resetHitModel()
+{
   beginResetModel();
   this->show_evts_.clear();
-  for (auto &evt : evts_) {
-    if (isHitFilter(evt)) {
+  for (auto &evt : evts_)
+  {
+    if (isHitFilter(evt))
+    {
       this->show_evts_.append(evt);
     }
   }
@@ -196,7 +237,8 @@ void VfsEventModel::resetHitModel() {
   endResetModel();
 }
 
-QHash<int, QByteArray> VfsEventModel::roleNames() const {
+QHash<int, QByteArray> VfsEventModel::roleNames() const
+{
   return {{VfsRole::ActionRole, "action"},
           {VfsRole::IdRole, "id"},
           {VfsRole::SrcRole, "source"},

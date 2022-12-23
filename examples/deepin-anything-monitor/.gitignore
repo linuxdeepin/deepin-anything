@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2022 Kingtous <me@kingtous.cn>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # build files
 build
 build/**

@@ -1,0 +1,4 @@
+[Desktop Entry]
+Name=deepin-anything-monitor
+Exec=/usr/bin/deepin-anything-monitor
+X-Deepin-TurboType=dtkqml

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2022 Kingtous <me@kingtous.cn>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef BLOCKDEVICEMODEL_H
 #define BLOCKDEVICEMODEL_H
 
@@ -15,7 +19,8 @@ class BlockDeviceModel : public QAbstractItemModel
 public:
     explicit BlockDeviceModel(QObject *parent = nullptr);
 
-    enum BlockDeviceRoles {
+    enum BlockDeviceRoles
+    {
         DevName = Qt::UserRole + 1,
         MajorId,
         MinorId,
@@ -30,8 +35,8 @@ public:
     // Basic functionality:
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
-    Q_INVOKABLE int getCheckState(const QModelIndex& index) const;
-    Q_INVOKABLE bool check(const QModelIndex& index, bool checked);
+    Q_INVOKABLE int getCheckState(const QModelIndex &index) const;
+    Q_INVOKABLE bool check(const QModelIndex &index, bool checked);
     Q_INVOKABLE QString getDeviceName(QString id);
 
 public slots:
@@ -39,13 +44,10 @@ public slots:
     void updatePartition();
 
 private:
+    QVector<BlockDeviceItem *> devices;
 
-    QVector<BlockDeviceItem*> devices;
-
-    BlockDeviceItem* rootItem;
-    void setupModelData(const QStringList &lines,
-                        BlockDeviceItem *parent);
-    QSet<BlockDeviceItem*> checkedItems_;
+    BlockDeviceItem *rootItem;
+    QSet<BlockDeviceItem *> checkedItems_;
 
     // QAbstractItemModel interface
 public:

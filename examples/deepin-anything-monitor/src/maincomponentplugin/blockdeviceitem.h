@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2022 Kingtous <me@kingtous.cn>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef BLOCKDEVICEITEM_H
 #define BLOCKDEVICEITEM_H
 
@@ -11,7 +15,8 @@ sda 8:0 0 64G 0 disk
 sda1 8:1 0 64G 0 part /
 sr0 11:0 1 50.5M 0 rom /media/kingtous/VBox_GAs_7.0.4
 */
-enum {
+enum
+{
     Name,
     Major,
     Minor,
@@ -30,8 +35,8 @@ enum {
 class BlockDeviceItem
 {
 public:
-    explicit BlockDeviceItem(const QVector<QVariant>& data, BlockDeviceItem* parent);
-    ~BlockDeviceItem() ;
+    explicit BlockDeviceItem(const QVector<QVariant> &data, BlockDeviceItem *parent);
+    ~BlockDeviceItem();
 
     void appendChild(BlockDeviceItem *child);
 
@@ -50,9 +55,9 @@ public:
     void setChildItems(const QVector<BlockDeviceItem *> &newChildItems);
 
 private:
-    QVector<BlockDeviceItem*> childItems_{};
+    QVector<BlockDeviceItem *> childItems_{};
     QVector<QVariant> data_{};
-    BlockDeviceItem* parentItem_{nullptr};
+    BlockDeviceItem *parentItem_{nullptr};
 
     bool is_checked_{false};
 };
