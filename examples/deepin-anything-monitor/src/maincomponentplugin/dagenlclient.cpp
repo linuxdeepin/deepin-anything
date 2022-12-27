@@ -28,6 +28,7 @@ DAGenlClient::DAGenlClient() : QThread(nullptr){};
 
 DAGenlClient::~DAGenlClient()
 {
+  qDebug() << "stopping genl client";
   if (cb_)
   {
     nl_cb_put(cb_);

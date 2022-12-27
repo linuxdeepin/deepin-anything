@@ -1,5 +1,5 @@
-%{ProjectName} (0.0.1) unstable; urgency=medium
+deepin-anything-monitor (0.0.1) unstable; urgency=medium
 
   * Initial release.
 
- -- Deepin Packages Builder <packages@deepin.com>  Wed, 01 Jul 2020 14:14:35 +0800
+ -- Kingtous <me@kingtous.cn>  Tue, 27 Dec 2022 10:47:30 +0800

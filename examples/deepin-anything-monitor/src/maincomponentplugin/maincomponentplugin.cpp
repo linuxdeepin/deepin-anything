@@ -23,7 +23,11 @@ MainComponentPlugin::MainComponentPlugin(QObject *parent) : QObject(parent) {
   }
 }
 
-MainComponentPlugin::~MainComponentPlugin() {}
+MainComponentPlugin::~MainComponentPlugin() {
+    DAGenlClient::ref().terminate();
+    // Wait for one second to wait the thread being terminated.
+    DAGenlClient::ref().wait(QDeadlineTimer(1000));
+}
 
 void MainComponentPlugin::initialize(QQmlApplicationEngine *engine) {
 

@@ -82,7 +82,16 @@ AppLoader {
                                 role: "name"
                                 width: 100
                                 delegate:  Text {
+                                    elide: styleData.elideMode
                                     text: "/dev/"+ styleData.value //name + "(" + major + ":"+ minor + ")" + " " + size
+                                    ToolTip.visible: block_device_ma.containsMouse
+                                    ToolTip.text: "/dev/"+ styleData.value
+                                    MouseArea {
+                                        id: block_device_ma
+                                        hoverEnabled: true
+                                        anchors.fill: parent
+                                        acceptedButtons: Qt.NoButton
+                                    }
                                 }
                             }
 
@@ -96,6 +105,19 @@ AppLoader {
                                 width: 150
                                 title: qsTr("Mount point")
                                 role: "mount"
+                                delegate: Text {
+                                    text: styleData.value
+                                    elide: styleData.elideMode
+                                    ToolTip.text: styleData.value
+                                    ToolTip.visible: ma.containsMouse
+                                    ToolTip.delay: 100
+                                    MouseArea {
+                                        id: ma
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        acceptedButtons: Qt.NoButton
+                                    }
+                                }
                             }
 
                         }
@@ -178,12 +200,31 @@ AppLoader {
                         Layout.fillHeight: true
                         Layout.fillWidth: true
 
+                        Component {
+                            id: cell
+                            Text {
+                                 anchors.centerIn: parent
+                                 text: styleData.value
+                                 elide: styleData.elideMode
+                                 ToolTip.text: styleData.value
+                                 ToolTip.visible: ma_source.containsMouse
+                                 ToolTip.delay: 100
+                                 MouseArea {
+                                     id: ma_source
+                                     anchors.fill: parent
+                                     hoverEnabled: true
+                                     acceptedButtons: Qt.NoButton
+                                 }
+                             }
+                        }
+
                         C.TableViewColumn {
                                  role: "id"
                                  title: qsTr("Id")
                                  width: 50
                                  delegate: Text {
                                      anchors.centerIn: parent
+                                     elide: styleData.elideMode
                                      text: blockDeviceModel.getDeviceName(styleData.value)
                                 }
                         }
@@ -194,6 +235,7 @@ AppLoader {
                             width: 100
                             delegate:  Text {
                                 anchors.centerIn: parent
+                                elide: styleData.elideMode
                                 text: vfsEventModel.getReadableAction(styleData.value)
                             }
                         }
@@ -202,11 +244,13 @@ AppLoader {
                              role: "source"
                              title: qsTr("Source")
                              width: 250
+                             delegate: cell
                          }
                          C.TableViewColumn {
                              role: "dest"
                              title: qsTr("Destination")
                              width: 250
+                             delegate: cell
                          }
                          C.TableViewColumn {
                              role: "time"

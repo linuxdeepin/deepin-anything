@@ -3,8 +3,8 @@
     "supportedProjectTypes": [ "CMakeProjectManager.CMakeProject"],
     "id": "A.Dtk QtQuick Application",
     "category": "F.Project",
-    "trDescription": "Creates a Dtk QtQuick Application for UOS.",
-    "trDisplayName": "Dtk QtQuick Application",
+    "trDescription": "A vfs event monitor based on deepin-anything",
+    "trDisplayName": "Deepin Anything Monitor",
     "trDisplayCategory": "Dtk QML Application",
     "featuresRequired": [ "QtSupport.Wizards.FeatureQt.5.6" ],
     "options":
