@@ -5,30 +5,28 @@
 #ifndef VFSEVENT_H
 #define VFSEVENT_H
 
+#include <QDateTime>
 #include <QObject>
-
 #include <QString>
 #include <QTime>
-#include <QDateTime>
 
-class VfsEvent
-{
-public:
-    explicit VfsEvent();
+class VfsEvent {
+ public:
+  explicit VfsEvent();
 
-    unsigned char act_;
-    QString src_;
-    QString dst_;
-    unsigned int cookie_;
-    unsigned short major_;
-    unsigned char minor_;
-    QDateTime time_;
+  unsigned char act_;
+  QString src_;
+  QString dst_;
+  unsigned int cookie_;
+  unsigned short major_;
+  unsigned char minor_;
+  QDateTime time_;
 
-    int operator==(const VfsEvent &other);
+  int operator==(const VfsEvent &other);
 
-    QVariant toVariant(int columns) const;
-    static const char *headerRow();
-    QString toRow() const;
+  QVariant toVariant(int columns) const;
+  static const char *headerRow();
+  QString toRow() const;
 };
 
-#endif // VFSEVENT_H
+#endif  // VFSEVENT_H

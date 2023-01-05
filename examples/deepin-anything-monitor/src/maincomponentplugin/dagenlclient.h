@@ -5,48 +5,48 @@
 #ifndef DAGENLCLIENT_H
 #define DAGENLCLIENT_H
 
-#include <QObject>
-#include <QThread>
-#include <DSingleton>
-
 #include <deepin-anything/vfs_change_consts.h>
 #include <netlink/genl/ctrl.h>
 #include <netlink/genl/genl.h>
+
+#include <DSingleton>
 #include <QMap>
+#include <QObject>
+#include <QThread>
 
-#include "vfsgenl.h"
 #include "vfsevent.h"
+#include "vfsgenl.h"
 
-class DAGenlClient : public QThread, public Dtk::Core::DSingleton<DAGenlClient>
-{
-    Q_OBJECT
-    friend class DSingleton<DAGenlClient>;
+class DAGenlClient : public QThread,
+                     public Dtk::Core::DSingleton<DAGenlClient> {
+  Q_OBJECT
+  friend class DSingleton<DAGenlClient>;
 
-public:
-    /// @brief
-    /// @param parent
-    DAGenlClient();
+ public:
+  /// @brief
+  /// @param parent
+  DAGenlClient();
 
-    ~DAGenlClient() override;
+  ~DAGenlClient() override;
 
-    /// @brief init deepin anything genl client
-    int init();
+  /// @brief init deepin anything genl client
+  int init();
 
-signals:
-    void onVfsEvent(VfsEvent);
-    void onPartitionUpdate();
+ signals:
+  void onVfsEvent(VfsEvent);
+  void onPartitionUpdate();
 
-protected:
-    void run() override;
+ protected:
+  void run() override;
 
-private:
-    struct nl_cb *cb_;
-    struct nl_sock *sock_;
-    static int handleMsgFromGenl(struct nl_msg *msg, void *arg);
+ private:
+  struct nl_cb *cb_;
+  struct nl_sock *sock_;
+  static int handleMsgFromGenl(struct nl_msg *msg, void *arg);
 
-    QMap<unsigned int, QByteArray> rename_from_;
+  QMap<unsigned int, QByteArray> rename_from_;
 
-    int handleMsg(struct nl_msg *msg);
+  int handleMsg(struct nl_msg *msg);
 };
 
-#endif // DAGENLCLIENT_H
+#endif  // DAGENLCLIENT_H

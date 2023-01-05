@@ -37,6 +37,9 @@ QVariant VfsEventModel::data(const QModelIndex &index, int role) const {
   if (role > Qt::UserRole) {
     auto &evt = show_evts_[rows];
     auto s = evt.toVariant(role - VfsRole::IdRole);
+    if (s.toString().trimmed().isEmpty()) {
+      return s;
+    }
     // parse to the full path
     if (role == VfsRole::SrcRole || role == VfsRole::DstRole) {
       if (block_device_model_ != nullptr) {

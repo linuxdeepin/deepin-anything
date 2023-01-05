@@ -8,18 +8,19 @@
 #include <dqmlappmainwindowinterface.h>
 
 class QQmlComponent;
-class MainComponentPlugin : public QObject, public DTK_QUICK_NAMESPACE::DQmlAppMainWindowInterface
-{
-    Q_OBJECT
-    Q_PLUGIN_METADATA(IID DQmlAppMainWindowInterface_iid)
-    Q_INTERFACES(DTK_QUICK_NAMESPACE::DQmlAppMainWindowInterface)
-public:
-    MainComponentPlugin(QObject *parent = nullptr);
-    ~MainComponentPlugin() override;
+class MainComponentPlugin
+    : public QObject,
+      public DTK_QUICK_NAMESPACE::DQmlAppMainWindowInterface {
+  Q_OBJECT
+  Q_PLUGIN_METADATA(IID DQmlAppMainWindowInterface_iid)
+  Q_INTERFACES(DTK_QUICK_NAMESPACE::DQmlAppMainWindowInterface)
+ public:
+  MainComponentPlugin(QObject *parent = nullptr);
+  ~MainComponentPlugin() override;
 
-    void initialize(QQmlApplicationEngine *engine) override;
+  void initialize(QQmlApplicationEngine *engine) override;
 
-    QUrl mainComponentPath() const override;
+  QUrl mainComponentPath() const override;
 };
 
-#endif // MAINCOMPONENTPLUGIN_H
+#endif  // MAINCOMPONENTPLUGIN_H
