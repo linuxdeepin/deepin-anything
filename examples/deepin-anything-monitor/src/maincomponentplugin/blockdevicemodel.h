@@ -38,6 +38,10 @@ public:
     Q_INVOKABLE int getCheckState(const QModelIndex &index) const;
     Q_INVOKABLE bool check(const QModelIndex &index, bool checked);
     Q_INVOKABLE QString getDeviceName(QString id);
+    QString getMountPoint(unsigned short major, unsigned short minor);
+
+signals:
+    void partitionUpdated();
 
 public slots:
     Q_INVOKABLE void fetchDevices(bool isUpdate);

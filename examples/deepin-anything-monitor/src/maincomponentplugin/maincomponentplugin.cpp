@@ -24,13 +24,12 @@ MainComponentPlugin::MainComponentPlugin(QObject *parent) : QObject(parent) {
 }
 
 MainComponentPlugin::~MainComponentPlugin() {
-    DAGenlClient::ref().terminate();
-    // Wait for one second to wait the thread being terminated.
-    DAGenlClient::ref().wait(QDeadlineTimer(1000));
+  DAGenlClient::ref().terminate();
+  // wait for one second to wait the thread being terminated.
+  DAGenlClient::ref().wait(QDeadlineTimer(1000));
 }
 
 void MainComponentPlugin::initialize(QQmlApplicationEngine *engine) {
-
   qmlRegisterType<BlockDeviceModel>("com.kingtous.block_device_model", 1, 0,
                                     "BlockDeviceModel");
   qmlRegisterType<VfsEventModel>("com.kingtous.vfs_event_model", 1, 0,

@@ -49,10 +49,14 @@ public:
 
     unsigned short getMajor() const;
     QString name() const;
+    QString type() const;
+    QString shortestMountPoint() const;
     unsigned short getMinor() const;
     bool isPartition() const;
 
     void setChildItems(const QVector<BlockDeviceItem *> &newChildItems);
+
+    const QVector<BlockDeviceItem *> &childItems() const;
 
 private:
     QVector<BlockDeviceItem *> childItems_{};

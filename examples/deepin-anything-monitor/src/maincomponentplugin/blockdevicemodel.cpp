@@ -12,20 +12,17 @@
 #include "dagenlclient.h"
 
 BlockDeviceModel::BlockDeviceModel(QObject *parent)
-    : QAbstractItemModel(parent)
-{
+    : QAbstractItemModel(parent) {
   rootItem = new BlockDeviceItem({ROOT}, nullptr);
   fetchDevices(false);
   connect(&DAGenlClient::ref(), SIGNAL(onPartitionUpdate()), this,
           SLOT(updatePartition()));
 }
 
-int BlockDeviceModel::rowCount(const QModelIndex &parent) const
-{
+int BlockDeviceModel::rowCount(const QModelIndex &parent) const {
   BlockDeviceItem *parentItem;
 
-  if (parent.column() > 0)
-    return 0;
+  if (parent.column() > 0) return 0;
 
   if (!parent.isValid())
     parentItem = rootItem;
@@ -34,100 +31,72 @@ int BlockDeviceModel::rowCount(const QModelIndex &parent) const
   return parentItem->childCount();
 }
 
-QVariant BlockDeviceModel::data(const QModelIndex &index, int role) const
-{
-  if (!index.isValid())
-  {
+QVariant BlockDeviceModel::data(const QModelIndex &index, int role) const {
+  if (!index.isValid()) {
     return QVariant();
   }
   auto device = static_cast<BlockDeviceItem *>(index.internalPointer());
-  if (role == BlockDeviceRoles::FilterRole)
-  {
+  if (role == BlockDeviceRoles::FilterRole) {
     return getCheckState(index);
   }
-  if (role >= BlockDeviceRoles::DevName)
-  {
+  if (role >= BlockDeviceRoles::DevName) {
     return device->data(role - BlockDeviceRoles::DevName);
   }
-  if (role == Qt::DisplayRole && index.isValid())
-  {
+  if (role == Qt::DisplayRole && index.isValid()) {
     return device->data(Name);
   }
-  if (role == Qt::TextAlignmentRole)
-  {
+  if (role == Qt::TextAlignmentRole) {
     return QVariant(Qt::AlignLeft);
   }
   return QVariant();
 }
 
-int BlockDeviceModel::getCheckState(const QModelIndex &index) const
-{
-  if (!index.isValid())
-  {
+int BlockDeviceModel::getCheckState(const QModelIndex &index) const {
+  if (!index.isValid()) {
     return false;
   }
   auto item = static_cast<BlockDeviceItem *>(index.internalPointer());
   qDebug() << "check" << item->name();
-  if (item->isPartition())
-  {
+  if (item->isPartition()) {
     return checkedItems_.contains(item) ? Qt::CheckState::Checked
                                         : Qt::CheckState::Unchecked;
-  }
-  else
-  {
+  } else {
     auto checkCnt = 0;
-    for (auto *checkedItem : checkedItems_)
-    {
-      if (checkedItem->parentItem() == item)
-      {
+    for (auto *checkedItem : checkedItems_) {
+      if (checkedItem->parentItem() == item) {
         checkCnt++;
       }
     }
-    if (checkCnt == item->childCount())
-    {
+    if (checkCnt == item->childCount()) {
       return Qt::CheckState::Checked;
-    }
-    else if (checkCnt == 0)
-    {
+    } else if (checkCnt == 0) {
       return Qt::CheckState::Unchecked;
-    }
-    else
-    {
+    } else {
       return Qt::CheckState::PartiallyChecked;
     }
   }
 }
 
-bool BlockDeviceModel::check(const QModelIndex &index, bool checked)
-{
-  if (!index.isValid())
-  {
+bool BlockDeviceModel::check(const QModelIndex &index, bool checked) {
+  if (!index.isValid()) {
     return false;
   }
   auto item = static_cast<BlockDeviceItem *>(index.internalPointer());
-  if (!item->isPartition())
-  {
+  if (!item->isPartition()) {
     auto cnt = item->childCount();
-    for (auto row = 0; row < cnt; row++)
-    {
+    for (auto row = 0; row < cnt; row++) {
       auto partition = item->child(row);
-      if (checked)
-      {
+      if (checked) {
         checkedItems_.insert(partition);
-      }
-      else
-      {
+      } else {
         checkedItems_.remove(partition);
       }
     }
   }
   // self
-  if (checked)
-  {
+  if (checked) {
     checkedItems_.insert(item);
-  }
-  else
-  {
+  } else {
     checkedItems_.remove(item);
   }
   qDebug() << "listening" << checkedItems_;
@@ -137,21 +106,16 @@ bool BlockDeviceModel::check(const QModelIndex &index, bool checked)
   return true;
 }
 
-QString BlockDeviceModel::getDeviceName(QString id)
-{
+QString BlockDeviceModel::getDeviceName(QString id) {
   auto id_list = id.split(":");
-  if (id_list.count() == 2)
-  {
+  if (id_list.count() == 2) {
     int major = id_list[0].toInt();
     int minor = id_list[1].toInt();
-    for (auto &root : devices)
-    {
+    for (auto &root : devices) {
       auto cnt = root->childCount();
-      for (int i = 0; i < cnt; i++)
-      {
+      for (int i = 0; i < cnt; i++) {
         auto child = root->child(i);
-        if (child->getMajor() == major && child->getMinor() == minor)
-        {
+        if (child->getMajor() == major && child->getMinor() == minor) {
           return child->name();
         }
       }
@@ -161,13 +125,30 @@ QString BlockDeviceModel::getDeviceName(QString id)
   return tr("Unknown");
 }
 
-void BlockDeviceModel::fetchDevices(bool isUpdate = true)
-{
+QString BlockDeviceModel::getMountPoint(unsigned short major,
+                                        unsigned short minor) {
+  for (auto &root : devices) {
+    if (root->getMajor() == major && root->getMinor() == minor) {
+      return root->shortestMountPoint();
+    }
+    auto child_count = root->childCount();
+    if (child_count != 0) {
+      for (int row = 0; row < child_count; row++) {
+        auto child = root->child(row);
+        if (child->getMajor() == major && child->getMinor() == minor) {
+          return child->shortestMountPoint();
+        }
+      }
+    }
+  }
+  return "";
+}
+
+void BlockDeviceModel::fetchDevices(bool isUpdate = true) {
   // get all data
   auto process = new QProcess();
   process->start("/usr/bin/lsblk", {"-r"});
-  if (!process->waitForFinished())
-  {
+  if (!process->waitForFinished()) {
     qDebug() << "error on waiting lsblk commands";
     return;
   }
@@ -175,20 +156,16 @@ void BlockDeviceModel::fetchDevices(bool isUpdate = true)
   auto blk_string = QString::fromUtf8(blk_output);
   auto blk_list = blk_string.split("\n");
   blk_list.erase(blk_list.begin());
-  if (isUpdate)
-  {
-    if (rowCount())
-    {
+  if (isUpdate) {
+    if (rowCount()) {
       beginRemoveRows(QModelIndex(), 0, rowCount() - 1);
       devices.clear();
       endRemoveRows();
     }
   }
   QVector<BlockDeviceItem *> device_repo;
-  for (auto &blk : blk_list)
-  {
-    if (blk.trimmed().isEmpty())
-    {
+  for (auto &blk : blk_list) {
+    if (blk.trimmed().isEmpty()) {
       continue;
     }
     auto dev_metadata = blk.trimmed().split(" ");
@@ -210,52 +187,54 @@ void BlockDeviceModel::fetchDevices(bool isUpdate = true)
     data_vec[MountPoints] = mnt_point;
     auto item = new BlockDeviceItem{std::move(data_vec), nullptr};
     device_repo.push_back(item);
-    if (!isUpdate)
-    {
+    if (!isUpdate) {
       // checked
       checkedItems_.insert(item);
     }
   }
   // build root tree
   QVector<BlockDeviceItem *> root_devices;
-  for (auto &dev : device_repo)
-  {
-    if (dev->getMinor() == 0)
-    {
+  for (auto &dev : device_repo) {
+    if (dev->type() != "part") {
       root_devices.push_back(dev);
     }
   }
-  for (auto &root : root_devices)
-  {
-    auto major = root->getMajor();
-    for (auto &dev : device_repo)
-    {
-      if (dev->getMajor() == major && dev->getMinor() != 0)
-      {
+  for (auto &root : root_devices) {
+    auto root_name = root->name();
+    for (auto &dev : device_repo) {
+      if (root != dev && dev->name().startsWith(root_name)) {
         root->appendChild(dev);
       }
     }
   }
-  if (isUpdate)
-  {
-    beginInsertRows(QModelIndex(), rowCount(),
-                    rowCount() + root_devices.length() - 1);
+  if (isUpdate) {
+    beginResetModel();
+    for (auto root : rootItem->childItems()) {
+      delete root;
+    }
+    rootItem->setChildItems(root_devices);
+    devices = std::move(root_devices);
+    checkedItems_.clear();
+    for (auto dev : devices) {
+      checkedItems_.insert(dev);
+      for (auto child : dev->childItems()) {
+        checkedItems_.insert(child);
+      }
+    }
+    endResetModel();
+  } else {
     rootItem->setChildItems(root_devices);
     devices.append(root_devices);
-    endInsertRows();
   }
-  else
-  {
-    rootItem->setChildItems(root_devices);
-    devices.append(root_devices);
-  }
-  qDebug() << "got " << devices.count() << " devices";
+  qDebug() << "Got " << devices.count() << " devices";
 }
 
-void BlockDeviceModel::updatePartition() { fetchDevices(true); }
+void BlockDeviceModel::updatePartition() {
+  fetchDevices(true);
+  emit partitionUpdated();
+}
 
-QHash<int, QByteArray> BlockDeviceModel::roleNames() const
-{
+QHash<int, QByteArray> BlockDeviceModel::roleNames() const {
   return {{BlockDeviceRoles::DevName, "name"},
           {BlockDeviceRoles::MajorId, "major"},
           {BlockDeviceRoles::MinorId, "minor"},
@@ -267,39 +246,30 @@ QHash<int, QByteArray> BlockDeviceModel::roleNames() const
 }
 
 QModelIndex BlockDeviceModel::index(int row, int column,
-                                    const QModelIndex &parent) const
-{
-  if (!hasIndex(row, column, parent))
-  {
+                                    const QModelIndex &parent) const {
+  if (!hasIndex(row, column, parent)) {
     return QModelIndex();
   }
   BlockDeviceItem *parentItem;
-  if (!parent.isValid())
-  {
+  if (!parent.isValid()) {
     parentItem = rootItem;
-  }
-  else
-  {
+  } else {
     parentItem = static_cast<BlockDeviceItem *>(parent.internalPointer());
   }
   auto childItem = parentItem->child(row);
-  if (childItem)
-  {
+  if (childItem) {
     return createIndex(row, column, childItem);
   }
   return QModelIndex();
 }
 
-QModelIndex BlockDeviceModel::parent(const QModelIndex &child) const
-{
-  if (!child.isValid())
-  {
+QModelIndex BlockDeviceModel::parent(const QModelIndex &child) const {
+  if (!child.isValid()) {
     return QModelIndex();
   }
   BlockDeviceItem *childItem =
       static_cast<BlockDeviceItem *>(child.internalPointer());
-  if (childItem == rootItem)
-  {
+  if (childItem == rootItem) {
     return QModelIndex();
   }
   auto parentItem = childItem->parentItem();
@@ -309,7 +279,6 @@ QModelIndex BlockDeviceModel::parent(const QModelIndex &child) const
 
 int BlockDeviceModel::columnCount(const QModelIndex &parent) const { return 3; }
 
-const QSet<BlockDeviceItem *> &BlockDeviceModel::checkedItems() const
-{
+const QSet<BlockDeviceItem *> &BlockDeviceModel::checkedItems() const {
   return checkedItems_;
 }

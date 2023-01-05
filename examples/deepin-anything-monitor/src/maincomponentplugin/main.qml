@@ -6,7 +6,8 @@ import QtQuick 2.12
 import QtQuick.Controls 1.4 as C
 import QtQuick.Controls 2.4
 import QtQuick.Layouts 1.15
-import Qt.labs.platform 1.1
+import QtQuick.Dialogs 1.3
+import Qt.labs.platform 1.1 as Lab
 import org.deepin.dtk 1.0
 
 import com.kingtous.block_device_model 1.0
@@ -31,6 +32,13 @@ AppLoader {
 
     BlockDeviceModel {
         id: blockDeviceModel
+    }
+
+    Connections {
+        target: blockDeviceModel
+        function onPartitionUpdated () {
+            update_disk_dialog.open();
+        }
     }
 
     VfsEventModel {
@@ -88,7 +96,7 @@ AppLoader {
                                     ToolTip.text: "/dev/"+ styleData.value
                                     MouseArea {
                                         id: block_device_ma
-                                        hoverEnabled: true
+                                        hoverEnabled: styleData.value !== ""
                                         anchors.fill: parent
                                         acceptedButtons: Qt.NoButton
                                     }
@@ -106,15 +114,16 @@ AppLoader {
                                 title: qsTr("Mount point")
                                 role: "mount"
                                 delegate: Text {
-                                    text: styleData.value
+                                    // remove \x0 space
+                                    text: styleData.value.replace("\\x0a", " ")
                                     elide: styleData.elideMode
-                                    ToolTip.text: styleData.value
+                                    ToolTip.text: styleData.value.replace("\\x0a", " ")
                                     ToolTip.visible: ma.containsMouse
                                     ToolTip.delay: 100
                                     MouseArea {
                                         id: ma
                                         anchors.fill: parent
-                                        hoverEnabled: true
+                                        hoverEnabled: styleData.value !== ""
                                         acceptedButtons: Qt.NoButton
                                     }
                                 }
@@ -163,11 +172,11 @@ AppLoader {
                                         exportFileDialog.open();
                                     }
 
-                                    FileDialog {
+                                    Lab.FileDialog {
                                         id: exportFileDialog
                                         title: qsTr("Please choose a location")
                                         folder: shortcuts.home
-                                        fileMode: FileDialog.SaveFile
+                                        fileMode: Lab.FileDialog.SaveFile
                                         nameFilters: [
                                             "CSV table files (*.csv)"
                                         ]
@@ -212,7 +221,7 @@ AppLoader {
                                  MouseArea {
                                      id: ma_source
                                      anchors.fill: parent
-                                     hoverEnabled: true
+                                     hoverEnabled: styleData.value !== ""
                                      acceptedButtons: Qt.NoButton
                                  }
                              }
@@ -286,6 +295,12 @@ AppLoader {
 
             }
         }
+    }
+
+    MessageDialog {
+        id: update_disk_dialog
+        title: qsTr("Data updated")
+        text: qsTr("The disk info has been updated, device list resets and is up to date now.")
     }
 
     Popup {
