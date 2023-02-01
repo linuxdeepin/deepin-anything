@@ -20,6 +20,7 @@ set(MAINCOMPONENNT_SRC
     blockdevicemodel.cpp
     blockdeviceitem.cpp
     vfseventmodel.cpp
+    mountinfo.cpp
     )
 
 # Find the Qt5Quick library

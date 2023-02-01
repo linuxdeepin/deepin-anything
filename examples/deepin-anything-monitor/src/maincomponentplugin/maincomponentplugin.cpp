@@ -11,6 +11,7 @@
 
 #include "blockdevicemodel.h"
 #include "dagenlclient.h"
+#include "mountinfo.h"
 #include "vfsevent.h"
 #include "vfseventmodel.h"
 
@@ -36,6 +37,7 @@ void MainComponentPlugin::initialize(QQmlApplicationEngine *engine) {
                                  "VfsEventModel");
   engine->rootContext()->setContextProperty("genl_client",
                                             &DAGenlClient::ref());
+  engine->rootContext()->setContextProperty("mount_info", &MountInfo::ref());
   qRegisterMetaType<VfsEvent>("VfsEvent");
 }
 

@@ -115,9 +115,9 @@ AppLoader {
                                 role: "mount"
                                 delegate: Text {
                                     // remove \x0 space
-                                    text: styleData.value.replace("\\x0a", " ")
+                                    text: styleData.value
                                     elide: styleData.elideMode
-                                    ToolTip.text: styleData.value.replace("\\x0a", " ")
+                                    ToolTip.text: styleData.value
                                     ToolTip.visible: ma.containsMouse
                                     ToolTip.delay: 100
                                     MouseArea {
@@ -203,7 +203,7 @@ AppLoader {
                 ColumnLayout {
                     Layout.fillHeight: true
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 4
+                    Layout.preferredWidth: 3
 
                     C.TableView {
                         Layout.fillHeight: true
@@ -227,16 +227,16 @@ AppLoader {
                              }
                         }
 
-                        C.TableViewColumn {
-                                 role: "id"
-                                 title: qsTr("Id")
-                                 width: 50
-                                 delegate: Text {
-                                     anchors.centerIn: parent
-                                     elide: styleData.elideMode
-                                     text: blockDeviceModel.getDeviceName(styleData.value)
-                                }
-                        }
+//                        C.TableViewColumn {
+//                                 role: "id"
+//                                 title: qsTr("Id")
+//                                 width: 50
+//                                 delegate: Text {
+//                                     anchors.centerIn: parent
+//                                     elide: styleData.elideMode
+//                                     text: blockDeviceModel.getDeviceName(styleData.value)
+//                                }
+//                        }
 
                         C.TableViewColumn {
                             role: "action"

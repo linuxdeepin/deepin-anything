@@ -39,7 +39,7 @@ class BlockDeviceItem {
   unsigned short getMajor() const;
   QString name() const;
   QString type() const;
-  QString shortestMountPoint() const;
+  QString rootMountPoint() const;
   unsigned short getMinor() const;
   bool isPartition() const;
 

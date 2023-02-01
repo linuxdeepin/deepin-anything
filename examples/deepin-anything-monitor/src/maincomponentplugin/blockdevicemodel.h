@@ -47,9 +47,8 @@ class BlockDeviceModel : public QAbstractItemModel {
   void updatePartition();
 
  private:
-  QVector<BlockDeviceItem *> devices;
-
   BlockDeviceItem *rootItem;
+  QVector<BlockDeviceItem *> devices;
   QSet<BlockDeviceItem *> checkedItems_;
 
   // QAbstractItemModel interface

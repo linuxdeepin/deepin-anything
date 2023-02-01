@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: 2022 Kingtous <me@kingtous.cn>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-
 #include "blockdeviceitem.h"
+
+#include <QDebug>
+
+#include "mountinfo.h"
 
 BlockDeviceItem::BlockDeviceItem(const QVector<QVariant> &data,
                                  BlockDeviceItem *parent)
@@ -48,7 +51,18 @@ QString BlockDeviceItem::name() const { return this->data_[Name].toString(); }
 
 QString BlockDeviceItem::type() const { return this->data_[Type].toString(); }
 
-QString BlockDeviceItem::shortestMountPoint() const {
+QString BlockDeviceItem::rootMountPoint() const {
+  // Try mount_info first.
+  QString min_max_string;
+  QTextStream stream(&min_max_string);
+  stream << getMajor() << ":" << getMinor();
+  auto root_point = MountInfo::ref().queryMountPoint(min_max_string);
+
+  if (root_point.length() != 0) {
+    qDebug() << "Found root point: " << root_point;
+    return root_point;
+  }
+  // Not found root mount point in mount_info, let's do a fallback.
   if (this->data_.length() <= MountPoints) {
     return "";
   }

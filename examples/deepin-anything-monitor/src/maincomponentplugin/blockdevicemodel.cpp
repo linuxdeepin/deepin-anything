@@ -10,6 +10,7 @@
 #include <QProcess>
 
 #include "dagenlclient.h"
+#include "mountinfo.h"
 
 BlockDeviceModel::BlockDeviceModel(QObject *parent)
     : QAbstractItemModel(parent) {
@@ -39,6 +40,10 @@ QVariant BlockDeviceModel::data(const QModelIndex &index, int role) const {
   if (role == BlockDeviceRoles::FilterRole) {
     return getCheckState(index);
   }
+  if (role == BlockDeviceRoles::MountPointRole) {
+    auto mnt = device->data(role - BlockDeviceRoles::DevName);
+    return mnt.toString().replace("\\x0a", " ");
+  }
   if (role >= BlockDeviceRoles::DevName) {
     return device->data(role - BlockDeviceRoles::DevName);
   }
@@ -48,6 +53,7 @@ QVariant BlockDeviceModel::data(const QModelIndex &index, int role) const {
   if (role == Qt::TextAlignmentRole) {
     return QVariant(Qt::AlignLeft);
   }
+
   return QVariant();
 }
 
@@ -129,14 +135,14 @@ QString BlockDeviceModel::getMountPoint(unsigned short major,
                                         unsigned short minor) {
   for (auto &root : devices) {
     if (root->getMajor() == major && root->getMinor() == minor) {
-      return root->shortestMountPoint();
+      return root->rootMountPoint();
     }
     auto child_count = root->childCount();
     if (child_count != 0) {
       for (int row = 0; row < child_count; row++) {
         auto child = root->child(row);
         if (child->getMajor() == major && child->getMinor() == minor) {
-          return child->shortestMountPoint();
+          return child->rootMountPoint();
         }
       }
     }
@@ -231,6 +237,7 @@ void BlockDeviceModel::fetchDevices(bool isUpdate = true) {
 
 void BlockDeviceModel::updatePartition() {
   fetchDevices(true);
+  MountInfo::ref().fetchLatestMountInfo();
   emit partitionUpdated();
 }
 
