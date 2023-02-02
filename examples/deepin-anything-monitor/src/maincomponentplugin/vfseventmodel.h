@@ -51,6 +51,7 @@ class VfsEventModel : public QAbstractTableModel {
  signals:
   void runningChanged();
   void filterChanged(int index, bool checked);
+  void rowAdded(int row);
 
  public slots:
   void insertVfsEvent(const VfsEvent &evt);

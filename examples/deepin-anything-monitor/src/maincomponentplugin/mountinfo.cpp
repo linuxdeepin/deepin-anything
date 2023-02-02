@@ -30,7 +30,11 @@ void MountInfo::fetchLatestMountInfo() {
   for (auto line : lines) {
     // 23 29 0:21 / /sys rw,nosuid,nodev,noexec,relatime shared:7 - sysfs sysfs
     auto items = line.trimmed().split(QRegExp("\\s"));
-    if (items.empty()) {
+    if (items.empty() && items.length() < 5) {
+      continue;
+    }
+    // Filter root data.
+    if (items[3] != "/") {
       continue;
     }
     data_[items[2]] = items[4];

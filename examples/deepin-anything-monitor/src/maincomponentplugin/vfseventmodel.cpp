@@ -171,9 +171,10 @@ void VfsEventModel::insertVfsEvent(const VfsEvent &evt) {
   if (isRunning()) {
     evts_.push_front(evt);
     if (isHitFilter(evt)) {
-      beginInsertRows(QModelIndex(), 0, 0);
-      show_evts_.push_front(std::move(evt));
+      beginInsertRows(QModelIndex(), show_evts_.length(), show_evts_.length());
+      show_evts_.push_back(std::move(evt));
       endInsertRows();
+      emit rowAdded(show_evts_.length() - 1);
     }
   }
 }

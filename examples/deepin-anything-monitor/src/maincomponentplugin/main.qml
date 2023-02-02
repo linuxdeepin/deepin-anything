@@ -208,6 +208,14 @@ AppLoader {
                     C.TableView {
                         Layout.fillHeight: true
                         Layout.fillWidth: true
+                        id: vfs_event_table
+
+                        Connections {
+                            target: vfsEventModel
+                            function onRowAdded(row) {
+                                vfs_event_table.positionViewAtRow(row, ListView.Contain);
+                            }
+                        }
 
                         Component {
                             id: cell
