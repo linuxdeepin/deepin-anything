@@ -62,6 +62,19 @@ static inline int is_mnt_ns_valid(void)
     return target_mnt_ns && current->nsproxy && current->nsproxy->mnt_ns == target_mnt_ns;
 }
 
+static inline int is_custom_type(const char* fs_type)
+{
+    const char* custom_fs_types[] = {
+        "fuse.dlnfs",
+        0
+    };
+
+    for (int i = 0; custom_fs_types[i]; i++)
+        if (strcmp(fs_type, custom_fs_types[i]) == 0)
+            return 1;
+    return 0;
+}
+
 struct do_mount_args {
     char dir_name[NAME_MAX];
 };
@@ -97,7 +110,8 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
         return 1;
     }
     strcpy(dir_type, type_name);
-    if (strstr(dir_type, "fuse")) {
+    //定制的文件系统类型外，比如长文件名
+    if (!is_custom_type(dir_type) && strstr(dir_type, "fuse")) {
         mpr_info("This is the fuse filesytem，not handle\n");
         return 1;
     }
