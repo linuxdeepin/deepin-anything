@@ -426,6 +426,19 @@ bool LFTManager::removePath(const QString &path)
     return false;
 }
 
+static inline int map_custom_type(const char* fs_type)
+{
+    const char* custom_fs_types[] = {
+        "fuse.dlnfs",
+        0
+    };
+
+    for (int i = 0; custom_fs_types[i]; i++)
+        if (strcmp(fs_type, custom_fs_types[i]) == 0)
+            return 1;
+    return 0;
+}
+
 // 返回path对应的fs_buf对象，且将path转成为相对于fs_buf root_path的路径
 static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path, bool onlyFirst = true)
 {
@@ -471,8 +484,13 @@ static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path, bool o
                 break;
         }
 
-        if (result_path == "/" || result_path == storage_info.rootPath())
+        if (result_path == "/") {
             break;
+        } else if (result_path == storage_info.rootPath()) {
+            // fuse定制文件系统无块设备，虚拟挂载到其它分区，需要向上查到根索引点，比如长文件
+            if (!map_custom_type(storage_info.fileSystemType().data()))
+                break;
+        }
 
         int last_dir_split_pos = result_path.lastIndexOf('/');
 

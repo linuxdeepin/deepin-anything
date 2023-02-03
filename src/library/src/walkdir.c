@@ -51,6 +51,19 @@ static int is_special_mount_point(const char* mp, const char* fs_type)
 			((mounted_at(mp, "/dev") || mounted_at(mp, "/run")) && strcmp(fs_type, "tmpfs") != 0);
 }
 
+static inline int is_custom_type(const char* fs_type)
+{
+	const char* custom_fs_types[] = {
+		"fuse.dlnfs",
+		0
+	};
+
+	for (int i = 0; custom_fs_types[i]; i++)
+		if (strcmp(fs_type, custom_fs_types[i]) == 0)
+			return 1;
+	return 0;
+}
+
 static int compare_partition(const void *p1, const void *p2)
 {
 	partition* part1 = (partition*)p1, *part2 = (partition*)p2;
@@ -101,9 +114,12 @@ static int should_skip_path(const char* path, partition_filter *pf)
 	if (pf->merge_partition)
 		return 0;
 
-	for (int i = pf->selected_partition+1; i < pf->partition_count; i++)
-		if (strstr(path, pf->partitions[i].mount_point) == path)
+	for (int i = pf->selected_partition+1; i < pf->partition_count; i++) {
+		if (is_custom_type(pf->partitions[i].fs_type))
+			return 0;
+		if (strstr(path, pf->partitions[i].mount_point) == path)			
 			return 1;
+	}
 
 	return 0;
 }
