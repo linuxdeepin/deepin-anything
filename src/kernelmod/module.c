@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -8,6 +8,7 @@
 #include <linux/fsnotify_backend.h>
 #include <linux/delay.h>
 
+#include "vfs_sysfs.h"
 #include "event.h"
 #include "vfs_kgenl.h"
 #include "vfs_fsnotify.h"
@@ -28,9 +29,13 @@ int __init init_module()
     events_source = "kretprobes";
 #endif
 
+    ret = vfs_init_sysfs();
+    if (ret)
+        goto vfs_init_sysfs_quit;
+
     ret = init_vfs_event_cache();
     if (ret)
-        goto quit;
+        goto init_vfs_event_cache_quit;
 
     vfs_changed_func = vfs_notify_dentry_event;
     ret = init_vfs_genl();
@@ -54,7 +59,9 @@ init_event_source_fail:
     cleanup_vfs_genl();
 init_vfs_genl_fail:
     cleanup_vfs_event_cache();
-quit:
+init_vfs_event_cache_quit:
+    vfs_exit_sysfs();
+vfs_init_sysfs_quit:
     mpr_info("init fail, %s, %s\n", events_source, notify_solution);
 	return ret;
 }
@@ -73,6 +80,7 @@ void __exit cleanup_module()
     clearup_event_merge();
     cleanup_vfs_genl();
     cleanup_vfs_event_cache();
+    vfs_exit_sysfs();
 
     mpr_info("clearup ok\n");
 }
