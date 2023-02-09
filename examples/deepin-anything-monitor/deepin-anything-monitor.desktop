@@ -1,0 +1,8 @@
+[Desktop Entry]
+Categories=System;
+Icon=deepin-anything-monitor
+Name=deepin-anything-monitor
+Exec=/usr/bin/deepin-anything-monitor
+X-Deepin-TurboType=dtkqml
+Type=Application
+Comment=Deepin Anything Vfs Monitor

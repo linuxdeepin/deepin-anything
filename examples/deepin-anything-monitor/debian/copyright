@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: deepin-anything-monitor
+Source: https://github.com/linuxdeepin/deepin-anything
+
+Files: *
+Copyright: UnionTech Software Technology Co., Ltd.
+License: GPL-3.0-or-later
