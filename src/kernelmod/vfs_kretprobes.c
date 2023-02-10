@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -19,7 +19,10 @@
 #include "arg_extractor.h"
 #include "vfs_change_consts.h"
 #include "event.h"
+#include "vfs_sysfs.h"
 
+
+extern char vfs_unnamed_devices[MAX_MINOR+1];
 static int (*vfs_changed_entry)(struct vfs_event *event);
 static atomic_t event_sync_cookie = ATOMIC_INIT(0);
 
@@ -154,9 +157,6 @@ void do_mount_work_handle(struct work_struct *work)
     }
     dev = path.dentry->d_sb->s_dev;
     path_put(&path);
-
-    if (!MAJOR(dev))
-        goto quit;
 
     if (unlikely(strlen(do_mount_work->args.dir_name) >= sizeof(event->buf))){
         mpr_info("do_mount_work_handle, mountpoint is too long, %s\n", do_mount_work->args.dir_name);
@@ -325,7 +325,7 @@ static int common_vfs_ent(struct vfs_event **event, struct dentry *de)
 {
     if (de == 0 || de->d_sb == 0)
         return 1;
-    if (!MAJOR(de->d_sb->s_dev) || !is_mnt_ns_valid())
+    if (IS_INVALID_DEVICE(de->d_sb->s_dev) || !is_mnt_ns_valid())
         return 1;
 
     *event = vfs_event_alloc_atomic();
@@ -433,7 +433,7 @@ static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs
 
     if (de_old == 0 || de_old->d_sb == 0 || de_new == 0)
         return 1;
-    if (!MAJOR(de_old->d_sb->s_dev) || !is_mnt_ns_valid())
+    if (IS_INVALID_DEVICE(de_old->d_sb->s_dev) || !is_mnt_ns_valid())
         return 1;
 
     fe = &((struct vfs_rename_args *)ri->data)->fe;

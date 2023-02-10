@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+    </qresource>
+    <qresource prefix="/">
+        <file>main_en.ts</file>
+    </qresource>
+    <qresource prefix="/">
+        <file>main_zh.ts</file>
+    </qresource>
+</RCC>

@@ -44,7 +44,7 @@ Copyright: None
 License: CC0-1.0
 
 # debian
-Files: debian/*
+Files: debian/* examples/*/debian/*
 Copyright: None
 License: CC0-1.0
 
@@ -55,5 +55,20 @@ License: CC0-1.0
 
 # third party
 Files: 3rdparty/fsearch/thread_pool.c 3rdparty/fsearch/thread_pool.h
+Copyright: None
+License: CC0-1.0
+
+# ts translation files in examples
+Files: examples/**/*.ts
+Copyright: None
+License: CC0-1.0
+
+# examples qrc files in examples
+Files: examples/**/*.qrc
+Copyright: None
+License: CC0-1.0
+
+# examples desktop files in examples
+Files: examples/**/*.desktop
 Copyright: None
 License: CC0-1.0

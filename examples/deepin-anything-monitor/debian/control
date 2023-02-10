@@ -1,0 +1,20 @@
+Source: deepin-anything-monitor
+Section: admin
+Priority: optional
+Maintainer: Deepin Packages Builder <packages@deepin.com>
+Build-Depends:
+ deepin-anything-dev (>= 6.0.2),
+ debhelper (>= 9),
+ cmake,
+ pkg-config,
+ qtdeclarative5-dev,
+ libdtkdeclarative-dev
+Standards-Version: 3.9.8
+Homepage: http://www.deepin.org
+
+Package: deepin-anything-monitor
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: A vfs monitor based on deepin-anything module.
+ A realtime vfs event monitor based on deepin-anything module.
+
