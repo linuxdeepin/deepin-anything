@@ -64,6 +64,33 @@ static inline int is_custom_type(const char* fs_type)
 	return 0;
 }
 
+static inline int end_with(const char *str, const char* suffix)
+{
+	size_t str_len = strlen(str);
+	size_t suffix_len = strlen(suffix);
+	if (str_len >= suffix_len) {
+		return !memcmp(str + str_len - suffix_len, suffix, suffix_len);
+	}
+}
+
+static inline int is_same_mount(const void *cur_parts, int cur_count, char major, char minor, const char* new_mp)
+{
+	partition* parts= (partition*)cur_parts;
+	for (int i = 0; i < cur_count; i++) {
+		if (parts[i].major == major && parts[i].minor == minor) {			
+			if (end_with(new_mp, parts[i].mount_point)) {
+				//新的更长,包含前一个,覆盖。比如 cur: /home/user new:/data/home/user
+				strcpy(parts[i].mount_point, new_mp);
+				return 1;
+			} else if (end_with(parts[i].mount_point, new_mp)) {
+				//新的包含在前一个路径中,跳过。比如 cur: /data/home/user new:/home/user
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
 static int compare_partition(const void *p1, const void *p2)
 {
 	partition* part1 = (partition*)p1, *part2 = (partition*)p2;
@@ -85,8 +112,14 @@ __attribute__((visibility("default"))) int get_partitions(int* part_count, parti
 		if (stat(mp, &st) != 0)
 			continue;
 
-		parts[*part_count].major = major(st.st_dev);
-		parts[*part_count].minor = minor(st.st_dev);
+		char ma = major(st.st_dev);
+		char mi = minor(st.st_dev);
+		// 同一个分区，存在多个挂载点，保留一个最长的。比如：/home 在/data分区，同时定制文件系统挂载/home/uos, 就会存在"/home/uos"和"/data/home/uos"两个挂载点
+		if (is_custom_type(fs_type) && is_same_mount(parts, *part_count, ma, mi, mp))
+			continue;
+
+		parts[*part_count].major = ma;
+		parts[*part_count].minor = mi;
 		strcpy(parts[*part_count].dev, dev);
 		strcpy(parts[*part_count].mount_point, mp);
 		strcpy(parts[*part_count].fs_type, fs_type);
@@ -115,9 +148,8 @@ static int should_skip_path(const char* path, partition_filter *pf)
 		return 0;
 
 	for (int i = pf->selected_partition+1; i < pf->partition_count; i++) {
-		if (is_custom_type(pf->partitions[i].fs_type))
-			return 0;
-		if (strstr(path, pf->partitions[i].mount_point) == path)			
+		// 定制文件系统挂载到其它分区路径，不应该跳过。
+		if (strstr(path, pf->partitions[i].mount_point) == path && !is_custom_type(pf->partitions[i].fs_type))
 			return 1;
 	}
 
