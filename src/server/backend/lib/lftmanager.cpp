@@ -462,6 +462,7 @@ static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path, bool o
 
     Q_FOREVER {
         fs_buf *buf = _global_fsBufMap->value(result_path);
+        bool up_find = false;
 
         if (buf) {
             // path相对于此fs_buf root_path的路径
@@ -488,8 +489,11 @@ static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path, bool o
             break;
         } else if (result_path == storage_info.rootPath()) {
             // fuse定制文件系统无块设备，虚拟挂载到其它分区，需要向上查到根索引点，比如长文件
-            if (!map_custom_type(storage_info.fileSystemType().data()))
+            if (map_custom_type(storage_info.fileSystemType().data())) {
+                up_find = true;
+            } else {
                 break;
+            }
         }
 
         int last_dir_split_pos = result_path.lastIndexOf('/');
@@ -498,6 +502,11 @@ static QList<QPair<QString, fs_buf*>> getFsBufByPath(const QString &path, bool o
             break;
 
         result_path = result_path.left(last_dir_split_pos);
+        if (up_find) {
+            // 更新存储路径为上级目录,向上查找
+            storage_info.setPath(result_path); //设置新的root
+            storage_info.refresh();  //更新磁盘信息
+        }
 
         if (result_path.isEmpty())
             result_path = "/";
