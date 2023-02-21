@@ -339,6 +339,8 @@ bool LFTManager::addPath(QString path, bool autoIndex)
     nDebug() << "Equivalent paths:" << path_list;
 
     // 将路径改为相对于第一个挂载点的路径，vfs_monitor中所有文件的改动都是以设备第一个挂载点通知的
+    if (path_list.isEmpty())
+        return false;
     path = path_list.first();
 
     // 保存信息，用于判断索引是否正在构建
