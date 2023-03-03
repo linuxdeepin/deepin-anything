@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -11,13 +11,26 @@
 #include <QStorageInfo>
 #include <QScopedPointer>
 #include <QDebug>
+#include <QLoggingCategory>
 
 extern "C" {
 #include <libmount.h>
 }
 
+Q_LOGGING_CATEGORY(lcDiskTool, "anything.manager.disktool", DEFAULT_MSG_TYPE)
+#define diskToolWarning(...) qCWarning(lcDiskTool, __VA_ARGS__)
+
 namespace LFTDiskTool {
 Q_GLOBAL_STATIC(DDiskManager, _global_diskManager)
+
+QStringList logCategoryList()
+{
+    QStringList list;
+
+    list << lcDiskTool().categoryName();
+
+    return list;
+}
 
 QByteArray pathToSerialUri(const QString &path)
 {
@@ -139,7 +152,7 @@ static int parser_errcb(libmnt_table *tb, const char *filename, int line)
 {
     Q_UNUSED(tb)
 
-    qWarning("%s: parse error at line %d -- ignored", filename, line);
+    diskToolWarning("%s: parse error at line %d -- ignored", filename, line);
 
     return 1;
 }
@@ -177,7 +190,7 @@ QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mount
     int rc = mnt_table_parse_mtab(tb.data(), "/proc/self/mountinfo");
 
     if (rc) {
-        qWarning("can't read /proc/self/mountinfo");
+        diskToolWarning("can't read /proc/self/mountinfo");
 
         return map;
     }
@@ -193,7 +206,7 @@ QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mount
 
             map[mount_point] = info;
         } else {
-            qWarning("can't find mountpoint \"%s\"", mount_point.constData());
+            diskToolWarning("can't find mountpoint \"%s\"", mount_point.constData());
         }
     }
 

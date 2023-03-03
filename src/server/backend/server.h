@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -19,6 +19,8 @@ class Server : public QThread
 
 public:
     explicit Server(EventSource *eventsrc, QObject *parent = nullptr);
+
+    static QStringList logCategoryList();
 
 signals:
     void fileCreated(QByteArrayList files);

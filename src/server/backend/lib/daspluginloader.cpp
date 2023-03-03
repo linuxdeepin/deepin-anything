@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -13,6 +13,7 @@
 #include <QFileSystemWatcher>
 #include <QDateTime>
 #include <QDebug>
+#include <QLoggingCategory>
 
 DAS_BEGIN_NAMESPACE
 
@@ -20,6 +21,9 @@ Q_GLOBAL_STATIC(QList<DASPluginLoader *>, qt_factory_loaders)
 
 Q_GLOBAL_STATIC_WITH_ARGS(QMutex, qt_factoryloader_mutex, (QMutex::Recursive))
 Q_GLOBAL_STATIC(QFileSystemWatcher, fileWatcher)
+
+Q_LOGGING_CATEGORY(lcLoader, "anything.monitor.pluginloader", DEFAULT_MSG_TYPE)
+#define loaderDebug(...) qCDebug(lcLoader, __VA_ARGS__)
 
 // avoid duplicate QStringLiteral data:
 inline QString iidKeyLiteral() { return QStringLiteral("IID"); }
@@ -79,7 +83,7 @@ DASPluginLoaderPrivate::DASPluginLoaderPrivate(DASPluginLoader *qq)
     }
 
     if (das_debug_component())
-        qDebug() << "plugin paths:" << pluginPaths;
+        loaderDebug() << "plugin paths:" << pluginPaths;
 }
 
 DASPluginLoaderPrivate::~DASPluginLoaderPrivate()
@@ -132,14 +136,14 @@ QPluginLoader *DASPluginLoaderPrivate::loadPlugin(const QString &fileName)
     }
 #endif
     if (das_debug_component()) {
-        qDebug() << "PluginLoader::PluginLoader() looking at" << fileName;
+        loaderDebug() << "PluginLoader::PluginLoader() looking at" << fileName;
     }
     loader = (new QPluginLoader(fileName, q_ptr));
     loader->setLoadHints(QLibrary::ResolveAllSymbolsHint);
 
     if (!loader->load()) {
         if (das_debug_component()) {
-            qDebug() << loader->errorString();
+            loaderDebug() << loader->errorString();
         }
         loader->deleteLater();
         return 0;
@@ -149,11 +153,11 @@ QPluginLoader *DASPluginLoaderPrivate::loadPlugin(const QString &fileName)
     QStringList keys = getKeys(loader, &metaDataOk);
 
     if (das_debug_component())
-        qDebug() << "Got keys from plugin meta data" << keys;
+        loaderDebug() << "Got keys from plugin meta data" << keys;
 
     if (!metaDataOk) {
         if (das_debug_component()) {
-            qDebug() << "failed on load meta data";
+            loaderDebug() << "failed on load meta data";
         }
 
         loader->deleteLater();
@@ -192,11 +196,11 @@ QPluginLoader *DASPluginLoaderPrivate::loadPlugin(const QString &fileName)
         pluginFileLastModified[info.absoluteFilePath()] = info.lastModified().toTime_t();
 
         if (das_debug_component()) {
-            qDebug() << "file last modified:" << info.lastModified();
+            loaderDebug() << "file last modified:" << info.lastModified();
         }
     } else {
         if (das_debug_component()) {
-            qDebug() << "the plugin all key is occupied";
+            loaderDebug() << "the plugin all key is occupied";
         }
 
         loader->deleteLater();
@@ -209,7 +213,7 @@ QPluginLoader *DASPluginLoaderPrivate::loadPlugin(const QString &fileName)
 void DASPluginLoaderPrivate::_q_onDirectoryChanged(const QString &path)
 {
     if (das_debug_component()) {
-        qDebug() << "directory changed:" << path;
+        loaderDebug() << "directory changed:" << path;
     }
 
     if (!watchedPaths.contains(path)) {
@@ -222,8 +226,8 @@ void DASPluginLoaderPrivate::_q_onDirectoryChanged(const QString &path)
     QStringList modified_file_list;
 
     if (das_debug_component()) {
-        qDebug() << "old files:" << old_file_list;
-        qDebug() << "existing files:" << plugins;
+        loaderDebug() << "old files:" << old_file_list;
+        loaderDebug() << "existing files:" << plugins;
     }
 
     for (int j = 0; j < plugins.count(); ++j) {
@@ -239,16 +243,16 @@ void DASPluginLoaderPrivate::_q_onDirectoryChanged(const QString &path)
                 modified_file_list << fileName;
             }
 
-            qDebug() << "modified date time, old:" << QDateTime::fromTime_t(last_modified) << "new:" << info.lastModified();
+            loaderDebug() << "modified date time, old:" << QDateTime::fromTime_t(last_modified) << "new:" << info.lastModified();
         } else {
             new_file_list << fileName;
         }
     }
 
     if (das_debug_component()) {
-        qDebug() << "dirty files:" << old_file_list;
-        qDebug() << "new files:" << new_file_list;
-        qDebug() << "modified files:" << modified_file_list;
+        loaderDebug() << "dirty files:" << old_file_list;
+        loaderDebug() << "new files:" << new_file_list;
+        loaderDebug() << "modified files:" << modified_file_list;
     }
 
     QList<QPluginLoader*> dirtyLoaders;
@@ -269,7 +273,7 @@ void DASPluginLoaderPrivate::_q_onDirectoryChanged(const QString &path)
     for (QPluginLoader *l : dirtyLoaders) {
         const QStringList &keys = getKeys(l);
 
-        qDebug() << "plugin deleted, keyes:" << keys << "in file:" << l->fileName();
+        loaderDebug() << "plugin deleted, keyes:" << keys << "in file:" << l->fileName();
 
         emit q_ptr->pluginRemoved(l, keys);
     }
@@ -278,7 +282,7 @@ void DASPluginLoaderPrivate::_q_onDirectoryChanged(const QString &path)
         if (QPluginLoader *l = loadPlugin(file)) {
             for (const QString &key : getKeys(l)) {
                 if (das_debug_component())
-                    qDebug() << "add plugin, key:" << key << "in file:" << file;
+                    loaderDebug() << "add plugin, key:" << key << "in file:" << file;
 
                 emit q_ptr->pluginAdded(key);
             }
@@ -288,7 +292,7 @@ void DASPluginLoaderPrivate::_q_onDirectoryChanged(const QString &path)
     for (QPluginLoader *l : needUpdateLoaders) {
         const QStringList &keys = getKeys(l);
 
-        qDebug() << "plugin modified, keyes:" << keys << "in file:" << l->fileName();
+        loaderDebug() << "plugin modified, keyes:" << keys << "in file:" << l->fileName();
 
         emit q_ptr->pluginModified(l, keys);
     }
@@ -318,9 +322,9 @@ DASPluginLoader::DASPluginLoader(const char *iid,
                 d->watchedPaths << path;
 
                 if (das_debug_component())
-                    qDebug() << "watch:" << path;
+                    loaderDebug() << "watch:" << path;
             } else if (das_debug_component()) {
-                qDebug() << "failed on add watch:" << path;
+                loaderDebug() << "failed on add watch:" << path;
             }
         }
     }
@@ -347,7 +351,7 @@ void DASPluginLoader::update()
         QString path = pluginDir + d->suffix;
 
         if (das_debug_component())
-            qDebug() << "PluginLoader::PluginLoader() checking directory path" << path << "...";
+            loaderDebug() << "PluginLoader::PluginLoader() checking directory path" << path << "...";
 
         if (!QDir(path).exists(QLatin1String(".")))
             continue;
@@ -373,7 +377,7 @@ void DASPluginLoader::update()
 #else
     Q_D(PluginLoader);
     if (dfm_debug_component()) {
-        qDebug() << "PluginLoader::PluginLoader() ignoring" << d->iid
+        loaderDebug() << "PluginLoader::PluginLoader() ignoring" << d->iid
                  << "since plugins are disabled in static builds";
     }
 #endif
@@ -385,7 +389,7 @@ bool DASPluginLoader::removeLoader(QPluginLoader *loader)
 
     if (!loader->unload()) {
         if (das_debug_component())
-            qDebug() << loader->errorString();
+            loaderDebug() << loader->errorString();
 
         return false;
     }
@@ -398,7 +402,7 @@ bool DASPluginLoader::removeLoader(QPluginLoader *loader)
     }
 
     if (das_debug_component()) {
-        qDebug() << "plugin is removed:" << loader->fileName();
+        loaderDebug() << "plugin is removed:" << loader->fileName();
     }
 
     loader->deleteLater();
@@ -420,9 +424,9 @@ QPluginLoader *DASPluginLoader::reloadLoader(QPluginLoader *loader)
 
     if (das_debug_component()) {
         if (loader)
-            qDebug() << "plugin is reload:" << file_name;
+            loaderDebug() << "plugin is reload:" << file_name;
         else
-            qDebug() << "failed on reload loader, file name:" << file_name;
+            loaderDebug() << "failed on reload loader, file name:" << file_name;
     }
 
     return loader;
@@ -432,6 +436,15 @@ DASPluginLoader::~DASPluginLoader()
 {
     QMutexLocker locker(qt_factoryloader_mutex());
     qt_factory_loaders()->removeAll(this);
+}
+
+QStringList DASPluginLoader::logCategoryList()
+{
+    QStringList list;
+
+    list << lcLoader().categoryName();
+
+    return list;
 }
 
 QList<QJsonObject> DASPluginLoader::metaData() const

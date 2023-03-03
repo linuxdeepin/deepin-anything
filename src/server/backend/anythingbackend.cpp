@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -31,6 +31,9 @@ DCORE_USE_NAMESPACE
 
 DAS_BEGIN_NAMESPACE
 
+Q_LOGGING_CATEGORY(lcBackend, "anything.backend", DEFAULT_MSG_TYPE)
+#define backWarning(...) qCWarning(lcBackend, __VA_ARGS__)
+#define backDebug(...) qCDebug(lcBackend, __VA_ARGS__)
 
 class _AnythingBackend : public AnythingBackend {};
 Q_GLOBAL_STATIC(_AnythingBackend, _global_anybackend)
@@ -65,7 +68,7 @@ void AnythingBackend::addPlugin(const QString &key, Server *server)
     DASInterface *interface = DASFactory::create(key);
 
     if (!interface) {
-        qWarning() << "interface is null, key:" << key;
+        backWarning() << "interface is null, key:" << key;
         return;
     }
 
@@ -94,7 +97,7 @@ void AnythingBackend::removePlugins(const QStringList &keys, Server *server)
         t->quit();
 
         if (!t->wait()) {
-            qWarning() << "failed on wait thread to quit, key:" << value.first;
+            backWarning() << "failed on wait thread to quit, key:" << value.first;
             continue;
         }
 
@@ -105,10 +108,36 @@ void AnythingBackend::removePlugins(const QStringList &keys, Server *server)
     }
 }
 
+static void initLog()
+{
+    static std::once_flag flag;
+
+    std::call_once(flag, []() {
+        ConsoleAppender *consoleAppender = new ConsoleAppender;
+        consoleAppender->setFormat(logFormat);
+
+        RollingFileAppender *rollingFileAppender = new RollingFileAppender(LFTManager::cacheDir() + "/app.log");
+        rollingFileAppender->setFormat(logFormat);
+        rollingFileAppender->setLogFilesLimit(5);
+        rollingFileAppender->setDatePattern(RollingFileAppender::DailyRollover);
+
+        QStringList logCategoryList = LFTManager::logCategoryList() +
+                                      Server::logCategoryList() +
+                                      EventSource_GENL::logCategoryList() +
+                                      DASPluginLoader::logCategoryList();
+        logCategoryList << lcBackend().categoryName();
+        for (const QString &c : logCategoryList) {
+            logger->registerCategoryAppender(c, consoleAppender);
+            logger->registerCategoryAppender(c, rollingFileAppender);
+        }
+    });
+}
+
 int AnythingBackend::init_connection()noexcept
 {
     if (hasconnected)
         return 0;
+    initLog();
     if (backendRun() == 0 && monitorStart() == 0) {
         hasconnected = true;
         return 0;
@@ -118,12 +147,6 @@ int AnythingBackend::init_connection()noexcept
 
 int AnythingBackend::monitorStart()
 {
-    qSetMessagePattern("[%{time yyyy-MM-dd, HH:mm:ss.zzz}] [%{category}-%{type}] [%{function}: %{line}]: %{message}");
-
-#ifdef QT_NO_DEBUG
-    QLoggingCategory::setFilterRules("vfs.info=false");
-#endif
-
     if (!eventsrc)
         eventsrc = new EventSource_GENL();
 
@@ -167,38 +190,22 @@ int AnythingBackend::monitorStart()
 int AnythingBackend::backendRun()
 {
     const QString anythingServicePath = "com.deepin.anything";
-    // init log
-    ConsoleAppender *consoleAppender = new ConsoleAppender;
-    consoleAppender->setFormat(logFormat);
 
-    RollingFileAppender *rollingFileAppender = new RollingFileAppender(LFTManager::cacheDir() + "/app.log");
-    rollingFileAppender->setFormat(logFormat);
-    rollingFileAppender->setLogFilesLimit(5);
-    rollingFileAppender->setDatePattern(RollingFileAppender::DailyRollover);
-
-    logger->registerAppender(consoleAppender);
-    logger->registerAppender(rollingFileAppender);
-
-    for (const QString &c : LFTManager::logCategoryList()) {
-        logger->registerCategoryAppender(c, consoleAppender);
-        logger->registerCategoryAppender(c, rollingFileAppender);
+    QDBusConnection connection = QDBusConnection::systemBus();
+    if (!connection.interface()->isServiceRegistered(anythingServicePath)) {
+        bool reg_result = connection.registerService(anythingServicePath);
+        if (!reg_result) {
+            backWarning("Cannot register the \"com.deepin.anything\" service.\n");
+            return 2;
+        }
+        Q_UNUSED(new AnythingAdaptor(LFTManager::instance()));
+        if (!connection.registerObject("/com/deepin/anything", LFTManager::instance())) {
+            backWarning("Cannot register to the D-Bus object: \"/com/deepin/anything\"\n");
+            return 3;
+        }
+    }else{
+        backDebug() << "deepin-anything-backend is running";
     }
-
-     QDBusConnection connection = QDBusConnection::systemBus();
-     if (!connection.interface()->isServiceRegistered(anythingServicePath)) {
-         bool reg_result = connection.registerService(anythingServicePath);
-         if (!reg_result) {
-             qWarning("Cannot register the \"com.deepin.anything\" service.\n");
-             return 2;
-         }
-         Q_UNUSED(new AnythingAdaptor(LFTManager::instance()));
-         if (!connection.registerObject("/com/deepin/anything", LFTManager::instance())) {
-             qWarning("Cannot register to the D-Bus object: \"/com/deepin/anything\"\n");
-             return 3;
-         }
-     }else{
-         qDebug() << "deepin-anything-backend is running";
-     }
 
     return 0;
 }

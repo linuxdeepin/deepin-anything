@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -25,8 +25,8 @@ extern "C" {
 #include <unistd.h>
 #include <sys/time.h>
 
-Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, normalLog, ("manager.normal"))
-Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, changesLog, ("manager.changes", QtWarningMsg))
+Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, normalLog, ("anything.manager.normal", DEFAULT_MSG_TYPE))
+Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, changesLog, ("anything.manager.changes", DEFAULT_MSG_TYPE))
 
 #define nDebug(...) qCDebug((*normalLog), __VA_ARGS__)
 #define nInfo(...) qCInfo((*normalLog), __VA_ARGS__)
@@ -156,7 +156,7 @@ QStringList LFTManager::logCategoryList()
     list << normalLog->categoryName()
          << changesLog->categoryName();
 
-    return list;
+    return list + LFTDiskTool::logCategoryList();
 }
 
 QByteArray LFTManager::setCodecNameForLocale(const QByteArray &codecName)
@@ -540,7 +540,7 @@ bool LFTManager::cancelBuild(const QString &path)
 
         // 清理其它等价的路径
         for (const QString &path : _global_fsWatcherMap->keys(watcher)) {
-            qDebug() << "do remove:" << path;
+            nDebug() << "do remove:" << path;
 
             _global_fsWatcherMap->remove(path);
         }
@@ -987,7 +987,7 @@ void LFTManager::setAutoIndexInternal(bool autoIndexInternal)
 
 void LFTManager::setLogLevel(int logLevel)
 {
-    qDebug() << logLevel;
+    nDebug() << "setLogLevel:" << logLevel;
 
     normalLog->setEnabled(QtDebugMsg, logLevel > 0);
     normalLog->setEnabled(QtWarningMsg, logLevel > 0);

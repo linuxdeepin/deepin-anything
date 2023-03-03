@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -22,6 +22,8 @@ class EventSource_GENL : public EventSource
 public:
     EventSource_GENL();
     ~EventSource_GENL() override;
+
+    static QStringList logCategoryList();
 
     bool init() override;
     bool isInited() override;

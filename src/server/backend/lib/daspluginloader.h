@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -23,6 +23,8 @@ public:
                              Qt::CaseSensitivity = Qt::CaseSensitive,
                              bool repetitiveKeyInsensitive  = false);
     ~DASPluginLoader();
+
+    static QStringList logCategoryList();
 
     QList<QJsonObject> metaData() const;
     QObject *instance(int index) const;
