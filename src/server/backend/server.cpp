@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -20,14 +20,24 @@ DAS_BEGIN_NAMESPACE
 
 static const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
 
-Q_LOGGING_CATEGORY(server, "server", QtInfoMsg)
-#define serverInfo(...) qCInfo(server, __VA_ARGS__)
+Q_LOGGING_CATEGORY(lcServer, "anything.monitor.server", DEFAULT_MSG_TYPE)
+#define serverWarning(...) qCWarning(lcServer, __VA_ARGS__)
+#define serverDebug(...) qCDebug(lcServer, __VA_ARGS__)
 
 Server::Server(EventSource *eventsrc, QObject *parent)
     : QThread(parent)
     , eventsrc(eventsrc)
 {
     qRegisterMetaType<QList<QPair<QByteArray, QByteArray>>>();
+}
+
+QStringList Server::logCategoryList()
+{
+    QStringList list;
+
+    list << lcServer().categoryName();
+
+    return list;
 }
 
 void Server::run()
@@ -47,7 +57,7 @@ void Server::run()
             case ACT_NEW_SYMLINK:
             case ACT_NEW_LINK:
             case ACT_NEW_FOLDER:
-                // serverInfo("%s: %s", act_names[action], src);
+                serverDebug("%s: %s", act_names[action], src);
 
                 create_list << src;
 
@@ -62,7 +72,7 @@ void Server::run()
                 break;
             case ACT_DEL_FILE:
             case ACT_DEL_FOLDER:
-                // serverInfo("%s: %s", act_names[action], src);
+                serverDebug("%s: %s", act_names[action], src);
 
                 delete_list << src;
 
@@ -77,7 +87,7 @@ void Server::run()
                 break;
             case ACT_RENAME_FILE:
             case ACT_RENAME_FOLDER:
-                // serverInfo("%s: %s, %s", act_names[action], src, dst);
+                serverDebug("%s: %s, %s", act_names[action], src, dst);
 
                 rename_list << qMakePair(QByteArray(src), QByteArray(dst));
 
@@ -91,7 +101,7 @@ void Server::run()
 
                 break;
             default:
-                qWarning() << "Unknow file action" << int(action);
+                serverWarning("Unknow file action: %d", int(action));
                 break;
             }
 

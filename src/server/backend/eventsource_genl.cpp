@@ -17,10 +17,10 @@
 
 DAS_BEGIN_NAMESPACE
 
-#define OnError(message) do { qCritical() << message << QString::fromLocal8Bit(strerror(errno)); qApp->exit(errno); return false; } while(false)
-
-Q_LOGGING_CATEGORY(genl, "genl", QtInfoMsg)
-#define genlInfo(...) qCInfo(genl, __VA_ARGS__)
+Q_LOGGING_CATEGORY(lcGenl, "anything.monitor.genl", DEFAULT_MSG_TYPE)
+#define genlCritical(...) qCCritical(lcGenl, __VA_ARGS__)
+#define genlWarning(...) qCWarning(lcGenl, __VA_ARGS__)
+#define genlInfo(...) qCInfo(lcGenl, __VA_ARGS__)
 
 /* attribute policy */
 static struct nla_policy vfsnotify_genl_policy[VFSMONITOR_A_MAX + 1];
@@ -29,11 +29,11 @@ static int add_group(struct nl_sock *nlsock, const char *group)
 {
     int grp_id = genl_ctrl_resolve_grp(nlsock, VFSMONITOR_FAMILY_NAME, group);
     if(grp_id < 0) {
-        genlInfo("genl_ctrl_resolve_grp fail\n");
+        genlWarning("genl_ctrl_resolve_grp fail.");
         return 1;
     }
     if (nl_socket_add_membership(nlsock, grp_id)) {
-        genlInfo("nl_socket_add_membership fail\n");
+        genlWarning("nl_socket_add_membership fail.");
         return 1;
     }
 
@@ -63,6 +63,15 @@ EventSource_GENL::~EventSource_GENL()
         nl_socket_free(nlsock);
 }
 
+QStringList EventSource_GENL::logCategoryList()
+{
+    QStringList list;
+
+    list << lcGenl().categoryName();
+
+    return list;
+}
+
 bool EventSource_GENL::init()
 {
     int family_id;
@@ -72,7 +81,7 @@ bool EventSource_GENL::init()
 
     nlsock = nl_socket_alloc();
     if (!nlsock) {
-        genlInfo("nl_socket_alloc fail\n");
+        genlWarning("nl_socket_alloc fail.");
         return false;
     }
 
@@ -81,14 +90,14 @@ bool EventSource_GENL::init()
 
     /* connect to genl */
     if (genl_connect(nlsock)) {
-        genlInfo("genl_connect fail\n");
+        genlWarning("genl_connect fail.");
         goto exit_err;
     }
 
     /* resolve the generic nl family id*/
     family_id = genl_ctrl_resolve(nlsock, VFSMONITOR_FAMILY_NAME);
     if(family_id < 0) {
-        genlInfo("genl_ctrl_resolve fail\n");
+        genlWarning("genl_ctrl_resolve fail.");
         goto exit_err;
     }
 
@@ -147,7 +156,7 @@ void write_vfs_unnamed_device(const char *str)
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {
         QByteArray ba = path.toLatin1();
-        genlInfo("open file failed, %s", ba.data());
+        genlWarning("open file failed: %s.", ba.data());
         return;
     }
     file.write(str, strlen(str));
@@ -160,7 +169,7 @@ void read_vfs_unnamed_device(QSet<QByteArray> &devices)
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         QByteArray ba = path.toLatin1();
-        genlInfo("open file failed, %s", ba.data());
+        genlWarning("open file failed: %s.", ba.data());
         return;
     }
     QByteArray line = file.readLine();
@@ -201,7 +210,7 @@ void EventSource_GENL::updatePartitions()
     QFile file_mountinfo(file_mountinfo_path);
     if (!file_mountinfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QByteArray ba = file_mountinfo_path.toLatin1();
-        genlInfo("open file failed, %s", ba.data());
+        genlWarning("open file failed: %s.", ba.data());
         return;
     }
     QByteArray mount_info;
@@ -213,7 +222,7 @@ void EventSource_GENL::updatePartitions()
     QSet<QByteArray> dlnfs_devs;
     QByteArray ba;
     partitions.clear();
-    genlInfo("updatePartitions start");
+    genlInfo("updatePartitions start.");
     while (sscanf(line, "%*d %*d %u:%u %250s %250s %*s %*s %*s %250s %*s %*s\n", &major, &minor, root, mp, type) == 5) {
         line = strchr(line, '\n') + 1;
 
@@ -231,7 +240,7 @@ void EventSource_GENL::updatePartitions()
         }
     }
     update_vfs_unnamed_device(dlnfs_devs);
-    genlInfo("updatePartitions end");
+    genlInfo("updatePartitions end.");
 }
 
 int EventSource_GENL::handleMsg(struct nl_msg *msg, void* arg)
@@ -242,7 +251,7 @@ int EventSource_GENL::handleMsg(struct nl_msg *msg, void* arg)
 
 #define get_attr(attrs, ATTR, attr, type) \
     if (!attrs[ATTR]) { \
-        genlInfo("msg error: no " #ATTR "\n"); \
+        genlWarning("msg error: no " #ATTR "."); \
         return 0; \
     } \
     attr = nla_get_##type(attrs[ATTR])
@@ -253,7 +262,7 @@ int EventSource_GENL::handleMsg(struct nl_msg *msg)
     struct nlattr *attrs[VFSMONITOR_A_MAX+1];
     int ret = genlmsg_parse(nlmsg_hdr(msg), 0, attrs, VFSMONITOR_A_MAX, vfsnotify_genl_policy);
     if (ret < 0) {
-        genlInfo("print_msg fail: %d\n", ret);
+        genlWarning("print_msg fail: %d.", ret);
         return 0;
     }
 
@@ -262,6 +271,7 @@ int EventSource_GENL::handleMsg(struct nl_msg *msg)
     unsigned int _cookie;
     unsigned short major = 0;
     unsigned char minor = 0;
+    _root = NULL;
 
     get_attr(attrs, VFSMONITOR_A_ACT, _act, u8);
     get_attr(attrs, VFSMONITOR_A_COOKIE, _cookie, u32);
@@ -271,7 +281,7 @@ int EventSource_GENL::handleMsg(struct nl_msg *msg)
 
     if (_act < ACT_MOUNT) {
         if (!partitions.contains(MKDEV(major, minor))) {
-            genlInfo("unknown device, %u, dev: %u:%u, path: %s, cookie: %u\n", _act, major, minor, _src, _cookie);
+            genlWarning("unknown device, %u, dev: %u:%u, path: %s, cookie: %u.", _act, major, minor, _src, _cookie);
             return 0;
         }
         _root = partitions[MKDEV(major, minor)].data();
@@ -306,10 +316,10 @@ int EventSource_GENL::handleMsg(struct nl_msg *msg)
         return 0;
     case ACT_RENAME_FILE:
     case ACT_RENAME_FOLDER:
-        genlInfo("not support file action: %d\n", int(_act));
+        genlWarning("not support file action: %d.", int(_act));
         return 0;
     default:
-        genlInfo("Unknow file action: %d\n", int(_act));
+        genlWarning("unknow file action: %d.", int(_act));
         return 0;
     }
 
@@ -331,12 +341,12 @@ bool EventSource_GENL::saveData(unsigned char _act, char *_root, char *_src, cha
     if (_dst) {
         size_t dst_size = strlen(_dst);
         if (root_size*2+src_size+dst_size+2 > sizeof(buf)) {
-            genlInfo("the msg buf is too small to cache msg\n");
+            genlCritical("the msg buf is too small to cache msg.");
             return false;
         }
     } else {
         if (root_size+src_size+1 > sizeof(buf)) {
-            genlInfo("the msg buf is too small to cache msg\n");
+            genlCritical("the msg buf is too small to cache msg.");
             return false;
         }
     }

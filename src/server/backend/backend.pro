@@ -42,8 +42,10 @@ CONFIG(debug, debug|release) {
     LIBS += -L$$_PRO_FILE_PWD_/../../library/bin/debug -lanything -lnl-genl-3 -lnl-3
     DEPENDPATH += $$_PRO_FILE_PWD_/../../library/bin/debug
     unix:QMAKE_RPATHDIR += $$_PRO_FILE_PWD_/../../library/bin/debug
+    DEFINES += DEFAULT_MSG_TYPE=QtDebugMsg
 } else {
     LIBS += -L$$_PRO_FILE_PWD_/../../library/bin/release -lanything -lnl-genl-3 -lnl-3
+    DEFINES += DEFAULT_MSG_TYPE=QtWarningMsg
 }
 
 isEmpty(LIB_INSTALL_DIR) {
