@@ -56,19 +56,31 @@ static inline int is_mnt_ns_valid(void)
 
 static void on_mount(const unsigned char *dir_name)
 {
+#ifdef QUERY_DEV_ON_MOUNT
     struct path path;
+#endif
     struct vfs_event *event = 0;
-    dev_t dev;
+    dev_t dev = 0;
 
     if (!is_mnt_ns_valid())
         return;
 
+    /*
+     * On a system with audit enabled, when a privileged user mounts the fuse
+     * file system, if vfs_monitor obtains information about the fuse file
+     * system (such as through kern_path()), it will cause a system call
+     * deadlock, because the fuse daemon responding to the request Waiting
+     * for mount to complete.
+     * The solution is to not get information about mounted devices by default.
+     */
+#ifdef QUERY_DEV_ON_MOUNT
     if (unlikely(kern_path(dir_name, LOOKUP_FOLLOW, &path))) {
         mpr_info("on_mount, kern_path fail for %s\n", dir_name);
         return;
     }
     dev = path.dentry->d_sb->s_dev;
     path_put(&path);
+#endif
 
     if (unlikely(strlen(dir_name) >= sizeof(event->buf))){
         mpr_info("on_mount, mountpoint is too long, %s\n", dir_name);
