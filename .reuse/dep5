@@ -24,7 +24,7 @@ Copyright: None
 License: CC0-1.0
 
 # ci
-Files: .github/*
+Files: .github/* .obs/workflows.yml
 Copyright: None
 License: CC0-1.0
 
