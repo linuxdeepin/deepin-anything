@@ -65,27 +65,12 @@ static inline int is_mnt_ns_valid(void)
     return target_mnt_ns && current->nsproxy && current->nsproxy->mnt_ns == target_mnt_ns;
 }
 
-static inline int is_custom_type(const char* fs_type)
-{
-    const char* custom_fs_types[] = {
-        "fuse.dlnfs",
-        0
-    };
-
-    for (int i = 0; custom_fs_types[i]; i++)
-        if (strcmp(fs_type, custom_fs_types[i]) == 0)
-            return 1;
-    return 0;
-}
-
 struct do_mount_args {
     char dir_name[NAME_MAX];
 };
 
 static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    char dir_type[NAME_MAX];
-    const char __user *type_name;
     const char *dir_name;
     /*
      * >= 5.9
@@ -99,25 +84,6 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
     struct do_mount_args *args = (struct do_mount_args *)ri->data;
     if (!is_mnt_ns_valid())
         return 1;
-
-    /*
-     * 解决ntfs文件系统挂载的时候开启了auditd以后，mount的时候会导致系统卡死问题
-     * 对挂载的ntfs等fuse类型的文件系统进行判断，如果是这类文件系统则退出
-     */
-    type_name = (const char __user *)get_arg(regs, 3);
-    if (type_name == NULL) {
-        mpr_info("on_do_mount_ent type_name is null\n");
-        return 1;
-    }
-    if (strlen(type_name) == 0 || strlen(type_name) >= sizeof(dir_type)) {
-        return 1;
-    }
-    strcpy(dir_type, type_name);
-    //定制的文件系统类型外，比如长文件名
-    if (!is_custom_type(dir_type) && strstr(dir_type, "fuse")) {
-        mpr_info("This is the fuse filesytem，not handle\n");
-        return 1;
-    }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
     dir_name = (const char*)get_arg(regs, 2);
@@ -146,17 +112,21 @@ struct do_mount_work_stuct {
 
 void do_mount_work_handle(struct work_struct *work)
 {
+#ifdef QUERY_DEV_ON_MOUNT
     struct path path;
-    dev_t dev;
+#endif
+    dev_t dev = 0;
     struct do_mount_work_stuct *do_mount_work = (struct do_mount_work_stuct *)work;
     struct vfs_event *event;
 
+#ifdef QUERY_DEV_ON_MOUNT
     if (unlikely(kern_path(do_mount_work->args.dir_name, LOOKUP_FOLLOW, &path))) {
         mpr_info("do_mount_work_handle, kern_path fail for %s\n", do_mount_work->args.dir_name);
         goto quit;
     }
     dev = path.dentry->d_sb->s_dev;
     path_put(&path);
+#endif
 
     if (unlikely(strlen(do_mount_work->args.dir_name) >= sizeof(event->buf))){
         mpr_info("do_mount_work_handle, mountpoint is too long, %s\n", do_mount_work->args.dir_name);
