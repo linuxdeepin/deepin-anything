@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -61,7 +61,7 @@ static int scan(int argc, char* argv[])
 		}
 	}
 
-	char path[PATH_MAX];
+	char path[PATH_MAX] = {0};
 	if (argc > optind) {
 		realpath(argv[optind], path);
 		if (path[strlen(path)-1] != '/')
@@ -114,9 +114,9 @@ static int scan(int argc, char* argv[])
 
 	collect_print_statistics(fsbuf, fsi);
 
-	start_vfs_monitor(fsbuf);
+	// start_vfs_monitor(fsbuf);
 	console_test(fsbuf, fsi);
-	stop_vfs_monitor();
+	// stop_vfs_monitor();
 
 	free_fs_buf(fsbuf);
 	return 0;
@@ -175,9 +175,9 @@ static int load(int argc, char* argv[])
 
 	collect_print_statistics(fsbuf, fsi);
 
-	start_vfs_monitor(fsbuf);
+	// start_vfs_monitor(fsbuf);
 	console_test(fsbuf, fsi);
-	stop_vfs_monitor();
+	// stop_vfs_monitor();
 
 	free_fs_buf(fsbuf);
 	return 0;
