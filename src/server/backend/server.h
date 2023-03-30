@@ -29,9 +29,16 @@ signals:
 
 private:
     void run() override;
+    void notifyChanged();
+    bool ignoreAction(QString &strSrc);
 
 private:
     EventSource *eventsrc;
+
+    QByteArrayList create_list;
+    QByteArrayList delete_list;
+    QList<QPair<QByteArray, QByteArray>> rename_list;
+    bool mark_ignore;
 };
 
 DAS_END_NAMESPACE

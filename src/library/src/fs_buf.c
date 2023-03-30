@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -1425,7 +1425,8 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 
 	const bool is_rule = (rule != NULL) ? 1 : 0;
 	// define the min range which lenght less than max_count * name_max, it should plus one because it includes tags.
-	const uint32_t min_range = (max_count + 1) * NAME_MAX;
+	// support dlnfs, the name_max will be 256*3, define it as 1024
+	const uint32_t min_range = (*count + 1) * 1024;
 	//it only need one thread if this is a short range.
 	const uint32_t num_threads = (min_off - s_off) <= min_range ? 1 : fsearch_thread_pool_get_num_threads(search_pool);
 	const uint32_t num_items_per_thread = MAX((min_off - s_off) / num_threads, 1);
