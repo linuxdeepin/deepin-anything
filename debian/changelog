@@ -1,3 +1,9 @@
+deepin-anything (6.0.5) unstable; urgency=medium
+
+  * Optimize the structure replace dbus with callback.
+
+ -- Deepin Package Builder <packages@deepin.com>  Wed, 12 Apr 2023 17:04:15 +0800
+
 deepin-anything (6.0.4) unstable; urgency=medium
 
   * fix search issue on dlnfs dir.

@@ -71,6 +71,7 @@ static inline int end_with(const char *str, const char* suffix)
 	if (str_len >= suffix_len) {
 		return !memcmp(str + str_len - suffix_len, suffix, suffix_len);
 	}
+	return 0;
 }
 
 static inline int is_same_mount(const void *cur_parts, int cur_count, char major, char minor, const char* new_mp)

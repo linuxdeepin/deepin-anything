@@ -1,4 +1,3 @@
 usr/lib/*/libdeepin-anything-server-lib.*
-usr/lib/*/deepin-anything-server-lib/plugins/*
 usr/share/dbus-1/interfaces
 etc/dbus-1/system.d

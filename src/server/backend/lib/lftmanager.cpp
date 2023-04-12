@@ -5,6 +5,7 @@
 
 #include "lftmanager.h"
 #include "lftdisktool.h"
+#include "eventadaptor.h"
 
 extern "C" {
 #include "fs_buf.h"
@@ -171,6 +172,21 @@ QByteArray LFTManager::setCodecNameForLocale(const QByteArray &codecName)
     nDebug() << codecName << "old:" << old_codec->name();
 
     return old_codec->name();
+}
+
+void LFTManager::onFileChanged(QList<QPair<QByteArray, QByteArray>> &actionList)
+{
+    nDebug() << "onFileChanged:" << actionList.count();
+    for(QPair<QByteArray, QByteArray> action: actionList) {
+        if (action.first.startsWith(INSERT_ACTION)) {
+            _global_lftmanager->insertFileToLFTBuf(action.second);
+        } else if (action.first.startsWith(REMOVE_ACTION)) {
+            _global_lftmanager->removeFileFromLFTBuf(action.second);
+        } else {
+            _global_lftmanager->renameFileOfLFTBuf(action.first, action.second);
+        }
+    }
+    nDebug() << "Do onFileChanged done!";
 }
 
 struct FSBufDeleter

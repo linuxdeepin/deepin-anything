@@ -1,2 +1,2 @@
 TEMPLATE = subdirs
-SUBDIRS += backend plugins
+SUBDIRS += backend

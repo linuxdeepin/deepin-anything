@@ -12,10 +12,7 @@ INCLUDEPATH += $$PWD/../../library/inc
 INCLUDEPATH += dbusservice
 
 SOURCES += \
-    lib/dasplugin.cpp \
-    lib/dasfactory.cpp \
-    lib/dasinterface.cpp \
-    lib/daspluginloader.cpp \
+    lib/eventadaptor.cpp \
     lib/lftmanager.cpp \
     lib/lftdisktool.cpp \
     server.cpp \
@@ -25,10 +22,7 @@ SOURCES += \
 
 HEADERS += \
     lib/dasdefine.h \
-    lib/dasplugin.h \
-    lib/dasfactory.h \
-    lib/dasinterface.h \
-    lib/daspluginloader.h \
+    lib/eventadaptor.h \
     lib/lftmanager.h \
     lib/lftdisktool.h \
     server.h \
@@ -54,26 +48,11 @@ isEmpty(LIB_INSTALL_DIR) {
 
 DEFINES += QMAKE_VERSION=\\\"$$VERSION\\\"
 
-PLUGINDIR = $$LIB_INSTALL_DIR/$${TARGET}/plugins
-
-readme.files += README.txt
-readme.path = $$PLUGINDIR/handlers
-
-CONFIG(debug, release|debug) {
-    PLUGINDIR = $$_PRO_FILE_PWD_/../plugins:$$PLUGINDIR
-}
-
-DEFINES += PLUGINDIR=\\\"$$PLUGINDIR\\\"
-
 target.path = $$LIB_INSTALL_DIR
 
 isEmpty(PREFIX): PREFIX = /usr
 
 includes.files += \
-    lib/dasdefine.h \
-    lib/dasfactory.h \
-    lib/dasplugin.h \
-    lib/dasinterface.h \
     lib/lftmanager.h \
     anythingexport.h
 

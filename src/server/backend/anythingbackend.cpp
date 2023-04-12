@@ -6,22 +6,13 @@
 #include <signal.h>
 #include <sys/utsname.h>
 
-#include <QCoreApplication>
-#include <QDebug>
-#include <QTimer>
-#include <QCommandLineOption>
-#include <QCommandLineParser>
 #include <QDBusConnection>
-#include <QDBusConnectionInterface>
 
 #include <DLog>
 
 #include "anythingbackend.h"
 #include "anythingexport.h"
 #include "server.h"
-#include "dasfactory.h"
-#include "dasinterface.h"
-#include "daspluginloader.h"
 #include "eventsource_genl.h"
 
 #include "lftmanager.h"
@@ -48,7 +39,6 @@ extern "C" ANYTHINGBACKEND_SHARED_EXPORT int fireAnything()
 }
 
 
-static QList<QPair<QString, DASInterface*>> interfaceList;
 static QString logFormat = "[%{time}{yyyy-MM-dd, HH:mm:ss.zzz}] [%{type:-7}] [%{file}=>%{function}: %{line}] %{message}\n";
 
 AnythingBackend::~AnythingBackend()
@@ -61,51 +51,6 @@ AnythingBackend::~AnythingBackend()
 AnythingBackend *AnythingBackend::instance()
 {
     return _global_anybackend;
-}
-
-void AnythingBackend::addPlugin(const QString &key, Server *server)
-{
-    DASInterface *interface = DASFactory::create(key);
-
-    if (!interface) {
-        backWarning() << "interface is null, key:" << key;
-        return;
-    }
-
-    QThread *t = new QThread(interface);
-
-    interface->moveToThread(t);
-    t->start();
-
-    interfaceList << qMakePair(key, interface);
-
-    QObject::connect(server, &Server::fileCreated, interface, &DASInterface::onFileCreate);
-    QObject::connect(server, &Server::fileDeleted, interface, &DASInterface::onFileDelete);
-    QObject::connect(server, &Server::fileRenamed, interface, &DASInterface::onFileRename);
-}
-
-void AnythingBackend::removePlugins(const QStringList &keys, Server *server)
-{
-    for (int i = 0; i < interfaceList.count(); ++i) {
-        const QPair<QString, DASInterface*> &value = interfaceList.at(i);
-
-        if (!keys.contains(value.first))
-            continue;
-
-        QThread *t = value.second->thread();
-
-        t->quit();
-
-        if (!t->wait()) {
-            backWarning() << "failed on wait thread to quit, key:" << value.first;
-            continue;
-        }
-
-        interfaceList.removeAt(i);
-        --i;
-        server->disconnect(value.second);
-        value.second->deleteLater();
-    }
 }
 
 static void initLog()
@@ -123,8 +68,7 @@ static void initLog()
 
         QStringList logCategoryList = LFTManager::logCategoryList() +
                                       Server::logCategoryList() +
-                                      EventSource_GENL::logCategoryList() +
-                                      DASPluginLoader::logCategoryList();
+                                      EventSource_GENL::logCategoryList();
         logCategoryList << lcBackend().categoryName();
         for (const QString &c : logCategoryList) {
             logger->registerCategoryAppender(c, consoleAppender);
@@ -157,30 +101,9 @@ int AnythingBackend::monitorStart()
         server = new Server(eventsrc);
 
     if (server && !server->isRunning()) {
-        // init plugins
-        for (const QString &key : DASFactory::keys()) {
-            addPlugin(key, server);
-        }
-
-        QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginRemoved, [this] (QPluginLoader *loader, const QStringList &keys) {
-            removePlugins(keys, server);
-            DASFactory::loader()->removeLoader(loader);
-        });
-
-        QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginModified, [this] (QPluginLoader *loader, const QStringList &keys) {
-            removePlugins(keys, server);
-            loader = DASFactory::loader()->reloadLoader(loader);
-
-            if (loader) {
-                for (const QString &key : DASFactory::loader()->getKeysByLoader(loader)) {
-                    addPlugin(key, server);
-                }
-            }
-        });
-
-        QObject::connect(DASFactory::loader(), &DASPluginLoader::pluginAdded, server, [this] (const QString &key) {
-            addPlugin(key, server);
-        });
+        EventAdaptor *adaptor = new EventAdaptor();
+        adaptor->onHandler = LFTManager::onFileChanged;
+        server->setEventAdaptor(adaptor);
 
         server->start();
     }
