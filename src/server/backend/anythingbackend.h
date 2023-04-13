@@ -7,8 +7,6 @@
 #define ANYTHINGBACKEND_H
 
 #include <dasdefine.h>
-#include <QMap>
-#include <QList>
 #include <QObject>
 
 DAS_BEGIN_NAMESPACE
@@ -31,13 +29,10 @@ protected:
 private:
     int monitorStart();
     int backendRun();
-    void addPlugin(const QString &key, Server *server);
-    void removePlugins(const QStringList &keys, Server *server);
-    int writeMountInfo();
 
     Server *server = nullptr;
     bool hasconnected = false;
-    EventSource_GENL *eventsrc;
+    EventSource_GENL *eventsrc = nullptr;
 };
 
 DAS_END_NAMESPACE

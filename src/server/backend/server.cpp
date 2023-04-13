@@ -33,6 +33,11 @@ Server::Server(EventSource *eventsrc, QObject *parent)
     qRegisterMetaType<QList<QPair<QByteArray, QByteArray>>>();
 }
 
+void Server::setEventAdaptor(EventAdaptor *adaptor)
+{
+    eventAdaptor = adaptor;
+}
+
 QStringList Server::logCategoryList()
 {
     QStringList list;
@@ -48,20 +53,11 @@ void Server::run()
     char *src, *dst;
     bool end;
 
-    // 初始化事件列表和忽略标记
-    delete_list.clear();
-    rename_list.clear();
-    create_list.clear();
-    mark_ignore = false;
-
     while (true) {
+        QPair<QByteArray, QByteArray> actionPair;
         if (eventsrc->getEvent(&action, &src, &dst, &end)) {
-            // 在支持长文件名的目录，一个动作底层会发出两次事件：一次原有文件系统的变更；一次长文件名系统dlnfs的变更。
-            // 忽略第一次原有文件系统事件
-            QString strSrc = QString(src);
-            if (ignoreAction(strSrc))
-                continue;
-
+            // 如果处理耗时，可能导致部分事件（极短时间大量事件）丢失，因为netlink丢掉
+            // 所以这里只做事件入队列
             switch(action) {
             case ACT_NEW_FILE:
             case ACT_NEW_SYMLINK:
@@ -69,75 +65,30 @@ void Server::run()
             case ACT_NEW_FOLDER:
                 serverDebug("%s: %s", act_names[action], src);
 
-                create_list << src;
+                actionPair = qMakePair(QByteArray(INSERT_ACTION), QByteArray(src));
                 break;
             case ACT_DEL_FILE:
             case ACT_DEL_FOLDER:
                 serverDebug("%s: %s", act_names[action], src);
 
-                delete_list << src;
+                actionPair = qMakePair(QByteArray(REMOVE_ACTION), QByteArray(src));
                 break;
             case ACT_RENAME_FILE:
             case ACT_RENAME_FOLDER:
                 serverDebug("%s: %s, %s", act_names[action], src, dst);
 
-                rename_list << qMakePair(QByteArray(src), QByteArray(dst));
+                actionPair = qMakePair(QByteArray(src), QByteArray(dst));
                 break;
             default:
                 serverWarning("Unknow file action: %d", int(action));
                 break;
             }
 
-            if (end) {
-                notifyChanged();
+            if (eventAdaptor) {
+                eventAdaptor->pushEvent(actionPair);
             }
         }
     }
-}
-
-void Server::notifyChanged()
-{
-    if (!delete_list.isEmpty()) {
-        emit fileDeleted(delete_list);
-        delete_list.clear();
-    }
-    if (!create_list.isEmpty()) {
-        emit fileCreated(create_list);
-        create_list.clear();
-    }
-    if (!rename_list.isEmpty()) {
-        emit fileRenamed(rename_list);
-        rename_list.clear();
-    }
-    mark_ignore = false;
-}
-
-bool Server::ignoreAction(QString &strSrc)
-{
-    if (strSrc.endsWith(".longname")) {
-        serverDebug() << "this is longname file, ignore. " << strSrc;
-        return true;
-    }
-
-    //没有标记忽略前一条，则检查是否长文件目录
-    if (!mark_ignore) {
-        QDir path_dir(strSrc);
-
-        // 向上找到一个当前文件存在的路径
-        while (!path_dir.exists()) {
-            if (!path_dir.cdUp())
-                break;
-        }
-
-        QStorageInfo storage_info(path_dir);
-        if (storage_info.fileSystemType().startsWith("fuse.dlnfs")) {
-            // 长文件目录，标记此条事件被忽略
-            serverDebug() << "ignore first action in dlnfs dir:" << strSrc;
-            mark_ignore = true;
-            return true;;
-        }
-    }
-    return false;
 }
 
 DAS_END_NAMESPACE

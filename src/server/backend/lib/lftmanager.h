@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -25,6 +25,7 @@ public:
     static QString cacheDir();
     static QStringList logCategoryList();
     static QByteArray setCodecNameForLocale(const QByteArray &codecName);
+    static void onFileChanged(QList<QPair<QByteArray, QByteArray>> &actionList);
 
     bool addPath(QString path, bool autoIndex = false);
     bool removePath(const QString &path);

@@ -8,6 +8,7 @@
 
 #include "dasdefine.h"
 #include "eventsource.h"
+#include "eventadaptor.h"
 
 #include <QThread>
 
@@ -19,26 +20,16 @@ class Server : public QThread
 
 public:
     explicit Server(EventSource *eventsrc, QObject *parent = nullptr);
+    void setEventAdaptor(EventAdaptor *adaptor);
 
     static QStringList logCategoryList();
 
-signals:
-    void fileCreated(QByteArrayList files);
-    void fileDeleted(QByteArrayList files);
-    void fileRenamed(QList<QPair<QByteArray, QByteArray>> files);
-
 private:
     void run() override;
-    void notifyChanged();
-    bool ignoreAction(QString &strSrc);
 
 private:
     EventSource *eventsrc;
-
-    QByteArrayList create_list;
-    QByteArrayList delete_list;
-    QList<QPair<QByteArray, QByteArray>> rename_list;
-    bool mark_ignore;
+    EventAdaptor *eventAdaptor = nullptr;
 };
 
 DAS_END_NAMESPACE

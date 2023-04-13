@@ -76,8 +76,6 @@ install -Dm644 server/monitor/deepin-anything-monitor.service %{buildroot}/usr/l
 %{_bindir}/deepin-anything-tool
 %{_bindir}/deepin-anything-tool-ionice
 %{_libdir}/libdeepin-anything-server-lib.so.*
-%{_libdir}/deepin-anything-server-lib/plugins/handlers/README.txt
-%{_libdir}/deepin-anything-server-lib/plugins/handlers/libupdate-lft.so
 %{_datadir}/dbus-1/interfaces/com.deepin.anything.xml
 %{_datadir}/dbus-1/system-services/com.deepin.anything.service
 %{_sysconfdir}/dbus-1/system.d/com.deepin.anything.conf
