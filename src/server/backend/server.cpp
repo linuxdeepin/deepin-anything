@@ -6,10 +6,9 @@
 #include "server.h"
 
 #include "vfs_change_consts.h"
+#include "logdefine.h"
 
 #include <QCoreApplication>
-#include <QLoggingCategory>
-#include <QDebug>
 #include <QDir>
 #include <QStorageInfo>
 
@@ -22,9 +21,7 @@ DAS_BEGIN_NAMESPACE
 
 static const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
 
-Q_LOGGING_CATEGORY(lcServer, "anything.monitor.server", DEFAULT_MSG_TYPE)
-#define serverWarning(...) qCWarning(lcServer, __VA_ARGS__)
-#define serverDebug(...) qCDebug(lcServer, __VA_ARGS__)
+Q_LOGGING_CATEGORY(logC, "anything.changes.server", DEFAULT_MSG_TYPE)
 
 Server::Server(EventSource *eventsrc, QObject *parent)
     : QThread(parent)
@@ -36,15 +33,6 @@ Server::Server(EventSource *eventsrc, QObject *parent)
 void Server::setEventAdaptor(EventAdaptor *adaptor)
 {
     eventAdaptor = adaptor;
-}
-
-QStringList Server::logCategoryList()
-{
-    QStringList list;
-
-    list << lcServer().categoryName();
-
-    return list;
 }
 
 void Server::run()
@@ -63,24 +51,24 @@ void Server::run()
             case ACT_NEW_SYMLINK:
             case ACT_NEW_LINK:
             case ACT_NEW_FOLDER:
-                serverDebug("%s: %s", act_names[action], src);
+                cDebug("%s: %s", act_names[action], src);
 
                 actionPair = qMakePair(QByteArray(INSERT_ACTION), QByteArray(src));
                 break;
             case ACT_DEL_FILE:
             case ACT_DEL_FOLDER:
-                serverDebug("%s: %s", act_names[action], src);
+                cDebug("%s: %s", act_names[action], src);
 
                 actionPair = qMakePair(QByteArray(REMOVE_ACTION), QByteArray(src));
                 break;
             case ACT_RENAME_FILE:
             case ACT_RENAME_FOLDER:
-                serverDebug("%s: %s, %s", act_names[action], src, dst);
+                cDebug("%s: %s, %s", act_names[action], src, dst);
 
                 actionPair = qMakePair(QByteArray(src), QByteArray(dst));
                 break;
             default:
-                serverWarning("Unknow file action: %d", int(action));
+                nWarning("Unknow file action: %d", int(action));
                 break;
             }
 

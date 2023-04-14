@@ -8,23 +8,17 @@
 
 #include <QDBusConnection>
 
-#include <DLog>
-
 #include "anythingbackend.h"
 #include "anythingexport.h"
 #include "server.h"
 #include "eventsource_genl.h"
+#include "logdefine.h"
+#include "logsaver.h"
 
 #include "lftmanager.h"
 #include "anything_adaptor.h"
 
-DCORE_USE_NAMESPACE
-
 DAS_BEGIN_NAMESPACE
-
-Q_LOGGING_CATEGORY(lcBackend, "anything.backend", DEFAULT_MSG_TYPE)
-#define backWarning(...) qCWarning(lcBackend, __VA_ARGS__)
-#define backDebug(...) qCDebug(lcBackend, __VA_ARGS__)
 
 class _AnythingBackend : public AnythingBackend {};
 Q_GLOBAL_STATIC(_AnythingBackend, _global_anybackend)
@@ -38,14 +32,12 @@ extern "C" ANYTHINGBACKEND_SHARED_EXPORT int fireAnything()
     return -1;
 }
 
-
-static QString logFormat = "[%{time}{yyyy-MM-dd, HH:mm:ss.zzz}] [%{type:-7}] [%{file}=>%{function}: %{line}] %{message}\n";
-
 AnythingBackend::~AnythingBackend()
 {
     if (server && server->isRunning()) {
         server->terminate();
     }
+    LogSaver::instance()->uninstallMessageHandler();
 }
 
 AnythingBackend *AnythingBackend::instance()
@@ -58,22 +50,9 @@ static void initLog()
     static std::once_flag flag;
 
     std::call_once(flag, []() {
-        ConsoleAppender *consoleAppender = new ConsoleAppender;
-        consoleAppender->setFormat(logFormat);
-
-        RollingFileAppender *rollingFileAppender = new RollingFileAppender(LFTManager::cacheDir() + "/app.log");
-        rollingFileAppender->setFormat(logFormat);
-        rollingFileAppender->setLogFilesLimit(5);
-        rollingFileAppender->setDatePattern(RollingFileAppender::DailyRollover);
-
-        QStringList logCategoryList = LFTManager::logCategoryList() +
-                                      Server::logCategoryList() +
-                                      EventSource_GENL::logCategoryList();
-        logCategoryList << lcBackend().categoryName();
-        for (const QString &c : logCategoryList) {
-            logger->registerCategoryAppender(c, consoleAppender);
-            logger->registerCategoryAppender(c, rollingFileAppender);
-        }
+        // 设置保存路径并开始记录
+        LogSaver::instance()->setlogFilePath(LFTManager::cacheDir());
+        LogSaver::instance()->installMessageHandler();
     });
 }
 
@@ -81,8 +60,9 @@ int AnythingBackend::init_connection()noexcept
 {
     if (hasconnected)
         return 0;
-    initLog();
+
     if (backendRun() == 0 && monitorStart() == 0) {
+        initLog();
         hasconnected = true;
         return 0;
     }
@@ -118,16 +98,16 @@ int AnythingBackend::backendRun()
     if (!connection.interface()->isServiceRegistered(anythingServicePath)) {
         bool reg_result = connection.registerService(anythingServicePath);
         if (!reg_result) {
-            backWarning("Cannot register the \"com.deepin.anything\" service.\n");
+            qWarning() << "Cannot register the \"com.deepin.anything\" service.";
             return 2;
         }
         Q_UNUSED(new AnythingAdaptor(LFTManager::instance()));
         if (!connection.registerObject("/com/deepin/anything", LFTManager::instance())) {
-            backWarning("Cannot register to the D-Bus object: \"/com/deepin/anything\"\n");
+            qWarning() << "Cannot register to the D-Bus object: \"/com/deepin/anything\"";
             return 3;
         }
     }else{
-        backDebug() << "deepin-anything-backend is running";
+        qDebug() << "deepin-anything-backend is running";
     }
 
     return 0;

@@ -23,7 +23,6 @@ public:
 
     static LFTManager *instance();
     static QString cacheDir();
-    static QStringList logCategoryList();
     static QByteArray setCodecNameForLocale(const QByteArray &codecName);
     static void onFileChanged(QList<QPair<QByteArray, QByteArray>> &actionList);
 

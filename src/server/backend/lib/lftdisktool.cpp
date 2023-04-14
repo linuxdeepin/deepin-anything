@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "lftdisktool.h"
+#include "logdefine.h"
 
 #include <dblockpartition.h>
 #include <ddiskmanager.h>
@@ -11,26 +12,15 @@
 #include <QStorageInfo>
 #include <QScopedPointer>
 #include <QDebug>
-#include <QLoggingCategory>
 
 extern "C" {
 #include <libmount.h>
 }
 
-Q_LOGGING_CATEGORY(lcDiskTool, "anything.manager.disktool", DEFAULT_MSG_TYPE)
-#define diskToolWarning(...) qCWarning(lcDiskTool, __VA_ARGS__)
 
 namespace LFTDiskTool {
 Q_GLOBAL_STATIC(DDiskManager, _global_diskManager)
-
-QStringList logCategoryList()
-{
-    QStringList list;
-
-    list << lcDiskTool().categoryName();
-
-    return list;
-}
+Q_LOGGING_CATEGORY(logN, "anything.normal.disktool", DEFAULT_MSG_TYPE)
 
 QByteArray pathToSerialUri(const QString &path)
 {
@@ -152,7 +142,7 @@ static int parser_errcb(libmnt_table *tb, const char *filename, int line)
 {
     Q_UNUSED(tb)
 
-    diskToolWarning("%s: parse error at line %d -- ignored", filename, line);
+    nWarning("%s: parse error at line %d -- ignored", filename, line);
 
     return 1;
 }
@@ -190,7 +180,7 @@ QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mount
     int rc = mnt_table_parse_mtab(tb.data(), "/proc/self/mountinfo");
 
     if (rc) {
-        diskToolWarning("can't read /proc/self/mountinfo");
+        nWarning("can't read /proc/self/mountinfo");
 
         return map;
     }
@@ -206,7 +196,7 @@ QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mount
 
             map[mount_point] = info;
         } else {
-            diskToolWarning("can't find mountpoint \"%s\"", mount_point.constData());
+            nWarning("can't find mountpoint \"%s\"", mount_point.constData());
         }
     }
 

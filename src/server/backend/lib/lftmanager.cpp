@@ -6,6 +6,7 @@
 #include "lftmanager.h"
 #include "lftdisktool.h"
 #include "eventadaptor.h"
+#include "logdefine.h"
 
 extern "C" {
 #include "fs_buf.h"
@@ -21,19 +22,13 @@ extern "C" {
 #include <QStandardPaths>
 #include <QRegularExpression>
 #include <QTimer>
-#include <QLoggingCategory>
 
 #include <unistd.h>
 #include <sys/time.h>
 
-Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, normalLog, ("anything.manager.normal", DEFAULT_MSG_TYPE))
-Q_GLOBAL_STATIC_WITH_ARGS(QLoggingCategory, changesLog, ("anything.manager.changes", DEFAULT_MSG_TYPE))
+Q_LOGGING_CATEGORY(logN, "anything.normal.manager", DEFAULT_MSG_TYPE)
+Q_LOGGING_CATEGORY(logC, "anything.changes.manager", DEFAULT_MSG_TYPE)
 
-#define nDebug(...) qCDebug((*normalLog), __VA_ARGS__)
-#define nInfo(...) qCInfo((*normalLog), __VA_ARGS__)
-#define nWarning(...) qCWarning((*normalLog), __VA_ARGS__)
-#define cDebug(...) qCDebug((*changesLog), __VA_ARGS__)
-#define cWarning(...) qCWarning((*changesLog), __VA_ARGS__)
 #define DEFAULT_RESULT_COUNT 100
 // set default timeout(ms) for search function return.
 #define DEFAULT_TIMEOUT 200
@@ -148,16 +143,6 @@ QString LFTManager::cacheDir()
     static QString dir = _getCacheDir();
 
     return dir;
-}
-
-QStringList LFTManager::logCategoryList()
-{
-    QStringList list;
-
-    list << normalLog->categoryName()
-         << changesLog->categoryName();
-
-    return list + LFTDiskTool::logCategoryList();
 }
 
 QByteArray LFTManager::setCodecNameForLocale(const QByteArray &codecName)
@@ -806,7 +791,7 @@ QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
             if (r == ERR_NO_MEM) {
                 cWarning() << "Failed(No Memory):" << i.first;
             } else {
-                cDebug() << "Failed:" << i.first << ", result:" << r;
+                cWarning() << "Failed:" << i.first << ", result:" << r;
             }
         }
     }
@@ -857,7 +842,7 @@ QStringList LFTManager::removeFileFromLFTBuf(const QByteArray &file)
             if (r == ERR_NO_MEM) {
                 cWarning() << "Failed(No Memory):" << i.first;
             } else {
-                cDebug() << "Failed:" << i.first << ", result:" << r;
+                cWarning() << "Failed:" << i.first << ", result:" << r;
             }
         }
     }
@@ -916,7 +901,7 @@ QStringList LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByt
             if (r == ERR_NO_MEM) {
                 cWarning() << "Failed(No Memory)";
             } else {
-                cDebug() << "Failed: result=" << r;
+                cWarning() << "Failed: result=" << r;
             }
         }
     }
@@ -941,8 +926,8 @@ bool LFTManager::autoIndexInternal() const
 
 int LFTManager::logLevel() const
 {
-    if (normalLog->isEnabled(QtDebugMsg)) {
-        if (changesLog->isEnabled(QtDebugMsg)) {
+    if (logN().isEnabled(QtDebugMsg)) {
+        if (logC().isEnabled(QtDebugMsg)) {
             return 2;
         } else {
             return 1;
@@ -1005,13 +990,16 @@ void LFTManager::setLogLevel(int logLevel)
 {
     nDebug() << "setLogLevel:" << logLevel;
 
-    normalLog->setEnabled(QtDebugMsg, logLevel > 0);
-    normalLog->setEnabled(QtWarningMsg, logLevel > 0);
-    normalLog->setEnabled(QtInfoMsg, logLevel > 0);
-
-    changesLog->setEnabled(QtDebugMsg, logLevel > 1);
-    changesLog->setEnabled(QtWarningMsg, logLevel > 0);
-    changesLog->setEnabled(QtInfoMsg, logLevel > 1);
+    QString rules;
+    if (logLevel > 1) {
+        rules = "anything.*=true";
+    } else if (logLevel > 0) {
+        rules = "anything.normal*=true\nanything.changes*.warning=true";
+    } else {
+        //default: warning and critical are true
+        rules = "anything.*=false\nanything.*.warning=true\nanything.*.critical=true";
+    }
+    QLoggingCategory::setFilterRules(rules);
 }
 
 inline static QString getAppRungingFile()

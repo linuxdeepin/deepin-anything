@@ -23,8 +23,6 @@ public:
     EventSource_GENL();
     ~EventSource_GENL() override;
 
-    static QStringList logCategoryList();
-
     bool init() override;
     bool isInited() override;
     bool getEvent(unsigned char *type, char **src, char **dst, bool *end) override;

@@ -5,9 +5,13 @@
 #ifndef EVENTADAPTOR_H
 #define EVENTADAPTOR_H
 
+#include "dasdefine.h"
+
 #include <QObject>
 #include <QTimer>
 #include <QQueue>
+
+DAS_BEGIN_NAMESPACE
 
 //定义一个函数指针
 typedef void(*OnHandleEvent)(QList<QPair<QByteArray, QByteArray>> &actionList);
@@ -36,5 +40,7 @@ private:
     QQueue<QPair<QByteArray, QByteArray>> action_buffers;
     QTimer handle_timer;
 };
+
+DAS_END_NAMESPACE
 
 #endif // EVENTADAPTOR_H

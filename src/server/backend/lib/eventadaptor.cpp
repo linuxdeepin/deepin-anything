@@ -4,9 +4,10 @@
 
 #include "eventadaptor.h"
 
-#include <QDebug>
 #include <QDir>
 #include <QStorageInfo>
+
+DAS_BEGIN_NAMESPACE
 
 EventAdaptor::EventAdaptor(QObject *parent)
     : QObject(parent)
@@ -90,3 +91,5 @@ bool EventAdaptor::ignoreAction(QByteArray &strArr, bool ignored)
     }
     return false;
 }
+
+DAS_END_NAMESPACE

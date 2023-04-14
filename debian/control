@@ -3,7 +3,7 @@ Section: admin
 Priority: optional
 Maintainer: Deepin Package Builder <packages@deepin.com>
 Build-Depends: debhelper (>= 9), dh-dkms | dkms, qtbase5-dev,
- pkg-config, libudisks2-qt5-dev, libmount-dev, libdtkcore-dev,
+ pkg-config, libudisks2-qt5-dev, libmount-dev,
  libglib2.0-dev, libpcre3-dev, libnl-genl-3-dev
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
