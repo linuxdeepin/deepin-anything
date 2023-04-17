@@ -22,8 +22,6 @@ public:
     explicit Server(EventSource *eventsrc, QObject *parent = nullptr);
     void setEventAdaptor(EventAdaptor *adaptor);
 
-    static QStringList logCategoryList();
-
 private:
     void run() override;
 

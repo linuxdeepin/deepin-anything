@@ -17,8 +17,6 @@ struct MountPointInfo {
     QByteArray sourcePath;
 };
 
-QStringList logCategoryList();
-
 QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mountPointList);
 
 QByteArray pathToSerialUri(const QString &path);

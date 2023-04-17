@@ -1,6 +1,6 @@
 TEMPLATE = lib
 TARGET = deepin-anything-server-lib
-QT += dbus concurrent dtkcore
+QT += dbus concurrent
 QT -= gui
 CONFIG += link_pkgconfig
 PKGCONFIG += udisks2-qt5 mount
@@ -12,6 +12,7 @@ INCLUDEPATH += $$PWD/../../library/inc
 INCLUDEPATH += dbusservice
 
 SOURCES += \
+    lib/logsaver.cpp \
     lib/eventadaptor.cpp \
     lib/lftmanager.cpp \
     lib/lftdisktool.cpp \
@@ -22,6 +23,8 @@ SOURCES += \
 
 HEADERS += \
     lib/dasdefine.h \
+    lib/logdefine.h \
+    lib/logsaver.h \
     lib/eventadaptor.h \
     lib/lftmanager.h \
     lib/lftdisktool.h \
