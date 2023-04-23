@@ -5,13 +5,10 @@
 
 #include "lftdisktool.h"
 #include "logdefine.h"
+#include "mountcacher.h"
 
 #include <dblockpartition.h>
 #include <ddiskmanager.h>
-
-#include <QStorageInfo>
-#include <QScopedPointer>
-#include <QDebug>
 
 extern "C" {
 #include <libmount.h>
@@ -22,26 +19,23 @@ namespace LFTDiskTool {
 Q_GLOBAL_STATIC(DDiskManager, _global_diskManager)
 Q_LOGGING_CATEGORY(logN, "anything.normal.disktool", DEFAULT_MSG_TYPE)
 
+static deepin_anything_server::MountCacher *s_mountCacher = deepin_anything_server::MountCacher::instance();
+
 QByteArray pathToSerialUri(const QString &path)
 {
-    QDir dir(path);
-    QStorageInfo storage_info(dir);
-
-    if (!storage_info.isValid()) {
+    // 避免使用QDir/QStorageInfo, 如果IO被阻塞（U盘正在被扫描或网络盘断网），则导致卡顿或假死
+    // 向上找到路径的真实挂载点
+    const QString mountPoint = s_mountCacher->findMountPointByPath(path);
+    if (mountPoint.isEmpty()) {
+        nWarning() << "pathToSerialUri findMountPointByPath NULL for:" << path;
         return QByteArray();
     }
 
-    // 为了和udisks2返回的device做比较，故加上\0结尾
-    const QByteArray &device = storage_info.device() + '\0';
-
-    if (!device.startsWith("/dev/"))
+    const QString device = s_mountCacher->getDeviceByPoint(mountPoint);
+    if (!device.startsWith("/dev/") || device.startsWith("/dev/loop") || device.compare("/dev/fuse") == 0) {
+        nWarning() << "ingore device:" << device;
         return QByteArray();
-
-    if (device.startsWith("/dev/loop"))
-        return QByteArray();
-
-    if (device == QByteArrayLiteral("/dev/fuse\0"))
-        return QByteArray();
+    }
 
     // 为了和udisks2返回的device做比较，故加上\0结尾
     QByteArray mount_partition = QByteArray(path.toLocal8Bit()).append('\0');
@@ -57,22 +51,21 @@ QByteArray pathToSerialUri(const QString &path)
     if (block_id.isEmpty())
         return QByteArray();
 
-    const QString &absolute_path = dir.absolutePath();
-    const QString &root_path = storage_info.rootPath();
-    const auto mount_info_map = getMountPointsInfos({root_path.toLocal8Bit()});
+    const auto mount_info_map = s_mountCacher->getRootsByPoints({mountPoint.toLocal8Bit()});
     QByteArray mount_root_path;
 
-    if (!mount_info_map.isEmpty()) {
-        mount_root_path = mount_info_map.first().sourcePath;
+    // 只获取一个，返回就取第一个值
+    if (!mount_info_map.isEmpty()) { 
+        mount_root_path = mount_info_map.first().toLocal8Bit();
     }
 
     if (mount_root_path.isEmpty())
         mount_root_path = "/";
 
-    int right_length = absolute_path.length() - root_path.length();
+    int right_length = path.length() - mountPoint.length();
 
     const QByteArray &uri = QByteArrayLiteral("serial:") + block_id.toLocal8Bit()
-                            + mount_root_path + absolute_path.right(right_length).toLocal8Bit();
+                            + mount_root_path + path.right(right_length).toLocal8Bit();
 
     return uri;
 }
@@ -94,27 +87,28 @@ QByteArrayList fromSerialUri(const QByteArray &uri)
 
     const QByteArray path = uri.mid(path_start_pos);
 
-    for (const QString &block : _global_diskManager->blockDevices()) {
+    QVariantMap option;
+    for (const QString &block : _global_diskManager->blockDevices(option)) {
         QScopedPointer<DBlockDevice> block_obj(_global_diskManager->createBlockPartition(block));
         const QString _block_id = block_obj->id();
 
         if (_block_id == block_id) {
             const QByteArrayList &mount_points = block_obj->mountPoints();
-            const auto mount_point_infos = getMountPointsInfos(mount_points);
+            const auto mount_point_infos = s_mountCacher->getRootsByPoints(mount_points);
             QByteArrayList pathList;
 
             for (QByteArray mount_point : mount_points) {
-                const MountPointInfo info = mount_point_infos.value(mount_point);
+                const QString root = mount_point_infos.value(mount_point);
                 QByteArray new_path = path;
 
                 // 因为挂载点是以 '\0' 结尾的, 所以此处必须要把结尾的一个字符排除;
                 mount_point.chop(1);
 
-                if (!info.sourcePath.isEmpty()) {
-                    if (!path.startsWith(info.sourcePath))
+                if (!root.isEmpty()) {
+                    if (!path.startsWith(root.toLocal8Bit()))
                         continue;
 
-                    new_path = path.mid(info.sourcePath.size());
+                    new_path = path.mid(root.size());
                 }
 
                 if (new_path.isEmpty()) {
@@ -137,78 +131,4 @@ DDiskManager *diskManager()
     return _global_diskManager;
 }
 
-/* error callback */
-static int parser_errcb(libmnt_table *tb, const char *filename, int line)
-{
-    Q_UNUSED(tb)
-
-    nWarning("%s: parse error at line %d -- ignored", filename, line);
-
-    return 1;
-}
-
-struct SPMntTableDeleter
-{
-    static inline void cleanup(libmnt_table *pointer)
-    {
-        mnt_free_table(pointer);
-    }
-};
-
-struct SPMntIterDeleter
-{
-    static inline void cleanup(libmnt_table *pointer)
-    {
-        mnt_free_table(pointer);
-    }
-};
-
-QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mountPointList)
-{
-    QMap<QByteArray, MountPointInfo> map;
-
-    mnt_init_debug(0);
-
-    QScopedPointer<libmnt_table, SPMntTableDeleter> tb(mnt_new_table());
-
-    if (!tb) {
-        return map;
-    }
-
-    mnt_table_set_parser_errcb(tb.data(), parser_errcb);
-
-    int rc = mnt_table_parse_mtab(tb.data(), "/proc/self/mountinfo");
-
-    if (rc) {
-        nWarning("can't read /proc/self/mountinfo");
-
-        return map;
-    }
-
-    for (const QByteArray &mount_point : mountPointList) {
-        libmnt_fs *fs = mnt_table_find_mountpoint(tb.data(), mount_point.constData(), MNT_ITER_BACKWARD);
-
-        if (fs) {
-            MountPointInfo info;
-
-            info.sourceDevice = QByteArray(mnt_fs_get_source(fs));
-            info.sourcePath = QByteArray(mnt_fs_get_root(fs));
-
-            map[mount_point] = info;
-        } else {
-            nWarning("can't find mountpoint \"%s\"", mount_point.constData());
-        }
-    }
-
-    return map;
-}
-
-}
-
-
-QDebug &operator <<(QDebug &deg, const LFTDiskTool::MountPointInfo &info)
-{
-    deg << "device:" << info.sourceDevice << ", path:" << info.sourcePath;
-
-    return deg;
 }

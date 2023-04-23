@@ -7,7 +7,9 @@
 #include "vfs_change_consts.h"
 #include "logdefine.h"
 #include "vfs_genl.h"
+#include "mountcacher.h"
 
+#include <sys/sysmacros.h>
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
 #include <errno.h>
@@ -193,37 +195,28 @@ void update_vfs_unnamed_device(const QSet<QByteArray> &news)
 
 void EventSource_GENL::updatePartitions()
 {
-    QString file_mountinfo_path("/proc/self/mountinfo");
-    QFile file_mountinfo(file_mountinfo_path);
-    if (!file_mountinfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QByteArray ba = file_mountinfo_path.toLatin1();
-        nWarning("open file failed: %s.", ba.data());
+    // 有mount/unmount事件，更新mount cache
+    MountCacher::instance()->updateMountPoints();
+
+    QList<MountPoint> mountList = MountCacher::instance()->getMountPointsByRoot("/");
+    if (mountList.isEmpty()) {
+        nWarning("getMountPointsByRoot(/) return empty");
         return;
     }
-    QByteArray mount_info;
-    mount_info = file_mountinfo.readAll();
-    file_mountinfo.close();
 
     unsigned int major, minor;
-    char mp[256], root[256], type[256], *line = mount_info.data();
     QSet<QByteArray> dlnfs_devs;
     QByteArray ba;
     partitions.clear();
     nInfo("updatePartitions start.");
-    while (sscanf(line, "%*d %*d %u:%u %250s %250s %*s %*s %*s %250s %*s %*s\n", &major, &minor, root, mp, type) == 5) {
-        line = strchr(line, '\n') + 1;
-
-        if (!major && strcmp(type, "fuse.dlnfs"))
-            continue;
-
-        if (!strcmp(root, "/")) {
-            partitions.insert(MKDEV(major, minor), QByteArray(mp));
-            nInfo("%u:%u, %s", major, minor, mp);
-            /* add monitoring for dlnfs device */
-            if (!major && !strcmp(type, "fuse.dlnfs")) {
-                ba.setNum(minor);
-                dlnfs_devs.insert(ba);
-            }
+    for(MountPoint info : mountList) {
+        unsigned long devno = info.deviceId;
+        major = major(devno);
+        minor = minor(devno);
+        partitions.insert(MKDEV(major, minor), info.mountTarget.toLocal8Bit());
+        if (info.mountType == "fuse.dlnfs") {
+            ba.setNum(minor);
+            dlnfs_devs.insert(ba);
         }
     }
     update_vfs_unnamed_device(dlnfs_devs);

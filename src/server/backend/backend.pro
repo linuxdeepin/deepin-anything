@@ -13,6 +13,7 @@ INCLUDEPATH += dbusservice
 
 SOURCES += \
     lib/logsaver.cpp \
+    lib/mountcacher.cpp \
     lib/eventadaptor.cpp \
     lib/lftmanager.cpp \
     lib/lftdisktool.cpp \
@@ -25,6 +26,7 @@ HEADERS += \
     lib/dasdefine.h \
     lib/logdefine.h \
     lib/logsaver.h \
+    lib/mountcacher.h \
     lib/eventadaptor.h \
     lib/lftmanager.h \
     lib/lftdisktool.h \

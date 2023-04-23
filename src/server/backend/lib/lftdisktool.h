@@ -12,19 +12,10 @@
 class DDiskManager;
 namespace LFTDiskTool
 {
-struct MountPointInfo {
-    QByteArray sourceDevice;
-    QByteArray sourcePath;
-};
-
-QMap<QByteArray, MountPointInfo> getMountPointsInfos(const QByteArrayList &mountPointList);
-
 QByteArray pathToSerialUri(const QString &path);
 QByteArrayList fromSerialUri(const QByteArray &uri);
 
 DDiskManager *diskManager();
 }
-
-QDebug &operator <<(QDebug &deg, const LFTDiskTool::MountPointInfo &info);
 
 #endif // LFTDISKTOOL_H
