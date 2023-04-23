@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "eventadaptor.h"
-
-#include <QDir>
-#include <QStorageInfo>
+#include "mountcacher.h"
 
 DAS_BEGIN_NAMESPACE
 
@@ -67,7 +65,7 @@ void EventAdaptor::onHandleEvent()
 
 bool EventAdaptor::ignoreAction(QByteArray &strArr, bool ignored)
 {
-    QString strPath = QString::fromUtf8(strArr);
+    QString strPath = QString::fromLocal8Bit(strArr);
     if (strPath.endsWith(".longname")) {
         // 长文件名记录文件，直接忽略
         return true;
@@ -75,18 +73,10 @@ bool EventAdaptor::ignoreAction(QByteArray &strArr, bool ignored)
 
     //没有标记忽略前一条，则检查是否长文件目录
     if (!ignored) {
-        QDir path_dir(strPath);
-
-        // 向上找到一个当前文件存在的路径
-        while (!path_dir.exists()) {
-            if (!path_dir.cdUp())
-                break;
-        }
-
-        QStorageInfo storage_info(path_dir);
-        if (storage_info.fileSystemType().startsWith("fuse.dlnfs")) {
+        // 向上找到一个当前文件的挂载点且匹配文件系统类型
+        if (MountCacher::instance()->pathMatchType(strPath, "fuse.dlnfs")) {
             // 长文件目录，标记此条事件被忽略
-            return true;;
+            return true;
         }
     }
     return false;

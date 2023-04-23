@@ -9,8 +9,6 @@
 #include "logdefine.h"
 
 #include <QCoreApplication>
-#include <QDir>
-#include <QStorageInfo>
 
 #include <fcntl.h>
 #include <unistd.h>
