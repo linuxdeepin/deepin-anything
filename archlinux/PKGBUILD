@@ -1,22 +1,22 @@
 # Maintainer: DingYuan Zhang <justforlxz@gmail.com>
 pkgbase=deepin-anything-git
 pkgname=(deepin-anything-git deepin-anything-dkms-git)
-pkgver=5.0.13.r14.g0218923
+pkgver=6.0.7
 _extramodules=extramodules-ARCH
 pkgrel=1
 sourcename=deepin-anything
-sourcedir="$sourcename"
-sourcetars=("$sourcename"_"$pkgver".tar.xz)
-pkgdesc="Deepin Anything file search tool"
+sourcedir="$sourcename"-"$pkgver"
+sourcetars=("$sourcename"-"$pkgver".tar.gz)
+pkgdesc="Deepin Anything file search library"
 arch=('x86_64' 'aarch64')
 url="https://github.com/linuxdeepin/deepin-anything"
 license=('GPL3')
 groups=('deepin-git')
-makedepends=('git' 'dtkcore-git' 'udisks2-qt5' 'pcre')
-source=("${sourcetars[@]}"
+makedepends=('git' 'libudisks2-qt5-dev' 'libmount-dev' 'libpcre3-dev' 'libnl-genl-3-dev')
+source=("${sourcetars[@]}::${url}/archive/refs/tags/${pkgver}.tar.gz"
         deepin-anything-server.sysusers)
 sha512sums=('SKIP'
-            '0ff6a6de1fbfb0c33eaac511b989da321a9e43ece92708af88aee34ad1a05e55572713b1290bc2705d70b91dc7bec4fb4abd3dc664a0abe01de27d88bd9e9c85')
+            'SKIP')
 
 prepare() {
  cd $sourcedir
@@ -38,7 +38,7 @@ package_deepin-anything-dkms-git() {
 }
 
 package_deepin-anything-git() {
-  depends=('DEEPIN-ANYTHING-MODULE' 'dtkcore-git' 'udisks2-qt5')
+  depends=('DEEPIN-ANYTHING-MODULE' 'libudisks2-qt5-dev' 'libmount-dev' 'libpcre3-dev' 'libnl-genl-3-dev')
   provides=('deepin-anything')
   conflicts=('deepin-anything')
   cd $sourcedir
