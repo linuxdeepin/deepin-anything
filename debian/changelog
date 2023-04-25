@@ -1,3 +1,10 @@
+deepin-anything (6.0.7) unstable; urgency=medium
+
+  * update archlinux and rpm building package.
+  * Fix the expired log issue.
+
+ -- Deepin Package Builder <packages@deepin.com>  Tue, 25 Apr 2023 15:40:51 +0800
+
 deepin-anything (6.0.6) unstable; urgency=medium
 
   * Optimize the mount info and fix QStorageInfo block issue.
