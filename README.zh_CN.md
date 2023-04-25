@@ -14,7 +14,6 @@ anything 的开发源自于 Windows 下的 everything，它致力于为 Linux �
 - pkg-config
 - libudisks2-qt5-dev
 - libmount-dev
-- libdtkcore-dev
 - libglib2.0-dev
 - libpcre3-dev
 

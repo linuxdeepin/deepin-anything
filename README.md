@@ -14,7 +14,6 @@ The development of anything is derived from everything under Windows, and it is 
 - pkg-config
 - libudisks2-qt5-dev
 - libmount-dev
-- libdtkcore-dev
 - libglib2.0-dev
 - libpcre3-dev
 

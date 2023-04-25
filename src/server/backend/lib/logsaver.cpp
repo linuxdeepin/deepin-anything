@@ -24,7 +24,7 @@ private:
     void resetFile();
     bool initLogFile();
     void backupLog();
-    void autoDeleteLog(); // 自动删除30天前的日志
+    void autoDeleteLog(); // 自动删除日志
 
     QDir   logDir;              // 日志文件夹
     QTimer renameLogFileTimer;  // 重命名日志文件使用的定时器
@@ -34,7 +34,8 @@ private:
     static QTextStream *logOut; // 输出日志的 QTextStream，使用静态对象就是为了减少函数调用的开销
     static QMutex logMutex;     // 同步使用的 mutex
 
-    int g_logLimitSize = 10 * 1024 * 1024; // 10M
+    int logLimitSize = 10 * 1024 * 1024; // 10M
+    int logExpiredDay = -30; // 30天过期
 };
 
 QMutex LogSaverPrivate::logMutex;
@@ -112,11 +113,12 @@ void LogSaverPrivate::backupLog()
 
     // 程序运行时如果创建日期不是当前日期，则使用创建日期重命名，并生成一个新的 *.log
     // 如果 app.log 文件大小超过10M，重新创建一个日志文件，原文件存档为yyyy-MM-dd-hh-mm-ss.log
-    if (logFileCreatedDate != QDate::currentDate() || logFile->size() > g_logLimitSize) {
+    if (logFileCreatedDate != QDate::currentDate() || logFile->size() > logLimitSize) {
         resetFile();
 
         QString logPath = logDir.absoluteFilePath("app.log");
         QTime lastTime = QFileInfo(logPath).lastModified().time();
+        //重命名日志文件为后缀是创建时间的文件（例如 app.log > app.log.2023-04-14-00-04-12）
         QString newLogPath = logDir.absoluteFilePath(logFileCreatedDate.toString("app.log.yyyy-MM-dd") + lastTime.toString("-hh-mm-ss"));
         QFile::rename(logPath, newLogPath);
 
@@ -125,26 +127,25 @@ void LogSaverPrivate::backupLog()
     }
 }
 
-// 自动删除7天前的日志
+// 自动删除过期日志
 void LogSaverPrivate::autoDeleteLog()
 {
+    if (logDir.isEmpty()) {
+        return;
+    }
     QDateTime now = QDateTime::currentDateTime();
+    QDateTime dateTime1 = now.addDays(logExpiredDay);
 
-    // 前7天
-    QDateTime dateTime1 = now.addDays(-7);
-    QDateTime dateTime2;
-
-    QString logPath = logDir.absoluteFilePath("app.log"); // 日志的路径
-    QDir dir(logPath);
-    QFileInfoList fileList = dir.entryInfoList();
-    foreach (QFileInfo f, fileList ) {
+    QFileInfoList fileList = logDir.entryInfoList();
+    for (QFileInfo f: fileList) {
         // "."和".."跳过
         if (f.baseName() == "")
             continue;
 
-        dateTime2 = QDateTime::fromString(f.baseName(), "yyyy-MM-dd");
-        if (dateTime2 < dateTime1) { // 只要日志时间小于前x天的时间就删除
-            dir.remove(f.absoluteFilePath());
+        // 从日志文件后缀获取创建时间（例如 app.log.2023-04-14-00-04-12 > 2023-04-14-00-04-12）
+        QDateTime dateTime2 = QDateTime::fromString(f.suffix(), "yyyy-MM-dd-hh-mm-ss");
+        if (dateTime2.isValid() && dateTime2 < dateTime1) {
+            logDir.remove(f.absoluteFilePath());
         }
     }
 }
