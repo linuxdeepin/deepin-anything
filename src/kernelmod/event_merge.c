@@ -7,6 +7,7 @@
 #include <linux/jiffies.h>
 #include <linux/version.h>
 #include <linux/delay.h>
+#include <linux/string.h>
 
 #include "event_merge.h"
 #include "event.h"
