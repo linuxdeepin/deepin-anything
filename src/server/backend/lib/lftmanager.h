@@ -76,8 +76,11 @@ protected:
 
 private:
     QTimer refresh_timer;
+    uint cpu_row_count;
+    bool cpu_limited;
     bool _isAutoIndexPartition() const;
 
+    void _cpuLimitCheck();
     void _syncAll();
     void _indexAll();
     void _indexAllDelay(int time = 10 * 60 * 1000);
