@@ -1,3 +1,9 @@
+deepin-anything (6.0.9) unstable; urgency=medium
+
+  * fix miss libcgroup depending.
+
+ -- Deepin Package Builder <packages@deepin.com>  Wed, 31 May 2023 16:30:58 +0800
+
 deepin-anything (6.0.8) unstable; urgency=medium
 
   * add cpu resource usage limit.
