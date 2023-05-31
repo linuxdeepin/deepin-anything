@@ -5,11 +5,16 @@
 #pragma once
 
 #include <stdint.h>
+#ifdef ENABLE_CGROUP
+#include <libcgroup.h>
+#endif
 
 // get this pid cpu usage percent
 double get_pid_cpupercent(int pid);
 
+#ifdef ENABLE_CGROUP
 // taskpid = 0, means self task pid; 
 // percent = cpu.cfs_quota_us/cpu.cfs_period_us
 int limit_cpu(int taskpid, int percent, struct cgroup **cg_ret);
 int free_cg_cpu(struct cgroup *cg);
+#endif

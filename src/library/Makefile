@@ -2,7 +2,7 @@ CC := gcc
 GLIB_INCL := $(shell pkg-config --cflags glib-2.0)
 GLIB_LIB := $(shell pkg-config --libs glib-2.0)
 CFLAGS := -std=gnu99 -Wall -Wl,--no-undefined -D_GNU_SOURCE -Iinc -Iinc/index -I../../3rdparty/fsearch ${GLIB_INCL} -shared -fPIC -fvisibility=hidden
-LDFLAG := -lpthread -lpcre ${GLIB_LIB} -lcgroup
+LDFLAG := -lpthread -lpcre ${GLIB_LIB}
 
 all: release debug
 

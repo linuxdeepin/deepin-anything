@@ -5,15 +5,19 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <libcgroup.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <sched.h>
 #include <time.h>
+#include <bits/time.h>
 #include <inttypes.h>
 
 #include "utils.h"
 #include "resourceutil .h"
 
-#define IO_BLK_SIZE (1 << 14)
+#ifdef ENABLE_CGROUP
 #define CGROUP_NAME "dfmgroup"
+#endif
 
 #ifdef CLOCK_MONOTONIC_RAW
 #define CPU_USAGE_CLOCK CLOCK_MONOTONIC_RAW
@@ -98,6 +102,7 @@ __attribute__((visibility("default"))) double get_pid_cpupercent(int pid)
 	return cpu_percent;
 }
 
+#ifdef ENABLE_CGROUP
 __attribute__((visibility("default"))) int limit_cpu(int taskpid, int percent, struct cgroup **cg_ret)
 {
 	if (percent < 0 || percent > 100) {
@@ -196,3 +201,4 @@ __attribute__((visibility("default"))) int free_cg_cpu(struct cgroup *cg)
 	cgroup_free(&cg);
 	return 0;
 }
+#endif
