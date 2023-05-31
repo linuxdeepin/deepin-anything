@@ -12,6 +12,7 @@
 extern "C" {
 #include "fs_buf.h"
 #include "walkdir.h"
+#include "resourceutil .h"
 }
 
 #include <ddiskmanager.h>
@@ -1059,6 +1060,14 @@ LFTManager::LFTManager(QObject *parent)
     // 每10分钟将fs_buf回写到硬盘一次
     sync_timer->setInterval(10 * 60 * 1000);
     sync_timer->start();
+
+    // 使用CPU资源和控制; 1分钟检测一次，连续3次>95%, 则使用cgroup限制50%，连续3次<30%，解除限制。
+    cpu_row_count = 0;
+    cpu_limited = false;
+    QTimer *resource_timer = new QTimer(this);
+    connect(resource_timer, &QTimer::timeout, this, &LFTManager::_cpuLimitCheck);
+    resource_timer->setInterval(60 * 1000);
+    resource_timer->start();
 }
 
 void LFTManager::sendErrorReply(QDBusError::ErrorType type, const QString &msg) const
@@ -1082,6 +1091,38 @@ void LFTManager::_syncAll()
     sync();
     // 清理sync失败的脏文件
     cleanDirtyLFTFiles();
+}
+
+void LFTManager::_cpuLimitCheck()
+{
+    double high_use = 95.0;
+    double low_use = 30.0;
+
+    pid_t pid = getpid();
+    double current_cpu = get_pid_cpupercent(pid);
+    if (current_cpu < low_use && !cpu_limited) {
+        // 处于低耗状态
+        cpu_row_count = 0;
+        return;
+    }
+    if (current_cpu > high_use || current_cpu < low_use) {
+        cpu_row_count++;
+    } else if (cpu_row_count > 0) {
+        cpu_row_count--;
+    }
+
+    // 超过3分钟，使用systemd对daemon服务cpu使用率做限制或解除
+    if (cpu_row_count > 2) {
+        QString cmd = "systemctl set-property dde-filemanager-daemon.service CPUQuota=";
+        if (current_cpu > high_use) {
+            QProcess::startDetached(cmd + "50%");
+            cpu_limited = true;
+        } else if (current_cpu < low_use) {
+            QProcess::startDetached(cmd);
+            cpu_limited = false;
+        }
+        cpu_row_count = 0;
+    }
 }
 
 void LFTManager::_indexAll()
