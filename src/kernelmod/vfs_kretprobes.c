@@ -72,6 +72,7 @@ struct do_mount_args {
 static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     const char *dir_name;
+    mm_segment_t org_fs;
     /*
      * >= 5.9
      * int path_mount(const char *dev_name, struct path *path,
@@ -86,16 +87,29 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
         return 1;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
-    dir_name = (const char*)get_arg(regs, 2);
+    dir_name = (const char *)get_arg(regs, 2);
     if (dir_name == NULL) {
         mpr_info("on_do_mount_ent dir_name is null\n");
         return 1;
     }
+#ifdef CONFIG_ARCH_HISI
+    // kernel will halt if set_fs func on kunpen SOC
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0))
         return 1;
 #else
+    org_fs = get_fs();
+    set_fs(KERNEL_DS);
+
+    if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0)) {
+        mpr_info("on_do_mount_ent strncpy dir_name failed: %s\n", dir_name);
+        set_fs(org_fs);
+        return 1;
+    }
+    set_fs(org_fs);
+#endif
+#else
     dir_name = d_path((struct path *)get_arg(regs, 2), args->dir_name, sizeof(args->dir_name));
-    if (IS_ERR(dir_name)){
+    if (IS_ERR(dir_name)) {
         mpr_info("on_do_mount_ent get mount dir fail\n");
         return 1;
     }
@@ -177,6 +191,7 @@ struct sys_umount_args {
 static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     const char *dir_name;
+    mm_segment_t org_fs;
     struct sys_umount_args *args = (struct sys_umount_args *)ri->data;
     if (!is_mnt_ns_valid())
         return 1;
@@ -184,12 +199,29 @@ static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
     //char __user* dir_name, int flags
     dir_name = (const char *)get_arg(regs, 1);
+    if (dir_name == NULL) {
+        mpr_info("on_sys_umount_ent dir_name is null\n");
+        return 1;
+    }
+
+#ifdef CONFIG_ARCH_HISI
+    // kernel will halt if set_fs func on kunpen SOC
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0))
         return 1;
 #else
+    org_fs = get_fs();
+    set_fs(KERNEL_DS);
+    if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0)) {
+        mpr_info("on_sys_umount_ent strncpy dir_name failed: %s\n", dir_name);
+        set_fs(org_fs);
+        return 1;
+    }
+    set_fs(org_fs);
+#endif
+#else
     /* int path_umount(struct path *path, int flags) */
     dir_name = d_path((struct path *)get_arg(regs, 1), args->dir_name, sizeof(args->dir_name));
-    if (IS_ERR(dir_name)){
+    if (IS_ERR(dir_name)) {
         mpr_info("on_sys_umount_ent get umount dir fail\n");
         return 1;
     }
