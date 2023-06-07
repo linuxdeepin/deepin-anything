@@ -1,3 +1,11 @@
+deepin-anything (6.1.0) unstable; urgency=medium
+
+  * fix dkms install issue.
+  * fix dir name is 0 on loongson64.
+  * fix BUG warning issue.
+
+ -- Deepin Package Builder <packages@deepin.com>  Wed, 07 Jun 2023 17:30:58 +0800
+
 deepin-anything (6.0.9) unstable; urgency=medium
 
   * fix miss libcgroup depending.
