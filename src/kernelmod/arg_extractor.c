@@ -27,7 +27,7 @@ unsigned long get_arg(struct pt_regs* regs, int n)
 		case 5: return regs->r8;
 		case 6: return regs->r9;
 
-#elif defined(CONFIG_CPU_LOONGSON3)
+#elif defined(CONFIG_CPU_LOONGSON3) || defined(CONFIG_CPU_LOONGSON64)
 
 		case 1:  // a0
 		case 2:  // a1
