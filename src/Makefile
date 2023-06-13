@@ -8,7 +8,7 @@ all:
 
 install:
 	mkdir -p $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)
-	cp library/bin/release/* $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)
+	make -C library install INSTALL_DIR=$(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)
 	mkdir -p $(DESTDIR)/usr/src/deepin-anything-$(VERSION)
 	cp -r kernelmod/* $(DESTDIR)/usr/src/deepin-anything-$(VERSION)
 	mkdir -p $(DESTDIR)/usr/lib/modules-load.d

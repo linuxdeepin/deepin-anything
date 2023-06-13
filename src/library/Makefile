@@ -1,32 +1,56 @@
 CC := gcc
+
+# Set the default target directory
+RELEASE_DIR = bin/release
+DEBUG_DIR = bin/debug
+EXTERNAL_DIR = ../../3rdparty
+
+ifeq ($(PROJECT_VERSION),)
+    PROJECT_VERSION = 1.0.0
+endif
+
+# default install dir
+ifeq ($(INSTALL_DIR),)
+    INSTALL_DIR = /usr/local/lib
+endif
+
+SOURCES := \
+	$(wildcard src/*.c) \
+	$(wildcard src/index/*.c) \
+	$(wildcard src/chinese/*.c) \
+	$(wildcard $(EXTERNAL_DIR)/fsearch/*.c)
+
+TARGET := libanything.so
+SONAME = $(TARGET).0
+REALNAME = $(TARGET).$(PROJECT_VERSION)
+
 GLIB_INCL := $(shell pkg-config --cflags glib-2.0)
 GLIB_LIB := $(shell pkg-config --libs glib-2.0)
-CFLAGS := -std=gnu99 -Wall -Wl,--no-undefined -D_GNU_SOURCE -Iinc -Iinc/index -I../../3rdparty/fsearch ${GLIB_INCL} -shared -fPIC -fvisibility=hidden
-LDFLAG := -lpthread -lpcre ${GLIB_LIB}
+
+INCLUDE_DIR := -Iinc -Iinc/index -I$(EXTERNAL_DIR)/fsearch ${GLIB_INCL}
+
+CFLAGS := -std=gnu99 -Wall -Wl,--no-undefined -D_GNU_SOURCE ${INCLUDE_DIR} -shared -fPIC -fvisibility=hidden
+LDFLAGS := -lpthread -lpcre ${GLIB_LIB} -shared -Wl,-soname,$(REALNAME)
 
 all: release debug
 
-release: bin/release/libanything.so
+release: $(SOURCES)
+	mkdir -p $(RELEASE_DIR)
+	$(CC) $(CFLAGS) -O3 $^ $(LDFLAGS) --shared -o $(RELEASE_DIR)/$(REALNAME)
+	ln -sf $(REALNAME) $(RELEASE_DIR)/$(TARGET)
 
-bin/release/libanything.so: src/*.c src/index/*.c src/chinese/*.c ../../3rdparty/fsearch/*.c
-	mkdir -p bin/release
-	rm bin/release/*.so*||true
-	$(CC) $(CFLAGS) -O3 -Wl,-soname,$(shell basename $@).1.0.0 $^ -o $@.1.0.0 $(LDFLAG)
-	ln -s $(shell basename $@).1.0.0 $@.1.0
-	ln -s $(shell basename $@).1.0.0 $@.1
-	ln -s $(shell basename $@).1.0.0 $@
 
-debug: bin/debug/libanything.so
+debug: $(SOURCES)
+	mkdir -p $(DEBUG_DIR)
+	$(CC) $(CFLAGS) -g -DIDX_DEBUG $^ $(LDFLAGS) --shared -o $(DEBUG_DIR)/$(REALNAME)
+	ln -sf $(REALNAME) $(DEBUG_DIR)/$(TARGET)
 
-bin/debug/libanything.so: src/*.c src/index/*.c src/chinese/*.c ../../3rdparty/fsearch/*.c
-	mkdir -p bin/debug
-	rm bin/debug/*.so*||true
-	$(CC) $(CFLAGS) -g -DIDX_DEBUG -Wl,-soname,$(shell basename $@).1.0.0 $^ -o $@.1.0.0 $(LDFLAG)
-	ln -s $(shell basename $@).1.0.0 $@.1.0
-	ln -s $(shell basename $@).1.0.0 $@.1
-	ln -s $(shell basename $@).1.0.0 $@
+install:
+	install -m 755 $(RELEASE_DIR)/$(REALNAME) $(INSTALL_DIR)
+	ln -sf $(REALNAME) $(INSTALL_DIR)/$(SONAME)
+	ln -sf $(SONAME) $(INSTALL_DIR)/$(TARGET)
 
 clean:
-	-rm -rf bin
+	rm -rf bin
 
-.PHONY: all release debug clean
+.PHONY: all release debug install clean
