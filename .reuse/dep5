@@ -14,12 +14,12 @@ Copyright: None
 License: CC0-1.0
 
 # Project file
-Files: *.pro
+Files: *.pro *.pc.in *.conf.in *.dkms.in
 Copyright: None
 License: CC0-1.0
 
-# Makefile
-Files: Makefile src/Makefile src/cli/Makefile src/kernelmod/Makefile src/library/Makefile
+# Makefile/CMake files
+Files: *Makefile *CMakeLists.txt
 Copyright: None
 License: CC0-1.0
 

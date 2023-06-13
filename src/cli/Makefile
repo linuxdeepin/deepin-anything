@@ -20,6 +20,6 @@ bin/debug/anything_cli: src/*.c
 	gcc ${CFLAGS} -L$(shell dirname $@) -DIDX_DEBUG -g $^ -o $@ ${LDFLAG}
 
 clean:
-	rm -Rf bin
+	rm -rf bin
 
 .PHONY: all release debug clean
