@@ -15,12 +15,11 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
    add_definitions(-DDEFAULT_MSG_TYPE=QtDebugMsg)
 #    SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
 else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast")
+    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast")
     add_definitions(-DDEFAULT_MSG_TYPE=QtWarningMsg)
     # SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 endif()
 
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(LFTManager_XML ${CMAKE_CURRENT_SOURCE_DIR}/dbusservice/com.deepin.anything.xml)
 
 # Setup the environment
@@ -30,7 +29,7 @@ find_package(Qt5 COMPONENTS DBus REQUIRED)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(GLIB REQUIRED glib-2.0)
-pkg_check_modules(mount REQUIRED mount IMPORTED_TARGET)
+pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
 
 pkg_check_modules(qt-udisks2 REQUIRED udisks2-qt5 IMPORTED_TARGET)
@@ -51,12 +50,6 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../../library/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/dbusservice
-)
-
-# public include
-FILE (GLOB IO_PUBLIC_INCLUDES
-    "anythingexport.h"
-    "lib/lftmanager.h"
 )
 
 # private include
@@ -87,7 +80,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     Qt5::Concurrent
     Qt5::DBus
     PkgConfig::qt-udisks2
-    PkgConfig::mount
     anything
     ${MOUNT_LIBRARIES}
     ${GLIB_LIBRARIES}
@@ -96,6 +88,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${GLIB_INCLUDE_DIRS}
+    ${MOUNT_INCLUDE_DIRS}
     ${GNL_INCLUDE_DIRS}
     ${CMAKE_CURRENT_LIST_DIR}/lib
 )
