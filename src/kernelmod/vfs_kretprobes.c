@@ -72,7 +72,6 @@ struct do_mount_args {
 static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     const char *dir_name;
-    mm_segment_t org_fs;
     /*
      * >= 5.9
      * int path_mount(const char *dev_name, struct path *path,
@@ -97,7 +96,7 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0))
         return 1;
 #else
-    org_fs = get_fs();
+    mm_segment_t org_fs = get_fs();
     set_fs(KERNEL_DS);
 
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0)) {
@@ -191,7 +190,6 @@ struct sys_umount_args {
 static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     const char *dir_name;
-    mm_segment_t org_fs;
     struct sys_umount_args *args = (struct sys_umount_args *)ri->data;
     if (!is_mnt_ns_valid())
         return 1;
@@ -209,7 +207,7 @@ static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0))
         return 1;
 #else
-    org_fs = get_fs();
+    mm_segment_t org_fs = get_fs();
     set_fs(KERNEL_DS);
     if (unlikely(strncpy_from_user(args->dir_name, dir_name, sizeof(args->dir_name)) < 0)) {
         mpr_info("on_sys_umount_ent strncpy dir_name failed: %s\n", dir_name);

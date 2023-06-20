@@ -1,3 +1,9 @@
+deepin-anything (6.1.2) unstable; urgency=medium
+
+  * fix kernel module build issue for linux > 5.10.
+
+ -- Deepin Package Builder <packages@deepin.com>  Tue, 20 Jun 2023 16:50:58 +0800
+
 deepin-anything (6.1.1) unstable; urgency=medium
 
   * fix can search issue for first start.
