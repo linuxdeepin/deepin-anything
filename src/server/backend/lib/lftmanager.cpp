@@ -382,6 +382,9 @@ bool LFTManager::addPath(QString path, bool autoIndex)
             }
 
             _global_fsWatcherMap->remove(path);
+            building_paths.removeOne(path);
+            if (building_paths.isEmpty())
+                Q_EMIT buildFinished();
 
             Q_EMIT addPathFinished(path, buf);
         }
@@ -394,6 +397,7 @@ bool LFTManager::addPath(QString path, bool autoIndex)
     });
 
     QFuture<fs_buf*> result = QtConcurrent::run(buildFSBuf, watcher, path.endsWith('/') ? path : path + "/");
+    building_paths.append(path);
 
     watcher->setFuture(result);
 
@@ -1061,13 +1065,20 @@ LFTManager::LFTManager(QObject *parent)
     sync_timer->setInterval(10 * 60 * 1000);
     sync_timer->start();
 
-    // 使用CPU资源和控制; 1分钟检测一次，连续3次>95%, 则使用cgroup限制50%，连续3次<30%，解除限制。
+    // 使用CPU资源和控制; 10秒检测一次，连续3次>85%, 则使用cgroup限制50%，连续3次<30%，解除限制。
     cpu_row_count = 0;
     cpu_limited = false;
     QTimer *resource_timer = new QTimer(this);
     connect(resource_timer, &QTimer::timeout, this, &LFTManager::_cpuLimitCheck);
-    resource_timer->setInterval(60 * 1000);
+    resource_timer->setInterval(10 * 1000);
     resource_timer->start();
+
+    // 创建索引结束解除CPU限定
+    connect(this, &LFTManager::buildFinished, this, [] {
+        nWarning() << "Build index finished, unlimit cpu.";
+        QString cmd = "systemctl set-property dde-filemanager-daemon.service CPUQuota=";
+        QProcess::startDetached(cmd);
+    });
 }
 
 void LFTManager::sendErrorReply(QDBusError::ErrorType type, const QString &msg) const
@@ -1095,7 +1106,7 @@ void LFTManager::_syncAll()
 
 void LFTManager::_cpuLimitCheck()
 {
-    double high_use = 95.0;
+    double high_use = 85.0;
     double low_use = 30.0;
 
     pid_t pid = getpid();
@@ -1111,15 +1122,17 @@ void LFTManager::_cpuLimitCheck()
         cpu_row_count--;
     }
 
-    // 超过3分钟，使用systemd对daemon服务cpu使用率做限制或解除
+    // 超过30秒，使用systemd对daemon服务cpu使用率做限制或解除
     if (cpu_row_count > 2) {
         QString cmd = "systemctl set-property dde-filemanager-daemon.service CPUQuota=";
         if (current_cpu > high_use) {
             QProcess::startDetached(cmd + "50%");
             cpu_limited = true;
+            nWarning() << "Limited, long time high CPU usage: " << current_cpu;
         } else if (current_cpu < low_use) {
             QProcess::startDetached(cmd);
             cpu_limited = false;
+            nWarning() << "Unlimited, long time low CPU usage: " << current_cpu;
         }
         cpu_row_count = 0;
     }
@@ -1127,6 +1140,12 @@ void LFTManager::_cpuLimitCheck()
 
 void LFTManager::_indexAll()
 {
+    nWarning() << "Start building index, limit cpu=50%";
+    // 限定创建索引时的CPU使用 50%
+    building_paths.clear();
+    QString cmd = "systemctl set-property dde-filemanager-daemon.service CPUQuota=";
+    QProcess::startDetached(cmd + "50%");
+
     // 遍历已挂载分区, 看是否需要为其建立索引数据
     QVariantMap option;
     for (const QString &block : LFTDiskTool::diskManager()->blockDevices(option)) {

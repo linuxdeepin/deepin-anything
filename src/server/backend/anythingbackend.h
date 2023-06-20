@@ -23,8 +23,6 @@ public:
 
     int init_connection()noexcept;
 
-protected:
-
 private:
     int monitorStart();
     int backendRun();
