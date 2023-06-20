@@ -69,6 +69,9 @@ Q_SIGNALS:
     void autoIndexExternalChanged(bool autoIndexExternal);
     void autoIndexInternalChanged(bool autoIndexInternal);
 
+    // 创建索引完成
+    void buildFinished();
+
 protected:
     explicit LFTManager(QObject *parent = nullptr);
 
@@ -78,12 +81,13 @@ private:
     QTimer refresh_timer;
     uint cpu_row_count;
     bool cpu_limited;
+    QStringList building_paths;
     bool _isAutoIndexPartition() const;
 
     void _cpuLimitCheck();
     void _syncAll();
     void _indexAll();
-    void _indexAllDelay(int time = 10 * 60 * 1000);
+    void _indexAllDelay(int time = 30 * 1000);
     void _cleanAllIndex();
     void _addPathByPartition(const DBlockDevice *block);
     void onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint);
