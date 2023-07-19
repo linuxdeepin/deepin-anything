@@ -78,7 +78,6 @@ protected:
     void sendErrorReply(QDBusError::ErrorType type, const QString &msg = QString()) const;
 
 private:
-    QTimer refresh_timer;
     uint cpu_row_count;
     bool cpu_limited;
     QStringList building_paths;
@@ -86,8 +85,8 @@ private:
 
     void _cpuLimitCheck();
     void _syncAll();
-    void _indexAll();
-    void _indexAllDelay(int time = 30 * 1000);
+    void _indexAll(bool force = false);
+    void _indexAllDelay();
     void _cleanAllIndex();
     void _addPathByPartition(const DBlockDevice *block);
     void onMountAdded(const QString &blockDevicePath, const QByteArray &mountPoint);

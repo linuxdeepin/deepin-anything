@@ -32,8 +32,15 @@ extern "C" ANYTHINGBACKEND_SHARED_EXPORT int fireAnything()
     return -1;
 }
 
+extern "C" ANYTHINGBACKEND_SHARED_EXPORT void downAnything()
+{
+    delete AnythingBackend::instance();
+}
+
 AnythingBackend::~AnythingBackend()
 {
+    delete LFTManager::instance();
+
     if (server && server->isRunning()) {
         server->terminate();
     }

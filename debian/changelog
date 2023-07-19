@@ -1,3 +1,9 @@
+deepin-anything (6.1.4) unstable; urgency=medium
+
+  * fix index issue.
+
+ -- Deepin Package Builder <packages@deepin.com>  Wed, 19 Jul 2023 15:00:18 +0800
+
 deepin-anything (6.1.3) unstable; urgency=medium
 
   * add miss build depend cmake.

@@ -163,7 +163,6 @@ QByteArray LFTManager::setCodecNameForLocale(const QByteArray &codecName)
 
 void LFTManager::onFileChanged(QList<QPair<QByteArray, QByteArray>> &actionList)
 {
-    nDebug() << "onFileChanged:" << actionList.count();
     for(QPair<QByteArray, QByteArray> action: actionList) {
         if (action.first.startsWith(INSERT_ACTION)) {
             _global_lftmanager->insertFileToLFTBuf(action.second);
@@ -173,7 +172,6 @@ void LFTManager::onFileChanged(QList<QPair<QByteArray, QByteArray>> &actionList)
             _global_lftmanager->renameFileOfLFTBuf(action.first, action.second);
         }
     }
-    nDebug() << "Do onFileChanged done!";
 }
 
 struct FSBufDeleter
@@ -383,8 +381,6 @@ bool LFTManager::addPath(QString path, bool autoIndex)
 
             _global_fsWatcherMap->remove(path);
             building_paths.removeOne(path);
-            if (building_paths.isEmpty())
-                Q_EMIT buildFinished();
 
             Q_EMIT addPathFinished(path, buf);
         }
@@ -394,6 +390,10 @@ bool LFTManager::addPath(QString path, bool autoIndex)
         }
 
         watcher->deleteLater();
+
+        if (building_paths.isEmpty()) {
+            Q_EMIT buildFinished();
+        }
     });
 
     QFuture<fs_buf*> result = QtConcurrent::run(buildFSBuf, watcher, path.endsWith('/') ? path : path + "/");
@@ -952,22 +952,6 @@ void LFTManager::setLogLevel(int logLevel)
     QLoggingCategory::setFilterRules(rules);
 }
 
-inline static QString getAppRungingFile()
-{
-    return LFTManager::cacheDir() + "/app.runing";
-}
-
-static void cleanLFTManager()
-{
-    nDebug() << "clean at application exit";
-
-    LFTManager::instance()->sync();
-    clearFsBufMap();
-    cleanDirtyLFTFiles();
-
-    QFile::remove(getAppRungingFile());
-}
-
 static QStringList removeLFTFiles(const QByteArray &serialUriFilter = QByteArray())
 {
     nDebug() << serialUriFilter;
@@ -1007,42 +991,17 @@ LFTManager::LFTManager(QObject *parent)
         nDebug() << "reset the locale codec to UTF-8";
     }
 
-    { // 创建一个普通文件, 在程序正常退出时删除, 用于识别进程未正常退出
-        QFile file(getAppRungingFile());
-
-        nDebug() << "app.runing:" << getAppRungingFile();
-
-        if (file.exists()) {
-            nWarning() << "[LFT] Last time not exiting normally";
-
-#ifdef QT_NO_DEBUG
-            // 说明进程上次未正常退出, 无法保证这些lft文件是正常的, 此处需要清理它们
-            removeLFTFiles();
-#endif
-        }
-
-        if (file.open(QIODevice::WriteOnly)) {
-            file.close();
-        }
-    }
-
-    qAddPostRoutine(cleanLFTManager);
     /*解决在最开始的10分钟内搜索不到问题 92168*/
-   connect(&refresh_timer,&QTimer::timeout,this,[this](){
-     const QStringList &list = this->refresh();
-     if(!list.isEmpty()){
-        refresh_timer.stop();
-     }
+    // 延迟 1s 尝试加载索引
+    QTimer::singleShot(1000, this, [this]() {
+        this->refresh();
+    });
 
-   });
-   refresh_timer.setInterval(10*1000);
-   refresh_timer.start();
 #ifdef QT_NO_DEBUG
-    // 可能会加载到一些自动生成的未被允许的索引文件, 此处应该清理一遍
-    _cleanAllIndex();
-
-    if (_isAutoIndexPartition())
-        _indexAllDelay();
+    // 延迟 30s 扫描更新索引
+    if (_isAutoIndexPartition()) {
+        QTimer::singleShot(30 * 1000, this, &LFTManager::_indexAllDelay);
+    }
 #endif
 
     connect(LFTDiskTool::diskManager(), &DDiskManager::mountAdded,
@@ -1074,10 +1033,13 @@ LFTManager::LFTManager(QObject *parent)
     resource_timer->start();
 
     // 创建索引结束解除CPU限定
-    connect(this, &LFTManager::buildFinished, this, [] {
+    connect(this, &LFTManager::buildFinished, this, [this]() {
         nWarning() << "Build index finished, unlimit cpu.";
         QString cmd = "systemctl set-property dde-filemanager-daemon.service CPUQuota=";
         QProcess::startDetached(cmd);
+
+        // 扫描完成，索引落盘
+        this->_syncAll();
     });
 }
 
@@ -1138,7 +1100,7 @@ void LFTManager::_cpuLimitCheck()
     }
 }
 
-void LFTManager::_indexAll()
+void LFTManager::_indexAll(bool force)
 {
     nWarning() << "Start building index, limit cpu=50%";
     // 限定创建索引时的CPU使用 50%
@@ -1160,17 +1122,22 @@ void LFTManager::_indexAll()
         if (device->mountPoints().isEmpty())
             continue;
 
-        if (!hasLFT(QString::fromLocal8Bit(device->mountPoints().first())))
+        if (force) {
             _addPathByPartition(device);
-        else
-            nDebug() << "Exist index data:" << device->mountPoints().first() << ", block:" << block;
+        } else {
+            if (!hasLFT(QString::fromLocal8Bit(device->mountPoints().first())))
+                _addPathByPartition(device);
+            else
+                nDebug() << "Exist index data:" << device->mountPoints().first() << ", block:" << block;
+        }
     }
 }
 
-// 不要立马自动生成索引，防止刚开机时和其它进程抢占io
-void LFTManager::_indexAllDelay(int time)
+// 延迟扫描生成索引
+void LFTManager::_indexAllDelay()
 {
-    QTimer::singleShot(time, this, &LFTManager::_indexAll);
+    // 强制重新扫描,更新索引
+    _indexAll(true);
 }
 
 void LFTManager::_cleanAllIndex()
