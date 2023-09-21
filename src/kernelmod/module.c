@@ -15,7 +15,7 @@
 #include "vfs_kretprobes.h"
 #include "event_merge.h"
 
-int __init init_module()
+int __init vfs_monitor_init_module(void)
 {
     int ret;
     char *notify_solution;
@@ -66,7 +66,7 @@ vfs_init_sysfs_quit:
 	return ret;
 }
 
-void __exit cleanup_module()
+void __exit vfs_monitor_cleanup_module(void)
 {
 #ifdef CONFIG_FSNOTIFY_BROADCAST
     cleanup_vfs_fsnotify();
@@ -84,6 +84,9 @@ void __exit cleanup_module()
 
     mpr_info("clearup ok\n");
 }
+
+module_init(vfs_monitor_init_module);
+module_exit(vfs_monitor_cleanup_module);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wangrong@uniontech.com");
