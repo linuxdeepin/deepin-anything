@@ -16,6 +16,7 @@
 #include <linux/namei.h>
 #include <linux/fs.h>
 #include <linux/delay.h>
+#include <linux/version.h>
 
 #include "vfs_change_consts.h"
 #include "event.h"
@@ -26,6 +27,17 @@ extern char vfs_unnamed_devices[MAX_MINOR+1];
 static int (*vfs_changed_entry)(struct vfs_event *event);
 
 static struct mnt_namespace *target_mnt_ns;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0)
+#define filename_type const unsigned char
+#define filename_str(filename) (filename)
+#define name_snapshot_str(name_snapshot) ((name_snapshot).name)
+#else
+#define filename_type const struct qstr
+#define filename_str(filename) ((filename) ? (filename)->name : NULL)
+#define name_snapshot_str(name_snapshot) ((name_snapshot).name.name)
+#endif
+
 
 static inline int init_mnt_ns(void)
 {
@@ -223,13 +235,13 @@ static inline void fsnotify_event_handler(struct inode *to_tell, __u32 mask, con
 }
 
 static void fsnotify_broadcast_listener(struct inode *to_tell, __u32 mask, const void *data, int data_is,
-    const unsigned char *file_name, u32 cookie)
+    filename_type *file_name, u32 cookie)
 {
-    if (!to_tell || FSNOTIFY_EVENT_INODE != data_is || !file_name
+    if (!to_tell || FSNOTIFY_EVENT_INODE != data_is || !filename_str(file_name)
         || IS_INVALID_DEVICE(to_tell->i_sb->s_dev) || !(mask & TARGET_EVENT) || !is_mnt_ns_valid())
         return;
 
-    fsnotify_event_handler(to_tell, mask, file_name, cookie);
+    fsnotify_event_handler(to_tell, mask, filename_str(file_name), cookie);
 }
 
 static void fsnotify_parent_broadcast_listener(const struct path *path,
@@ -247,7 +259,8 @@ static void fsnotify_parent_broadcast_listener(const struct path *path,
     }
 
     take_dentry_name_snapshot(&name, dentry);
-    fsnotify_event_handler(p_inode, mask, name.name, 0);
+    if (name_snapshot_str(name))
+        fsnotify_event_handler(p_inode, mask, name_snapshot_str(name), 0);
     release_dentry_name_snapshot(&name);
 
     if (parent)
