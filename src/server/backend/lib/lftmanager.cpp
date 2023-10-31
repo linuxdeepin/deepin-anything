@@ -27,6 +27,7 @@ extern "C" {
 
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 
 Q_LOGGING_CATEGORY(logN, "anything.normal.manager", DEFAULT_MSG_TYPE)
 Q_LOGGING_CATEGORY(logC, "anything.changes.manager", DEFAULT_MSG_TYPE)
@@ -1091,6 +1092,12 @@ void LFTManager::_cpuLimitCheck()
             QProcess::startDetached(cmd + "50%");
             cpu_limited = true;
             nWarning() << "Limited, long time high CPU usage: " << current_cpu;
+
+            struct stat statbuf;
+            if (stat("/tmp/anything_disable_abort", &statbuf)) {
+                nWarning() << "Abort for high CPU usage.";
+                abort();
+            }
         } else if (current_cpu < low_use) {
             QProcess::startDetached(cmd);
             cpu_limited = false;

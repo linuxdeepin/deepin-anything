@@ -16,3 +16,4 @@ if(NOT CMAKE_BUILD_TYPE)
 endif(NOT CMAKE_BUILD_TYPE)
 
 add_subdirectory("backend")
+add_subdirectory("app")
