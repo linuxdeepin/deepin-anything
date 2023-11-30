@@ -1,3 +1,9 @@
+deepin-anything (6.1.6) unstable; urgency=medium
+
+  * update CMakeLists.
+
+ -- Deepin Package Builder <packages@deepin.com>  Thu, 30 Nov 2023 14:48:21 +0800
+
 deepin-anything (6.1.5) unstable; urgency=medium
 
   * add executable for running anything.
