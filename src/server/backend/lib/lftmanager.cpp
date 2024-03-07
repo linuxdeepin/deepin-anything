@@ -1094,9 +1094,9 @@ void LFTManager::_cpuLimitCheck()
             nWarning() << "Limited, long time high CPU usage: " << current_cpu;
 
             struct stat statbuf;
-            if (stat("/tmp/anything_disable_abort", &statbuf)) {
-                nWarning() << "Abort for high CPU usage.";
-                abort();
+            if (stat("/tmp/anything_disable_exit", &statbuf)) {
+                nWarning() << "Exit for high CPU usage.";
+                _exit(1);
             }
         } else if (current_cpu < low_use) {
             QProcess::startDetached(cmd);
