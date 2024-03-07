@@ -34,17 +34,19 @@ extern "C" ANYTHINGBACKEND_SHARED_EXPORT int fireAnything()
 
 extern "C" ANYTHINGBACKEND_SHARED_EXPORT void downAnything()
 {
-    delete AnythingBackend::instance();
+    // delete cause SIGSEGV
+    // delete AnythingBackend::instance();
 }
 
 AnythingBackend::~AnythingBackend()
 {
-    delete LFTManager::instance();
+    // delete LFTManager::instance();
 
     if (server && server->isRunning()) {
         server->terminate();
     }
-    LogSaver::instance()->uninstallMessageHandler();
+    // uninstall cause SIGSEGV
+    // LogSaver::instance()->uninstallMessageHandler();
 }
 
 AnythingBackend *AnythingBackend::instance()
