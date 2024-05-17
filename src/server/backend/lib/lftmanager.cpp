@@ -746,6 +746,9 @@ QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
     } else {
         if (r == ERR_NO_MEM) {
             cWarning() << "Failed(No Memory):" << mount_path;
+        } else if (r == ERR_PATH_EXISTS) {
+            /* 由于事件合并的原因, 会经常导致报告此类错误. 由于它不属于程序问题, 特此降低日志等级 */
+            cDebug() << "Failed(Path Exists):" << mount_path;
         } else {
             cWarning() << "Failed:" << mount_path << ", result:" << r;
         }

@@ -1,3 +1,9 @@
+deepin-anything (6.1.9) unstable; urgency=medium
+
+  * update log.
+
+ -- Deepin Package Builder <packages@deepin.com>  Fri, 17 May 2024 10:32:00 +0800
+
 deepin-anything (6.1.8) unstable; urgency=medium
 
   * fix server core dump on restart.

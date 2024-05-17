@@ -84,10 +84,6 @@ void LogSaverPrivate::startSaveDir(const QString &logPath)
 
 bool LogSaverPrivate::initLogFile()
 {
-    if (logDir.isEmpty()) {
-        return false;
-    }
-
     // 程序每次启动时 logFile 为 nullptr
     if (logFile == nullptr) {
         QString logPath = logDir.absoluteFilePath("app.log");

@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-getent group deepin-anything >/dev/null || /usr/sbin/groupadd --system deepin-anything
+getent group deepin-anything >/dev/null || /usr/sbin/groupadd --system deepin-anything || true
 getent passwd deepin-anything >/dev/null || /usr/sbin/useradd --system -c "deepin-anything User" \
         -d /var/lib/deepin-anything -m -g deepin-anything -s /usr/sbin/nologin \
-        -G deepin-anything deepin-anything
+        -G deepin-anything deepin-anything || true
