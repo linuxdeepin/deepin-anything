@@ -1399,8 +1399,10 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 
 	// init the compare query struct, which includes keyword, icase and language support.
 	compare_query_t *comquery = calloc(1, sizeof(compare_query_t));
-	if (comquery == NULL)
+	if (comquery == NULL) {
+		pthread_rwlock_unlock(&fsbuf->lock);
 		return; // make sure the comparator related would be setted correctly.
+	}
 
 	comquery->icase = icase > 0;
 	if (pinyin_enable > 0) {

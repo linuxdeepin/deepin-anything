@@ -130,6 +130,10 @@ static void cleanDirtyLFTFiles()
 
 LFTManager::~LFTManager()
 {
+    cpu_monitor_quit.unlock();
+    cpu_monitor_thread->wait();
+    delete cpu_monitor_thread;
+
     sync();
     clearFsBufMap();
     // 删除剩余脏文件(可能是sync失败)
@@ -1028,13 +1032,17 @@ LFTManager::LFTManager(QObject *parent)
     sync_timer->setInterval(10 * 60 * 1000);
     sync_timer->start();
 
-    // 使用CPU资源和控制; 10秒检测一次，连续3次>85%, 则使用cgroup限制50%，连续3次<30%，解除限制。
+    // 使用CPU资源和控制; 10秒检测一次。
     cpu_row_count = 0;
     cpu_limited = false;
-    QTimer *resource_timer = new QTimer(this);
-    connect(resource_timer, &QTimer::timeout, this, &LFTManager::_cpuLimitCheck);
-    resource_timer->setInterval(10 * 1000);
-    resource_timer->start();
+    cpu_monitor_quit.lock();
+    cpu_monitor_thread = QThread::create(std::function<void ()> ([this]() {
+        while (!this->cpu_monitor_quit.tryLock(10 * 1000)) {
+            this->_cpuLimitCheck();
+        }
+        this->cpu_monitor_quit.unlock();
+    }));
+    cpu_monitor_thread->start();
 
     // 创建索引结束解除CPU限定
     connect(this, &LFTManager::buildFinished, this, [this]() {
