@@ -9,6 +9,8 @@
 #include <QObject>
 #include <QDBusContext>
 #include <QTimer>
+#include <QMutex>
+#include <QThread>
 
 class DBlockDevice;
 class LFTManager : public QObject, protected QDBusContext
@@ -80,6 +82,8 @@ protected:
 private:
     uint cpu_row_count;
     bool cpu_limited;
+    QMutex cpu_monitor_quit;
+    QThread *cpu_monitor_thread;
     QStringList building_paths;
     bool _isAutoIndexPartition() const;
 
