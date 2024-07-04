@@ -105,8 +105,22 @@ __attribute__((visibility("default"))) int get_partitions(int* part_count, parti
 	if (fp == 0)
 		return 1;
 
-	char dev[PART_NAME_MAX], mp[PART_NAME_MAX], fs_type[FS_TYPE_MAX];
-	while (fscanf(fp, "%s %s %s %*s %*d %*d\n", dev, mp, fs_type) == 3) {
+	char *dev = NULL, *mp = NULL, *fs_type = NULL;
+	while (1) {
+		free(dev); free(mp); free(fs_type);
+		dev = mp = fs_type = NULL;
+
+		if (fscanf(fp, "%ms %ms %ms %*s %*d %*d\n", &dev, &mp, &fs_type) != 3) {
+			free(dev); free(mp); free(fs_type);
+			break;
+		}
+
+		/* check dev/mp/fs_type is too long */
+		if (strlen(dev) >= PART_NAME_MAX ||
+			strlen(mp) >= PART_NAME_MAX ||
+			strlen(fs_type) >= FS_TYPE_MAX)
+			continue;
+
 		if (is_special_mount_point(mp, fs_type))
 			continue;
 		struct stat st = {0};

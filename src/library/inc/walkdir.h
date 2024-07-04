@@ -5,7 +5,7 @@
 
 #pragma once
 
-#define PART_NAME_MAX	128
+#define PART_NAME_MAX	256
 #define FS_TYPE_MAX		32
 
 typedef struct __partition__ {
