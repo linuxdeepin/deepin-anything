@@ -19,19 +19,17 @@ namespace LFTDiskTool {
 Q_GLOBAL_STATIC(DDiskManager, _global_diskManager)
 Q_LOGGING_CATEGORY(logN, "anything.normal.disktool", DEFAULT_MSG_TYPE)
 
-static deepin_anything_server::MountCacher *s_mountCacher = deepin_anything_server::MountCacher::instance();
-
 QByteArray pathToSerialUri(const QString &path)
 {
     // 避免使用QDir/QStorageInfo, 如果IO被阻塞（U盘正在被扫描或网络盘断网），则导致卡顿或假死
     // 向上找到路径的真实挂载点
-    const QString mountPoint = s_mountCacher->findMountPointByPath(path);
+    const QString mountPoint = deepin_anything_server::MountCacher::instance()->findMountPointByPath(path);
     if (mountPoint.isEmpty()) {
         nWarning() << "pathToSerialUri findMountPointByPath NULL for:" << path;
         return QByteArray();
     }
 
-    const QString device = s_mountCacher->getDeviceByPoint(mountPoint);
+    const QString device = deepin_anything_server::MountCacher::instance()->getDeviceByPoint(mountPoint);
     if (!device.startsWith("/dev/") || device.startsWith("/dev/loop") || device.compare("/dev/fuse") == 0) {
         nWarning() << "ingore device:" << device;
         return QByteArray();
@@ -51,7 +49,7 @@ QByteArray pathToSerialUri(const QString &path)
     if (block_id.isEmpty())
         return QByteArray();
 
-    const auto mount_info_map = s_mountCacher->getRootsByPoints({mountPoint.toLocal8Bit()});
+    const auto mount_info_map = deepin_anything_server::MountCacher::instance()->getRootsByPoints({mountPoint.toLocal8Bit()});
     QByteArray mount_root_path;
 
     // 只获取一个，返回就取第一个值
@@ -94,7 +92,7 @@ QByteArrayList fromSerialUri(const QByteArray &uri)
 
         if (_block_id == block_id) {
             const QByteArrayList &mount_points = block_obj->mountPoints();
-            const auto mount_point_infos = s_mountCacher->getRootsByPoints(mount_points);
+            const auto mount_point_infos = deepin_anything_server::MountCacher::instance()->getRootsByPoints(mount_points);
             QByteArrayList pathList;
 
             for (QByteArray mount_point : mount_points) {

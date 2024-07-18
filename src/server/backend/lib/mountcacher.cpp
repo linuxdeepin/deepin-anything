@@ -14,6 +14,9 @@ extern "C" {
 
 DAS_BEGIN_NAMESPACE
 
+class _MountCacher : public MountCacher {};
+Q_GLOBAL_STATIC(_MountCacher, mountCacherGlobal)
+
 /* error callback */
 static int parser_errcb(libmnt_table *tb, const char *filename, int line)
 {
@@ -34,14 +37,13 @@ struct SPMntTableDeleter
 
 MountCacher *MountCacher::instance()
 {
-    static MountCacher ins;
-    return &ins;
+    return mountCacherGlobal;
 }
 
 MountCacher::MountCacher(QObject *parent)
     : QObject(parent)
 {
-    mountPointList.clear();
+    updateMountPoints();
 }
 
 MountCacher::~MountCacher()
@@ -103,10 +105,6 @@ QString MountCacher::findMountPointByPath(const QString &path, bool hardreal)
 {
     QString result;
     QString result_path = path;
-    if (hardreal) {
-        // 如果跳过虚拟，查找真实设备的挂载点，须检查挂载信息是否已获取
-        checkCurrentMounts();
-    }
 
     Q_FOREVER {
         char *checkpath = QFile::encodeName(result_path).data();
@@ -158,7 +156,6 @@ bool MountCacher::pathMatchType(const QString &path, const QString &type)
 {
     bool result= false;
     QString point = findMountPointByPath(path);
-    checkCurrentMounts();
 
     for (MountPoint info: mountPointList) {
         if (point == info.mountTarget && type == info.mountType) {
@@ -173,7 +170,6 @@ bool MountCacher::pathMatchType(const QString &path, const QString &type)
 QMap<QByteArray, QString> MountCacher::getRootsByPoints(const QByteArrayList &pointList)
 {
     QMap<QByteArray, QString> map;
-    checkCurrentMounts();
 
     for (const QByteArray &point : pointList) {
         const QString target = QString(point);
@@ -191,7 +187,6 @@ QMap<QByteArray, QString> MountCacher::getRootsByPoints(const QByteArrayList &po
 QString MountCacher::getDeviceByPoint(const QString &point)
 {
     QString device;
-    checkCurrentMounts();
 
     for (MountPoint info: mountPointList) {
         if (point == info.mountTarget) {
@@ -205,7 +200,6 @@ QString MountCacher::getDeviceByPoint(const QString &point)
 // 获取所有根为指定的挂载点, 不指定则返回全部挂载点信息
 QList<MountPoint> MountCacher::getMountPointsByRoot(const QString &root)
 {
-    checkCurrentMounts();
     if (root == nullptr || !root.startsWith('/')) {
         return mountPointList;
     }
@@ -217,14 +211,6 @@ QList<MountPoint> MountCacher::getMountPointsByRoot(const QString &root)
         }
     }
     return list;
-}
-
-void MountCacher::checkCurrentMounts()
-{
-    if (mountPointList.isEmpty()) {
-        nWarning() << "mountPointList is empty, updat it first.";
-        updateMountPoints();
-    }
 }
 
 QDebug operator<<(QDebug debug, const MountPoint &mp)
