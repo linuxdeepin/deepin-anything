@@ -10,13 +10,9 @@ DAS_BEGIN_NAMESPACE
 EventAdaptor::EventAdaptor(QObject *parent)
     : QObject(parent)
 {
-    action_buffers.clear();
-
-    connect(&handle_timer, &QTimer::timeout, this, &EventAdaptor::onHandleEvent, Qt::QueuedConnection);
-    // 每500ms 触发一次事件
+    connect(&handle_timer, &QTimer::timeout, this, &EventAdaptor::onHandleEvent);
     handle_timer.setInterval(500);
     handle_timer.start();
-    jobFinished = true;
 }
 
 EventAdaptor::~EventAdaptor()
@@ -26,31 +22,43 @@ EventAdaptor::~EventAdaptor()
 
 void EventAdaptor::pushEvent(QPair<QByteArray, QByteArray> &action)
 {
-    QMutexLocker locker(&mutex); // 加锁
+    QMutexLocker locker(&mutex);
     action_buffers.enqueue(action);
-    waitCondition.wakeAll();
 }
 
 bool EventAdaptor::popEvent(QPair<QByteArray, QByteArray> *action)
 {
+    QMutexLocker locker(&mutex);
     if (action_buffers.isEmpty()) {
         return false;
     }
-    QMutexLocker locker(&mutex); // 加锁
     *action = action_buffers.dequeue();
-    waitCondition.wakeAll();
     return true;
 }
 
 void EventAdaptor::onHandleEvent()
 {
-    // 单线程保证索引串行更新
-    if (!jobFinished) {
-        return;
-    }
-    QMetaObject::invokeMethod(this, "startWork", Qt::QueuedConnection);
-}
+    bool pop = false;
+    QList<QPair<QByteArray, QByteArray>> tmpActions;
+    bool ignored = false;
+    do {
+        QPair<QByteArray, QByteArray> topAction;
+        pop = popEvent(&topAction);
+        if (pop) {
+            // 在支持长文件名的目录，一个动作底层会发出两次事件：一次原有文件系统的变更；一次长文件名系统dlnfs的变更。
+            // 忽略第一次原有文件系统事件
+            ignored = ignoreAction(topAction.second, ignored);
+            if (!ignored) {
+                // 不应该被忽略或前一条已被忽略
+                tmpActions.append(topAction);
+            }
+        }
+    } while (pop);
 
+    if (!tmpActions.isEmpty()) {
+        onHandler(tmpActions);
+    }
+}
 
 bool EventAdaptor::ignoreAction(QByteArray &strArr, bool ignored)
 {
@@ -69,40 +77,6 @@ bool EventAdaptor::ignoreAction(QByteArray &strArr, bool ignored)
         }
     }
     return false;
-}
-
-void EventAdaptor::startWork()
-{
-    jobFinished = false;
-
-    bool pop = false;
-    QList<QPair<QByteArray, QByteArray>> tmpActions;
-    bool ignored = false;
-    do {
-        QPair<QByteArray, QByteArray> topAction;
-        pop = popEvent(&topAction);
-        if (pop) {
-            // 在支持长文件名的目录，一个动作底层会发出两次事件：一次原有文件系统的变更；一次长文件名系统dlnfs的变更。
-            // 忽略第一次原有文件系统事件
-            ignored = ignoreAction(topAction.second, ignored);
-            if (!ignored) {
-                // 不应该被忽略或前一条已被忽略
-                tmpActions.append(topAction);
-            }
-        }
-    } while (pop);
-
-    // Start the worker thread
-    TaskThread* taskThread = new TaskThread(this);
-    connect(taskThread, &TaskThread::workFinished, this, &EventAdaptor::handleTaskFinish);
-    connect(taskThread, &QThread::finished, taskThread, &QThread::deleteLater);
-    taskThread->setData(onHandler, tmpActions);
-    taskThread->start();
-}
-
-void EventAdaptor::handleTaskFinish()
-{
-    jobFinished = true;
 }
 
 DAS_END_NAMESPACE

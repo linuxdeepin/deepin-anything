@@ -10,9 +10,7 @@
 #include <QObject>
 #include <QTimer>
 #include <QMutex>
-#include <QWaitCondition>
 #include <QQueue>
-#include <QThread>
 
 DAS_BEGIN_NAMESPACE
 
@@ -31,10 +29,6 @@ public:
     void pushEvent(QPair<QByteArray, QByteArray> &action);
     bool popEvent(QPair<QByteArray, QByteArray> *action);
 
-public slots:
-    void startWork();
-    void handleTaskFinish();
-
 public:
     OnHandleEvent onHandler;
 
@@ -46,45 +40,8 @@ private:
 
 private:
     QMutex mutex;
-    QWaitCondition waitCondition;
     QQueue<QPair<QByteArray, QByteArray>> action_buffers;
     QTimer handle_timer;
-    // 用于事件更新，串行进行
-    bool jobFinished = true;
-};
-
-class TaskThread : public QThread
-{
-    Q_OBJECT
-public:
-    explicit TaskThread(QObject *parent = nullptr) : QThread(parent) {}
-    ~TaskThread() override {
-        handleFunc = nullptr;
-        actionList.clear();
-        deleteLater();
-    }
-    void run() override
-    {
-        // 后台回调处理事件，更新索引
-        if (handleFunc)
-            handleFunc(actionList);
-
-        emit workFinished();
-    }
-
-public slots:
-    void setData(OnHandleEvent callbackFunc, QList<QPair<QByteArray, QByteArray>> &actions)
-    {
-        handleFunc = callbackFunc;
-        actionList = actions;
-    }
-
-signals:
-    void workFinished();
-
-private:
-    OnHandleEvent handleFunc = nullptr;
-    QList<QPair<QByteArray, QByteArray>> actionList;
 };
 
 DAS_END_NAMESPACE

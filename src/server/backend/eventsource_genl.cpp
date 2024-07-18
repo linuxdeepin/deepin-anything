@@ -195,28 +195,44 @@ void update_vfs_unnamed_device(const QSet<QByteArray> &news)
 
 void EventSource_GENL::updatePartitions()
 {
-    // 有mount/unmount事件，更新mount cache
-    MountCacher::instance()->updateMountPoints();
+    /* Invokes updateMountPoints in the event loop of MountCacher to avoid multi-threaded access */
+    QMetaObject::invokeMethod(MountCacher::instance(), "updateMountPoints", Qt::QueuedConnection);
 
-    QList<MountPoint> mountList = MountCacher::instance()->getMountPointsByRoot("/");
-    if (mountList.isEmpty()) {
-        nWarning("getMountPointsByRoot(/) return empty");
+    /*
+     * No use`MountCacher::instance()->getMountPointsByRoot("/")` to get mount list.
+     * This is to avoid multi-threaded access, and locks may cause dead locks.
+     */
+    QString file_mountinfo_path("/proc/self/mountinfo");
+    QFile file_mountinfo(file_mountinfo_path);
+    if (!file_mountinfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QByteArray ba = file_mountinfo_path.toLatin1();
+        nWarning("open file failed: %s.", ba.data());
         return;
     }
+    QByteArray mount_info;
+    mount_info = file_mountinfo.readAll();
+    file_mountinfo.close();
 
     unsigned int major, minor;
+    char mp[256], root[256], type[256], *line = mount_info.data();
     QSet<QByteArray> dlnfs_devs;
     QByteArray ba;
     partitions.clear();
     nInfo("updatePartitions start.");
-    for(MountPoint info : mountList) {
-        unsigned long devno = info.deviceId;
-        major = major(devno);
-        minor = minor(devno);
-        partitions.insert(MKDEV(major, minor), info.mountTarget.toLocal8Bit());
-        if (info.mountType == "fuse.dlnfs") {
-            ba.setNum(minor);
-            dlnfs_devs.insert(ba);
+    while (sscanf(line, "%*d %*d %u:%u %250s %250s %*s %*s %*s %250s %*s %*s\n", &major, &minor, root, mp, type) == 5) {
+        line = strchr(line, '\n') + 1;
+
+        if (!major && strcmp(type, "fuse.dlnfs"))
+            continue;
+
+        if (!strcmp(root, "/")) {
+            partitions.insert(MKDEV(major, minor), QByteArray(mp));
+            nInfo("%u:%u, %s", major, minor, mp);
+            /* add monitoring for dlnfs device */
+            if (!major && !strcmp(type, "fuse.dlnfs")) {
+                ba.setNum(minor);
+                dlnfs_devs.insert(ba);
+            }
         }
     }
     update_vfs_unnamed_device(dlnfs_devs);
