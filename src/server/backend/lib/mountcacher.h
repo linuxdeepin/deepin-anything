@@ -36,6 +36,7 @@ public:
 
     // 块设备存在多个挂载点，获取他们的根
     QMap<QByteArray, QString> getRootsByPoints(const QByteArrayList &pointList);
+    QMap<QString, QString> getRootsByStrPoints(const QStringList &pointList);
 
     // 获取挂载点的设备（source）, 必须传入真实挂载点
     QString getDeviceByPoint(const QString &point);

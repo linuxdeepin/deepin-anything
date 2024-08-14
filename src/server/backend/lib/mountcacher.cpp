@@ -183,6 +183,21 @@ QMap<QByteArray, QString> MountCacher::getRootsByPoints(const QByteArrayList &po
     return map;
 }
 
+QMap<QString, QString> MountCacher::getRootsByStrPoints(const QStringList &pointList)
+{
+    QMap<QString, QString> map;
+
+    for (const QString &point : pointList) {
+        for (const MountPoint &info: mountPointList) {
+            if (point == info.mountTarget) {
+                map[point] = info.mountRoot;
+            }
+        }
+    }
+
+    return map;
+}
+
 // 获取挂载点的设备（source）, 必须传入真实挂载点
 QString MountCacher::getDeviceByPoint(const QString &point)
 {
