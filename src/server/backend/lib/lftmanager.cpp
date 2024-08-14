@@ -1178,23 +1178,27 @@ void LFTManager::_cleanAllIndex()
     }
 }
 
-static QString getRootMountPoint(const DBlockDevice *block)
+QString getRootMountPoint(const DBlockDevice *block)
 {
-    const QByteArrayList &mount_points = block->mountPoints();
-    if(mount_points.size() == 1) {
-        return QString::fromLocal8Bit(mount_points.first());
+    /* Perform conversions early to detect potential crashes as early as possible */
+    QByteArrayList mountPointsByteArray = block->mountPoints();
+    QStringList mountPoints;
+
+    foreach (const QByteArray &item, mountPointsByteArray) {
+        mountPoints.append(QString::fromLocal8Bit(item));
+    }
+    if(mountPoints.size() == 1) {
+        return mountPoints.first();
     }
 
-    const auto mount_point_infos = deepin_anything_server::MountCacher::instance()->getRootsByPoints(mount_points);
-    for (QByteArray mount_point : mount_points) {
-        const QString root_point = mount_point_infos.value(mount_point);
-        if (root_point == "/") {
-            mount_point.chop(1);
-            return QString::fromLocal8Bit(mount_point);
+    QMap<QString, QString> mountPoint2Root = deepin_anything_server::MountCacher::instance()->getRootsByStrPoints(mountPoints);
+    for (const QString &mountPoint : mountPoints) {
+        if (mountPoint2Root.value(mountPoint) == "/") {
+            return mountPoint;
         }
     }
 
-    return QString::fromLocal8Bit(mount_points.first());
+    return mountPoints.first();
 }
 
 void LFTManager::_addPathByPartition(const DBlockDevice *block)
@@ -1225,6 +1229,8 @@ void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &
 {
     nInfo() << blockDevicePath << mountPoint;
 
+    deepin_anything_server::MountCacher::instance()->updateMountPoints();
+
     const QString &mount_root = QString::fromLocal8Bit(mountPoint);
     const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(mount_root);
 
@@ -1251,6 +1257,8 @@ void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &
 void LFTManager::onMountRemoved(const QString &blockDevicePath, const QByteArray &mountPoint)
 {
     nInfo() << blockDevicePath << mountPoint;
+
+    deepin_anything_server::MountCacher::instance()->updateMountPoints();
 
     const QString &mount_root = QString::fromLocal8Bit(mountPoint);
 //    const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(mount_root);
