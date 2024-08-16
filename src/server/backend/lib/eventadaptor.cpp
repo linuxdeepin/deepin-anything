@@ -7,11 +7,14 @@
 
 DAS_BEGIN_NAMESPACE
 
+#define MAX_EVENT_HANDLE_COUNT_PER_CYCLE 100
+#define EVENT_HANDLE_CYCLE 500
+
 EventAdaptor::EventAdaptor(QObject *parent)
     : QObject(parent)
 {
     connect(&handle_timer, &QTimer::timeout, this, &EventAdaptor::onHandleEvent);
-    handle_timer.setInterval(500);
+    handle_timer.setInterval(EVENT_HANDLE_CYCLE);
     handle_timer.start();
 }
 
@@ -41,6 +44,9 @@ void EventAdaptor::onHandleEvent()
     bool pop = false;
     QList<QPair<QByteArray, QByteArray>> tmpActions;
     bool ignored = false;
+    int event_count = 0;
+    int new_interval;
+
     do {
         QPair<QByteArray, QByteArray> topAction;
         pop = popEvent(&topAction);
@@ -53,7 +59,12 @@ void EventAdaptor::onHandleEvent()
                 tmpActions.append(topAction);
             }
         }
-    } while (pop);
+    } while (pop && ++event_count <= MAX_EVENT_HANDLE_COUNT_PER_CYCLE);
+
+    new_interval = pop ? 0 : EVENT_HANDLE_CYCLE;
+    if (new_interval != handle_timer.interval()) {
+        handle_timer.setInterval(new_interval);
+    }
 
     if (!tmpActions.isEmpty()) {
         onHandler(tmpActions);
