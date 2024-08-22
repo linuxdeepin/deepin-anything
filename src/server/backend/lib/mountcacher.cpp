@@ -107,8 +107,8 @@ QString MountCacher::findMountPointByPath(const QString &path, bool hardreal)
     QString result_path = path;
 
     Q_FOREVER {
-        char *checkpath = QFile::encodeName(result_path).data();
-        char *mount_point = mnt_get_mountpoint(checkpath);
+        QByteArray checkpath = QFile::encodeName(result_path);
+        char *mount_point = mnt_get_mountpoint(checkpath.data());
         if (nullptr != mount_point) {
             // nDebug() << path << " mountpoint: " << mount_point;
             result = QString(mount_point);
