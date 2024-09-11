@@ -21,6 +21,7 @@ BuildRequires: udisks2-qt5-devel
 BuildRequires: libmount
 BuildRequires: libmount-devel
 BuildRequires: pcre-devel libnl3-devel
+BuildRequires: libpolkit-qt5-1-devel
 
 
 %description
@@ -68,6 +69,7 @@ mkdir -p %{?buildroot}/usr/lib/modules-load.d/
 %{_libdir}/libdeepin-anything-server-lib.so.*
 %{_datadir}/dbus-1/interfaces/com.deepin.anything.xml
 %{_sysconfdir}/dbus-1/system.d/com.deepin.anything.conf
+%{_datadir}/polkit-1/actions/com.deepin.anything.policy
 
 %files devel
 %{_libdir}/libanything.so

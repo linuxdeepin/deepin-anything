@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+"http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+	<action id="com.deepin.anything">
+		<description>Access The File Index</description>
+		<message>Authentication is required to access the file index</message>
+		<defaults>
+			<allow_any>no</allow_any>
+			<allow_inactive>no</allow_inactive>
+			<allow_active>auth_admin_keep</allow_active>
+		</defaults>
+		<description xml:lang="zh_HK">Access The File Index</description>
+		<message xml:lang="zh_HK">存取檔案索引需要認證</message>
+		<description xml:lang="zh_CN">Access The File Index</description>
+		<message xml:lang="zh_CN">访问文件索引需要认证</message>
+		<description xml:lang="zh_TW">Access The File Index</description>
+		<message xml:lang="zh_TW">存取檔案索引需要認證</message>
+		<description xml:lang="bo">Access The File Index</description>
+		<message xml:lang="bo">ཡིག་ཆའི་དཀར་ཆག་ལ་འཛུལ་ཞུགས་བྱེད་པར་བདེན་དཔང་བྱེད་དགོས།</message>
+		<description xml:lang="ug">Access The File Index</description>
+		<message xml:lang="ug">ھۆججەت كۆرسەتكۈچىنى زىيارەت قىلىش ئۈچۈن دەلىللەش تەلەپ قىلىنىدۇ</message>
+	</action>
+</policyconfig>

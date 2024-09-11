@@ -1,5 +1,5 @@
 // Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2024 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -24,6 +24,8 @@ extern "C" {
 #include <QStandardPaths>
 #include <QRegularExpression>
 #include <QTimer>
+#include <polkit-qt5-1/PolkitQt1/Authority>
+#include <QDBusMessage>
 
 #include <unistd.h>
 #include <sys/time.h>
@@ -154,6 +156,9 @@ QString LFTManager::cacheDir()
 
 QByteArray LFTManager::setCodecNameForLocale(const QByteArray &codecName)
 {
+    if (!checkAuthorization())
+        return QByteArray();
+
     const QTextCodec *old_codec = QTextCodec::codecForLocale();
 
     if (codecName.isEmpty())
@@ -315,6 +320,9 @@ static void removeBuf(fs_buf *buf, bool &removeLFTFile)
 
 bool LFTManager::addPath(QString path, bool autoIndex)
 {
+    if (!checkAuthorization())
+        return false;
+
     nDebug() << path << autoIndex;
 
     if (!path.startsWith("/")) {
@@ -411,6 +419,9 @@ bool LFTManager::addPath(QString path, bool autoIndex)
 
 bool LFTManager::removePath(const QString &path)
 {
+    if (!checkAuthorization())
+        return false;
+
     nDebug() << path;
 
     if (fs_buf *buf = _global_fsBufMap->take(path)) {
@@ -493,6 +504,9 @@ bool LFTManager::lftBuinding(const QString &path) const
 
 bool LFTManager::cancelBuild(const QString &path)
 {
+    if (!checkAuthorization())
+        return false;
+
     nDebug() << path;
 
     if (QFutureWatcher<fs_buf*> *watcher = _global_fsWatcherMap->take(path)) {
@@ -545,6 +559,9 @@ QStringList LFTManager::hasLFTSubdirectories(QString path) const
 // 重新从磁盘加载lft文件
 QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 {
+    if (!checkAuthorization())
+        return QStringList();
+
     nDebug() << serialUriFilter;
 
     const QString &cache_path = cacheDir();
@@ -615,6 +632,9 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 
 QStringList LFTManager::sync(const QString &mountPoint)
 {
+    if (!checkAuthorization())
+        return QStringList();
+
     nDebug() << mountPoint;
 
     QStringList path_list;
@@ -709,6 +729,9 @@ enum SearchError
 
 QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
 {
+    if (!checkAuthorization())
+        return QStringList();
+
     cDebug() << file;
 
     auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(file));
@@ -763,6 +786,9 @@ QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
 
 QStringList LFTManager::removeFileFromLFTBuf(const QByteArray &file)
 {
+    if (!checkAuthorization())
+        return QStringList();
+
     cDebug() << file;
 
     auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(file));
@@ -812,6 +838,9 @@ QStringList LFTManager::removeFileFromLFTBuf(const QByteArray &file)
 
 QStringList LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFile)
 {
+    if (!checkAuthorization())
+        return QStringList();
+
     cDebug() << oldFile << newFile;
 
     auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(newFile));
@@ -869,6 +898,9 @@ QStringList LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByt
 
 void LFTManager::quit()
 {
+    if (!checkAuthorization())
+        return;
+
     qApp->quit();
 }
 
@@ -912,6 +944,9 @@ QStringList LFTManager::parallelsearch(const QString &path, quint32 startOffset,
 
 void LFTManager::setAutoIndexExternal(bool autoIndexExternal)
 {
+    if (!checkAuthorization())
+        return;
+
     if (this->autoIndexExternal() == autoIndexExternal)
         return;
 
@@ -929,6 +964,9 @@ void LFTManager::setAutoIndexExternal(bool autoIndexExternal)
 
 void LFTManager::setAutoIndexInternal(bool autoIndexInternal)
 {
+    if (!checkAuthorization())
+        return;
+
     if (this->autoIndexInternal() == autoIndexInternal)
         return;
 
@@ -946,6 +984,9 @@ void LFTManager::setAutoIndexInternal(bool autoIndexInternal)
 
 void LFTManager::setLogLevel(int logLevel)
 {
+    if (!checkAuthorization())
+        return;
+
     nDebug() << "setLogLevel:" << logLevel;
 
     QString rules;
@@ -1638,4 +1679,24 @@ int LFTManager::_doSearch(void *vbuf, quint32 maxCount, const QString &path, con
         free(name_offsets);
 
     return total;
+}
+
+bool LFTManager::checkAuthorization(void)
+{
+    if (!calledFromDBus())
+        return true;
+
+    QString actionId("com.deepin.anything");
+    QString appBusName = message().service();
+    PolkitQt1::Authority::Result result;
+
+    result = PolkitQt1::Authority::instance()->checkAuthorizationSync(actionId,
+                                                                      PolkitQt1::SystemBusNameSubject(appBusName),
+                                                                      PolkitQt1::Authority::AllowUserInteraction);
+    if (result == PolkitQt1::Authority::Yes) {
+        return true;
+    }else {
+        sendErrorReply(QDBusError::AccessDenied);
+        return false;
+    }
 }

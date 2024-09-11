@@ -27,6 +27,7 @@ find_package(Qt5 COMPONENTS Core REQUIRED)
 find_package(Qt5 COMPONENTS Concurrent REQUIRED)
 find_package(Qt5 COMPONENTS DBus REQUIRED)
 find_package(PkgConfig REQUIRED)
+find_package(PolkitQt5-1)
 
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
@@ -84,6 +85,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${MOUNT_LIBRARIES}
     ${GLIB_LIBRARIES}
     ${GNL_LIBRARIES}
+    PolkitQt5-1::Agent
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -103,6 +105,9 @@ FILE (GLOB DBUS_INSTALL
 FILE (GLOB DBUS_CONFIG_INSTALL
     "dbusservice/com.deepin.anything.conf"
 )
+FILE (GLOB DBUS_POLICY_INSTALL
+    "dbusservice/com.deepin.anything.policy"
+)
 
 include(GNUInstallDirs)
 
@@ -114,6 +119,9 @@ install (FILES ${DBUS_INSTALL}
 )
 install (FILES ${DBUS_CONFIG_INSTALL}
     DESTINATION /etc/dbus-1/system.d
+)
+install (FILES ${DBUS_POLICY_INSTALL}
+    DESTINATION share/polkit-1/actions
 )
 
 install_targets ("/${CMAKE_INSTALL_LIBDIR}" ${PROJECT_NAME})
