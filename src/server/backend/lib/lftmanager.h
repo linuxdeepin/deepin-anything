@@ -23,6 +23,8 @@ class LFTManager : public QObject, protected QDBusContext
 public:
     ~LFTManager();
 
+    static void ensureFSBufMapInitialized();
+
     static LFTManager *instance();
     static QString cacheDir();
     QByteArray setCodecNameForLocale(const QByteArray &codecName);
