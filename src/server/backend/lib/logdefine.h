@@ -15,6 +15,7 @@ Q_DECLARE_LOGGING_CATEGORY(logC)
 #define nWarning(...) qCWarning(logN, __VA_ARGS__)
 #define nCritical(...) qCCritical(logN, __VA_ARGS__)
 #define cDebug(...) qCDebug(logC, __VA_ARGS__)
-#define cWarning(...) qCWarning(logC, __VA_ARGS__)
+#define cWarning(...) qDebug() __VA_ARGS__
+// qCWarning(logC, __VA_ARGS__)
 
 #endif // LOGDEFINE_H

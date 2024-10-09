@@ -145,7 +145,7 @@ void write_vfs_unnamed_device(const char *str)
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {
         QByteArray ba = path.toLatin1();
-        nWarning("open file failed: %s.", ba.data());
+        nWarning("open file failed: %s.(write_vfs_unnamed_device)", ba.data());
         return;
     }
     file.write(str, strlen(str));
@@ -158,7 +158,7 @@ void read_vfs_unnamed_device(QSet<QByteArray> &devices)
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         QByteArray ba = path.toLatin1();
-        nWarning("open file failed: %s.", ba.data());
+        nWarning("open file failed: %s.(read_vfs_unnamed_device)", ba.data());
         return;
     }
     QByteArray line = file.readLine();

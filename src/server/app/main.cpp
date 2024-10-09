@@ -1,34 +1,20 @@
 // SPDX-FileCopyrightText: 2023 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "service_manager.h"
+#include "event_listenser.h"
+#include "lib/logsaver.h"
+#include "lib/lftmanager.h"
 
-#include <QCoreApplication>
-#include <QDebug>
-#include "anythingexport.h"
-#include <signal.h>
 
-static void handleSIGTERM(int sig)
-{
-    qDebug() << "received SIGTERM" << sig;
-    if (qApp) {
-        qApp->quit();
-    }
-}
+int main(int argc, char *argv[]) {
+    anything::service_manager manager;
+    auto ret = manager.register_service("com.deepin.anything");
 
-int main(int argc, char *argv[])
-{
-    int ret;
+    using namespace deepin_anything_server;
+    LogSaver::instance()->setlogFilePath(LFTManager::cacheDir());
+    LogSaver::instance()->installMessageHandler();
 
-    QCoreApplication app(argc, argv);
-    app.setOrganizationName("deepin");
-
-    if (fireAnything()) {
-        qCritical() << "fireAnything failed!";
-        abort();
-    }
-    signal(SIGTERM, handleSIGTERM);
-
-    ret = app.exec();
-    downAnything();
-    return ret;
+    anything::event_listenser listenser;
+    listenser.listen();
 }

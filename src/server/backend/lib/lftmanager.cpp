@@ -31,6 +31,8 @@ extern "C" {
 #include <sys/time.h>
 #include <sys/stat.h>
 
+#include <iostream>
+
 Q_LOGGING_CATEGORY(logN, "anything.normal.manager", DEFAULT_MSG_TYPE)
 Q_LOGGING_CATEGORY(logC, "anything.changes.manager", DEFAULT_MSG_TYPE)
 
@@ -320,6 +322,8 @@ static void removeBuf(fs_buf *buf, bool &removeLFTFile)
 
 bool LFTManager::addPath(QString path, bool autoIndex)
 {
+    std::cout << "begin addPath()\n";
+
     if (!checkAuthorization())
         return false;
 
@@ -456,8 +460,11 @@ bool LFTManager::removePath(const QString &path)
 // 返回path对应的fs_buf对象，且将path转成为相对于fs_buf root_path的路径
 static QPair<QString, fs_buf*> getFsBufByPath(const QString &path)
 {
+    // std::cout << "#1 getFsBufByPath\n";
     if (!_global_fsBufMap.exists())
         return QPair<QString, fs_buf*>();
+    
+    // std::cout << "#2 getFsBufByPath\n";
 
     if (!path.startsWith("/"))
         return QPair<QString, fs_buf*>();
@@ -468,9 +475,15 @@ static QPair<QString, fs_buf*> getFsBufByPath(const QString &path)
         nWarning() << "getFsBufByPath findMountPointByPath NULL for:" << path;
         return QPair<QString, fs_buf*>();
     }
+
+    std::cout << "#2-1 getFsBufByPath--" << mountPoint.toStdString() << "\n";
+
+
     QPair<QString, fs_buf*> buf_pair;
     fs_buf *buf = _global_fsBufMap->value(mountPoint);
     if (buf) {
+        std::cout << "#3 getFsBufByPath\n";
+
         // path相对于此fs_buf root_path的路径
         QString new_path = path.mid(mountPoint.size());
 
@@ -486,7 +499,11 @@ static QPair<QString, fs_buf*> getFsBufByPath(const QString &path)
             new_path.chop(1);
 
         buf_pair = qMakePair(new_path, buf);
+
+        std::cout << "#4 getFsBufByPath\n";
     }
+
+    std::cout << "end getFsBufByPath\n";
 
     return buf_pair;
 }
@@ -729,6 +746,8 @@ enum SearchError
 
 QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
 {
+    // std::cout << "#1 insert--" << file.toStdString() << "\n";
+
     if (!checkAuthorization())
         return QStringList();
 
@@ -737,12 +756,20 @@ QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
     auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(file));
     QStringList root_path_list;
 
+    // std::cout << "#1-1 insert--" << file.toStdString() << "\n";
+
     QString mount_path = buff_pair.first;
+
+    std::cout << "#1-1-1 insert--" << mount_path.toStdString() << "\n";
     if (mount_path.isEmpty())
         return root_path_list;
+    
+    std::cout << "#1-2 insert--" << file.toStdString() << "\n";
 
     QFileInfo info(QString::fromLocal8Bit(file));
     bool is_dir = info.isDir();
+
+    std::cout << "#2 insert--" << file.toStdString() << "\n";
 
     fs_buf *buf = buff_pair.second;
     // 有可能索引正在构建
@@ -763,6 +790,8 @@ QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
 
     cDebug() << "do insert:" << mount_path;
 
+    std::cout << "#3 insert\n";
+
     fs_change change;
     int r = insert_path(buf, mount_path.toLocal8Bit().constData(), is_dir, &change);
 
@@ -770,6 +799,8 @@ QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
         // buf内容已改动，标记删除对应的lft文件
         markLFTFileToDirty(buf);
         root_path_list << QString::fromLocal8Bit(get_root_path(buf));
+
+        std::cout << "Insert succeed: " << file.toStdString() << "\n";
     } else {
         if (r == ERR_NO_MEM) {
             cWarning() << "Failed(No Memory):" << mount_path;
@@ -777,26 +808,35 @@ QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
             /* 由于事件合并的原因, 会经常导致报告此类错误. 由于它不属于程序问题, 特此降低日志等级 */
             cDebug() << "Failed(Path Exists):" << mount_path;
         } else {
-            cWarning() << "Failed:" << mount_path << ", result:" << r;
+            cWarning() << "Failed:epoll" << mount_path << ", result:" << r;
         }
     }
+
+    std::cout << "#4 insert\n";
 
     return root_path_list;
 }
 
 QStringList LFTManager::removeFileFromLFTBuf(const QByteArray &file)
 {
+    // std::cout << "#1 remove--" << file.toStdString() << "\n";
+
     if (!checkAuthorization())
         return QStringList();
 
     cDebug() << file;
 
+    // std::cout << "#1-1 remove--" << file.toStdString() << "\n";
+
     auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(file));
     QStringList root_path_list;
 
     QString mount_path = buff_pair.first;
+    std::cout << "#1-1-1 remove--" << mount_path.toStdString() << "\n";
     if (mount_path.isEmpty())
         return root_path_list;
+
+    std::cout << "#2 remove--" << file.toStdString() << "\n";
 
     fs_buf *buf = buff_pair.second;
     // 有可能索引正在构建
@@ -817,6 +857,8 @@ QStringList LFTManager::removeFileFromLFTBuf(const QByteArray &file)
 
     cDebug() << "do remove:" << mount_path;
 
+    std::cout << "middle remove\n";
+
     fs_change changes[10];
     uint32_t count = 10;
     int r = remove_path(buf, mount_path.toLocal8Bit().constData(), changes, &count);
@@ -825,19 +867,25 @@ QStringList LFTManager::removeFileFromLFTBuf(const QByteArray &file)
         // buf内容已改动，标记删除对应的lft文件
         markLFTFileToDirty(buf);
         root_path_list << QString::fromLocal8Bit(get_root_path(buf));
+
+        std::cout << "Remove succeed: " << file.toStdString() << "\n";
     } else {
         if (r == ERR_NO_MEM) {
             cWarning() << "Failed(No Memory):" << mount_path;
         } else {
-            cWarning() << "Failed:" << mount_path << ", result:" << r;
+            cWarning() << "Failed:epoll" << mount_path << ", result:" << r;
         }
     }
+
+    std::cout << "end remove\n";
 
     return root_path_list;
 }
 
 QStringList LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByteArray &newFile)
 {
+    std::cout << "begin rename\n";
+
     if (!checkAuthorization())
         return QStringList();
 
@@ -885,6 +933,8 @@ QStringList LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByt
         // buf内容已改动，标记删除对应的lft文件
         markLFTFileToDirty(buf);
         root_path_list << QString::fromLocal8Bit(get_root_path(buf));
+
+        std::cout << "Renamed: " << oldFile.toStdString() << "-->" << newFile.toStdString() << "\n";
     } else {
         if (r == ERR_NO_MEM) {
             cWarning() << "Failed(No Memory)";
@@ -1034,6 +1084,7 @@ static QStringList removeLFTFiles(const QByteArray &serialUriFilter = QByteArray
 LFTManager::LFTManager(QObject *parent)
     : QObject(parent)
 {
+    qDebug() << "LFTManager ctor";
     // ascii编码支持内容太少, 此处改为兼容它的utf8编码
     if (QTextCodec::codecForLocale() == QTextCodec::codecForName("ASCII")) {
         QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
@@ -1699,4 +1750,9 @@ bool LFTManager::checkAuthorization(void)
         sendErrorReply(QDBusError::AccessDenied);
         return false;
     }
+}
+
+void LFTManager::ensureFSBufMapInitialized()
+{
+    (*_global_fsBufMap);
 }
