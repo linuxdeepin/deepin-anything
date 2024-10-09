@@ -23,12 +23,9 @@ class LFTManager : public QObject, protected QDBusContext
 public:
     ~LFTManager();
 
-    static void ensureFSBufMapInitialized();
-
     static LFTManager *instance();
     static QString cacheDir();
     QByteArray setCodecNameForLocale(const QByteArray &codecName);
-    static void onFileChanged(QList<QPair<QByteArray, QByteArray>> &actionList);
 
     bool addPath(QString path, bool autoIndex = false);
     bool removePath(const QString &path);

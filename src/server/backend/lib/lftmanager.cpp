@@ -5,7 +5,6 @@
 
 #include "lftmanager.h"
 #include "lftdisktool.h"
-#include "eventadaptor.h"
 #include "logdefine.h"
 #include "mountcacher.h"
 
@@ -173,19 +172,6 @@ QByteArray LFTManager::setCodecNameForLocale(const QByteArray &codecName)
     return old_codec->name();
 }
 
-void LFTManager::onFileChanged(QList<QPair<QByteArray, QByteArray>> &actionList)
-{
-    for(QPair<QByteArray, QByteArray> action: actionList) {
-        if (action.first.startsWith(INSERT_ACTION)) {
-            _global_lftmanager->insertFileToLFTBuf(action.second);
-        } else if (action.first.startsWith(REMOVE_ACTION)) {
-            _global_lftmanager->removeFileFromLFTBuf(action.second);
-        } else {
-            _global_lftmanager->renameFileOfLFTBuf(action.first, action.second);
-        }
-    }
-}
-
 struct FSBufDeleter
 {
     static inline void cleanup(fs_buf *pointer)
@@ -322,7 +308,7 @@ static void removeBuf(fs_buf *buf, bool &removeLFTFile)
 
 bool LFTManager::addPath(QString path, bool autoIndex)
 {
-    std::cout << "begin addPath()\n";
+    std::cout << "begin addPath() path:" << path.toStdString() << "\n";
 
     if (!checkAuthorization())
         return false;
@@ -576,6 +562,8 @@ QStringList LFTManager::hasLFTSubdirectories(QString path) const
 // 重新从磁盘加载lft文件
 QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
 {
+    std::cout << "refresh begin\n";
+
     if (!checkAuthorization())
         return QStringList();
 
@@ -1084,7 +1072,7 @@ static QStringList removeLFTFiles(const QByteArray &serialUriFilter = QByteArray
 LFTManager::LFTManager(QObject *parent)
     : QObject(parent)
 {
-    qDebug() << "LFTManager ctor";
+    std::cout << "LFTManager ctor\n";
     // ascii编码支持内容太少, 此处改为兼容它的utf8编码
     if (QTextCodec::codecForLocale() == QTextCodec::codecForName("ASCII")) {
         QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
@@ -1138,7 +1126,7 @@ LFTManager::LFTManager(QObject *parent)
 
     // 创建索引结束解除CPU限定
     connect(this, &LFTManager::buildFinished, this, [this]() {
-        nWarning() << "Build index finished, unlimit cpu.";
+        std::cout << "Build index finished, unlimit cpu.\n";
         QString cmd = "systemctl set-property dde-filemanager-daemon.service CPUQuota=";
         QProcess::startDetached(cmd);
 
@@ -1212,7 +1200,7 @@ void LFTManager::_cpuLimitCheck()
 
 void LFTManager::_indexAll(bool force)
 {
-    nWarning() << "Start building index, limit cpu=50%";
+    std::cout << "Start building index, limit cpu=50%\n";
     // 限定创建索引时的CPU使用 50%
     building_paths.clear();
     QString cmd = "systemctl set-property dde-filemanager-daemon.service CPUQuota=";
@@ -1750,9 +1738,4 @@ bool LFTManager::checkAuthorization(void)
         sendErrorReply(QDBusError::AccessDenied);
         return false;
     }
-}
-
-void LFTManager::ensureFSBufMapInitialized()
-{
-    (*_global_fsBufMap);
 }

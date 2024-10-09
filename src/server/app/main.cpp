@@ -5,11 +5,18 @@
 #include "event_listenser.h"
 #include "lib/logsaver.h"
 #include "lib/lftmanager.h"
+#include <QCoreApplication>
 
 
-int main(int argc, char *argv[]) {
+int main() {
     anything::service_manager manager;
     auto ret = manager.register_service("com.deepin.anything");
+    if (!ret) {
+        std::cerr << "Failed to register service\n";
+        return -1;
+    }
+
+    std::cout << "register service succeed\n";
 
     using namespace deepin_anything_server;
     LogSaver::instance()->setlogFilePath(LFTManager::cacheDir());
