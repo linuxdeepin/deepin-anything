@@ -73,10 +73,6 @@ event_listenser::event_listenser()
     vfs_policy[VFSMONITOR_A_MINOR].type = NLA_U8;
     vfs_policy[VFSMONITOR_A_PATH].type = NLA_NUL_STRING;
     vfs_policy[VFSMONITOR_A_PATH].maxlen = 4096;
-
-    // // Initialize the _global_fsBufMap
-    // (*_global_fsBufMap); // 通过访问触发初始化
-    LFTManager::ensureFSBufMapInitialized();
 }
 
 event_listenser::~event_listenser()
