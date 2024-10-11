@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Deepin Package Builder <packages@deepin.com>
 Build-Depends:
  cmake,
- debhelper (>= 9), dh-dkms | dkms, qtbase5-dev,
+ debhelper (>= 9), dh-dkms , dkms, qtbase5-dev,
  pkg-config, libudisks2-qt5-dev, libmount-dev,
  libglib2.0-dev, libpcre3-dev, libnl-genl-3-dev,
  libpolkit-qt5-1-dev
