@@ -9,6 +9,14 @@ if (NOT PROJECT_VERSION_MAJOR)
     set(PROJECT_VERSION_MAJOR 0)
 endif()
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
 add_definitions(-DQT_MESSAGELOGCONTEXT)
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
@@ -28,6 +36,12 @@ find_package(Qt5 COMPONENTS Concurrent REQUIRED)
 find_package(Qt5 COMPONENTS DBus REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(PolkitQt5-1)
+find_library(LUCENEPP_LIB lucene++)
+find_path(LUCENEPP_INCLUDE_DIR lucene++)
+
+if (LUCENEPP_LIB AND LUCENEPP_INCLUDE_DIR)
+    message("Found Lucene++ library: " ${LUCENEPP_INCLUDE_DIR})
+endif()
 
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
@@ -51,6 +65,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../../library/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/dbusservice
+    ${LUCENEPP_INCLUDE_DIR}
 )
 
 # private include
@@ -86,6 +101,9 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${GLIB_LIBRARIES}
     ${GNL_LIBRARIES}
     PolkitQt5-1::Agent
+    ${LUCENEPP_LIB}
+    pthread
+    boost_system
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -94,6 +112,11 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${GNL_INCLUDE_DIRS}
     ${CMAKE_CURRENT_LIST_DIR}/lib
 )
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message("src/server/backend no builtin strlen")
+    target_compile_options(${PROJECT_NAME} PRIVATE -fno-builtin-strlen)
+endif()
 
 FILE (GLOB PUB_INCLUDES_INSTALL
     "anythingexport.h"

@@ -17,8 +17,8 @@ bool service_manager::register_service(std::string path) {
         }
 
         std::cout << "Create AnythingAdaptor\n";
-        Q_UNUSED(new AnythingAdaptor(LFTManager::instance()));
-        if (!connection.registerObject("/com/deepin/anything", LFTManager::instance())) {
+        Q_UNUSED(new AnythingAdaptor(&LFTManager::instance()));
+        if (!connection.registerObject("/com/deepin/anything", &LFTManager::instance())) {
             std::cerr << "Cannot register to the D-Bus object: \"/com/deepin/anything\"";
             return false;
         }

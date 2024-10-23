@@ -1,12 +1,13 @@
 #ifndef ANYTHING_EVENT_LISTENSER_H
 #define ANYTHING_EVENT_LISTENSER_H
 
-#include "partition.h"
-#include "vfs_genl.h"
-#include "thread_pool.h"
-#include <string>
+#include <functional>
+
 #include <netlink/attr.h>
 #include <netlink/handlers.h>
+
+#include "vfs_genl.h"
+#include "fs_event.h"
 
 
 namespace anything {
@@ -14,24 +15,16 @@ namespace anything {
 using nl_sock_ptr = nl_sock*;
 using nl_msg_ptr  = nl_msg*;
 
-
-struct fs_event {
-    uint8_t     act;
-    uint32_t    cookie;
-    uint16_t    major;
-    uint8_t     minor;
-    std::string src;
-    std::string dst;
-};
-
-
 class event_listenser {
 public:
     event_listenser();
     ~event_listenser();
 
-    void listen();
-    void push_fs_event(fs_event event);
+    void start_listening();
+
+    void stop_listening();
+
+    void set_handler(std::function<void(fs_event)> handler);
 
 private:
     bool connect(nl_sock_ptr& sk);
@@ -39,33 +32,16 @@ private:
     bool set_callback(nl_sock_ptr& sk, nl_recvmsg_msg_cb_t func);
     int get_fd(nl_sock_ptr& sk) const;
 
-    template<class T>
-    bool partition_contains(const T& key) {
-        std::lock_guard<std::mutex> lock(mtx_);
-        return partitions_.contains(key);
-    }
-
-    template<class T>
-    auto partition_get(const T& key) {
-        std::lock_guard<std::mutex> lock(mtx_);
-        return partitions_[key];
-    }
-
+    void forward_event_to_handler(fs_event event);
 
     static int event_handler(nl_msg_ptr msg, void* arg);
-    
-    // Process the fs events
-    void fs_event_handler(fs_event event);
-
-    bool ignored_event(const std::string& path, bool ignored);
 
 private:
     nl_sock_ptr mcsk_;
     bool connected_;
+    bool should_stop_;
     int fam_;
-    partition partitions_;
-    thread_pool pool_;
-    std::mutex mtx_;
+    std::function<void(fs_event)> handler_;
 };
 
 } // namespace anything

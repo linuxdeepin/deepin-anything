@@ -6,13 +6,21 @@
 #ifndef LFTMANAGER_H
 #define LFTMANAGER_H
 
-#include <QObject>
 #include <QDBusContext>
-#include <QTimer>
+#include <QFutureWatcher>
 #include <QMutex>
+#include <QObject>
+#include <QSettings>
 #include <QThread>
+#include <QTimer>
+#include <QSet>
 
 class DBlockDevice;
+extern "C" {
+    struct __fs_buf__;
+    typedef struct __fs_buf__ fs_buf;
+}
+
 class LFTManager : public QObject, protected QDBusContext
 {
     Q_OBJECT
@@ -21,15 +29,18 @@ class LFTManager : public QObject, protected QDBusContext
     Q_PROPERTY(int logLevel READ logLevel WRITE setLogLevel)
 
 public:
-    ~LFTManager();
+    LFTManager(const LFTManager&) = delete;
+    LFTManager& operator=(const LFTManager&) = delete;
+    LFTManager(LFTManager&&) = delete;
+    LFTManager& operator=(LFTManager&&) = delete;
 
-    static LFTManager *instance();
-    static QString cacheDir();
+    // Singleton
+    static LFTManager& instance();
+
     QByteArray setCodecNameForLocale(const QByteArray &codecName);
 
     bool addPath(QString path, bool autoIndex = false);
     bool removePath(const QString &path);
-    bool hasLFT(const QString &path) const;
     bool lftBuinding(const QString &path) const;
     bool cancelBuild(const QString &path);
 
@@ -59,6 +70,11 @@ public:
                                const QString &keyword, const QStringList &rules,
                                quint32 &startOffsetReturn, quint32 &endOffsetReturn) const;
 
+    static QString cacheDir();
+    bool hasLFT(const QString& path) const;
+
+    static double current_cpu_usage();
+
 public Q_SLOTS:
     void setAutoIndexExternal(bool autoIndexExternal);
     void setAutoIndexInternal(bool autoIndexInternal);
@@ -74,8 +90,6 @@ Q_SIGNALS:
     void buildFinished();
 
 protected:
-    explicit LFTManager(QObject *parent = nullptr);
-
     void sendErrorReply(QDBusError::ErrorType type, const QString &msg = QString()) const;
 
 private:
@@ -107,7 +121,34 @@ private:
     QStringList _enterSearch(const QString &path, const QString &keyword, const QStringList &rules, quint32 &startOffsetReturn, quint32 &endOffsetReturn) const;
     int _doSearch(void *vbuf, quint32 maxCount, const QString &path, const QString &keyword, quint32 *startOffset, quint32 *endOffset, QList<uint32_t> &results, const QStringList &rules = {}) const;
 
+
     bool checkAuthorization(void);
+
+    void clear_fsbuf_map();
+
+    explicit LFTManager(QObject *parent = nullptr);
+    ~LFTManager();
+
+    static QStringList removeLFTFiles(const QByteArray &serialUriFilter = QByteArray());
+    static QString getLFTFileByPath(const QString &path, bool autoIndex);
+
+    QSet<fs_buf*> fsbuf_list();
+    void removeBuf(fs_buf *buf, bool &removeLFTFile);
+
+    QPair<QString, fs_buf*> retrieve_fsbuf(const QString& path) const;
+    void markLFTFileToDirty(fs_buf *buf);
+    void cleanDirtyLFTFiles();
+
+    bool doLFTFileToDirty(fs_buf *buf);
+    bool allowableBuf(LFTManager *manager, fs_buf *buf);
+
+private:
+    QSettings settings_;
+    QMap<QString, fs_buf*> fsbuf_;
+    QMap<fs_buf*, QString> fsbuf_to_file_;
+    QSet<fs_buf*> fsbuf_dirty_;
+    QMap<QString, QFutureWatcher<fs_buf*>*> fswatcher_;
+    QMap<QString, QString> block_id_;
 };
 
 #endif // LFTMANAGER_H
