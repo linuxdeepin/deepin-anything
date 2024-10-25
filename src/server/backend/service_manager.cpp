@@ -3,7 +3,8 @@
 #include <QDBusConnection>
 #include <iostream>
 
-namespace anything {
+
+ANYTHING_NAMESPACE_BEGIN
 
 bool service_manager::register_service(std::string path) {
     QString qpath = QString::fromStdString(std::move(path));
@@ -28,4 +29,4 @@ bool service_manager::register_service(std::string path) {
     return true;
 }
 
-} // namespace anything
+ANYTHING_NAMESPACE_END

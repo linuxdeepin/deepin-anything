@@ -9,8 +9,7 @@ ANYTHING_NAMESPACE_BEGIN
 
 
 disk_scanner::disk_scanner(const char* mounts)
-    : fmounts_(setmntent(mounts, "r"))
-{
+    : fmounts_(setmntent(mounts, "r")) {
     if (fmounts_) {
         struct mntent *ent;
         while ((ent = getmntent(fmounts_)) != NULL) {
@@ -31,19 +30,16 @@ disk_scanner::disk_scanner(const char* mounts)
     }
 }
 
-disk_scanner::~disk_scanner()
-{
+disk_scanner::~disk_scanner() {
     if (fmounts_)
         endmntent(fmounts_);
 }
 
-std::vector<fs::path> disk_scanner::mounted_paths() const
-{
+std::vector<fs::path> disk_scanner::mounted_paths() const {
     return mounted_paths_;
 }
 
-std::size_t disk_scanner::mounts_size() const
-{
+std::size_t disk_scanner::mounts_size() const {
     return mounted_paths_.size();
 }
 

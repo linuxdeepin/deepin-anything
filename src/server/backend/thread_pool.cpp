@@ -1,17 +1,15 @@
 #include "thread_pool.h"
 
 
-namespace anything {
+ANYTHING_NAMESPACE_BEGIN
 
 thread_pool::thread_pool(unsigned int num)
-    : stop_thread_{false}
-{
+    : stop_thread_{false} {
     for (unsigned int i = 0; i < num; ++i)
         threads_.emplace_back(std::thread(&thread_pool::thread_loop, this));
 }
 
-void thread_pool::enqueue_detach(job_type job)
-{
+void thread_pool::enqueue_detach(job_type job) {
     {
         std::lock_guard lock(mtx_);
         jobs_.push(std::move(job));
@@ -19,8 +17,7 @@ void thread_pool::enqueue_detach(job_type job)
     cv_.notify_one();
 }
 
-void thread_pool::wait_for_tasks()
-{
+void thread_pool::wait_for_tasks() {
     {
         std::lock_guard lock(mtx_);
         stop_thread_ = true;
@@ -33,14 +30,12 @@ void thread_pool::wait_for_tasks()
     threads_.clear();
 }
 
-bool thread_pool::busy()
-{
+bool thread_pool::busy() {
     std::lock_guard lock(mtx_);
     return !jobs_.empty();
 }
 
-void thread_pool::thread_loop()
-{
+void thread_pool::thread_loop() {
     for (;;) {
         job_type job;
         {
@@ -59,5 +54,4 @@ void thread_pool::thread_loop()
     }
 }
 
-} // namespace anything
-
+ANYTHING_NAMESPACE_END

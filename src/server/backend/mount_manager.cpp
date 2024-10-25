@@ -15,8 +15,7 @@
 ANYTHING_NAMESPACE_BEGIN
 
 mount_manager::mount_manager()
-    : mountinfo_path_{"/proc/self/mountinfo"}
-{
+    : mountinfo_path_{"/proc/self/mountinfo"} {
     update_mount_points();
 }
 
@@ -57,14 +56,12 @@ std::string mount_manager::get_mount_point(unsigned int device) const {
     return mounts_.at(device);
 }
 
-const std::vector<mount_point>& mount_manager::get_mount_points()
-{
+const std::vector<mount_point>& mount_manager::get_mount_points() {
     std::cout << "mount_points: " << mount_points_.size() << " mounts: " << mounts_.size() << "\n";
     return mount_points_;
 }
 
-bool mount_manager::update_mount_points()
-{
+bool mount_manager::update_mount_points() {
     mnt_init_debug(0);
 
     using unique_table_t = std::unique_ptr<libmnt_table, decltype(&mnt_free_table)>; 
@@ -117,8 +114,7 @@ bool mount_manager::update_mount_points()
     return true;
 }
 
-std::string mount_manager::find_mount_point(const std::string& path, bool hardreal)
-{
+std::string mount_manager::find_mount_point(const std::string& path, bool hardreal) {
     std::string result;
     std::string result_path = path;
 
@@ -162,8 +158,7 @@ std::string mount_manager::find_mount_point(const std::string& path, bool hardre
     return result;
 }
 
-bool mount_manager::path_match_type(const std::string& path, const std::string& type)
-{
+bool mount_manager::path_match_type(const std::string& path, const std::string& type) {
     auto point = find_mount_point(path);
     for (const auto& info : mount_points_) {
         if (point == info.target && type == info.type)

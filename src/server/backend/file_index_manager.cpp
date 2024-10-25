@@ -6,6 +6,8 @@
 #include "lucene++/FileUtils.h"
 #include "lucene++/ChineseAnalyzer.h"
 
+#include "jieba_analyzer.h"
+
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -34,6 +36,9 @@ file_index_manager::file_index_manager(std::string index_dir)
 file_index_manager::~file_index_manager() {
     std::cout << "file_index_manager::~file_index_manager()\n";
     if (writer_) {
+        if (!document_batch_.empty()) {
+            process_document_batch();
+        }
         std::cout << "All changes are commited\n";
         this->commit();
         writer_->close();
@@ -61,15 +66,14 @@ void file_index_manager::add_index(file_record record) {
 
 void file_index_manager::add_index_delay(file_record record, size_t batch_size) {
     try {
-        if (!document_exists(record.full_path)) {
+        if (!document_exists(record.full_path))
             document_batch_.push_back(create_document(record));
-
-            if (document_batch_.size() >= batch_size ||
-                (std::chrono::steady_clock::now() - last_process_time_) >= batch_interval_) {
-                    process_document_batch();
-                }
-        } else {
+        else
             std::cout << "Already indexed " << record.full_path << "\n";
+
+        if (document_batch_.size() >= batch_size ||
+            (std::chrono::steady_clock::now() - last_process_time_) >= batch_interval_) {
+            process_document_batch();
         }
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
@@ -159,13 +163,14 @@ bool file_index_manager::indexed() {
     return document_size() > 0;
 }
 
-void file_index_manager::test(String path) {
+void file_index_manager::test(std::string path) {
     // Create an instance of StandardAnalyzer
-    AnalyzerPtr analyzer = newLucene<KeywordAnalyzer>();
-    // AnalyzerPtr analyzer = newLucene<ChineseAnalyzer>();
+    // AnalyzerPtr analyzer = newLucene<SimpleAnalyzer>();
+    std::cout << "test path: " << path << "\n";
+    AnalyzerPtr analyzer = newLucene<jieba_analyzer>(std::move(path));
     
     // Use a StringReader to simulate input
-    TokenStreamPtr tokenStream = analyzer->tokenStream(L"content", newLucene<StringReader>(path));
+    TokenStreamPtr tokenStream = analyzer->tokenStream(L"", nullptr);
     TokenPtr token = newLucene<Token>();
     
     // Tokenize and print out the results
