@@ -1,11 +1,13 @@
-#ifndef ANYTHING_GENL_PARSER_HPP
-#define ANYTHING_GENL_PARSER_HPP
+#ifndef ANYTHING_GENL_PARSER_HPP_
+#define ANYTHING_GENL_PARSER_HPP_
 
 #include <optional>
 #include <type_traits>
 
+#include "anything_fwd.hpp"
 
-namespace anything {
+
+ANYTHING_NAMESPACE_BEGIN
 
 using nla_u8     = uint8_t;
 using nla_u16    = uint16_t;
@@ -41,6 +43,6 @@ private:
     nlattr** tb_;
 };
 
-} // namespace anything
+ANYTHING_NAMESPACE_END
 
-#endif // ANYTHING_GENL_PARSER_HPP
+#endif // ANYTHING_GENL_PARSER_HPP_

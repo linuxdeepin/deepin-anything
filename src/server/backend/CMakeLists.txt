@@ -37,6 +37,7 @@ find_package(Qt5 COMPONENTS DBus REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(PolkitQt5-1)
 find_library(LUCENEPP_LIB lucene++)
+find_library(LUCENEPP_CONTRIB_LIB lucene++-contrib)
 find_path(LUCENEPP_INCLUDE_DIR lucene++)
 
 if (LUCENEPP_LIB AND LUCENEPP_INCLUDE_DIR)
@@ -102,6 +103,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${GNL_LIBRARIES}
     PolkitQt5-1::Agent
     ${LUCENEPP_LIB}
+    ${LUCENEPP_CONTRIB_LIB}
     pthread
     boost_system
 )

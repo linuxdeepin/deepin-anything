@@ -48,15 +48,15 @@ default_event_handler::default_event_handler()
         index_manager_.commit();
     }
 
-    std::cout << "Document size: " << index_manager_.document_size() << "\n";
-    auto results = index_manager_.search_index("scripts");
-    std::cout << "Found " << results.size() << " results\n";
+    std::wcout << L"Document size: " << index_manager_.document_size() << L"\n";
+    auto results = index_manager_.search_index("不错");
+    std::wcout << L"Found " << results.size() << L" results\n";
     for (const auto& record : results) {
         std::cout << "file_name: " << record.file_name << " full_path: " << record.full_path << " is_directory: " << record.is_directory
                         << " modified: " << record.modified << "\n";
     }
 
-    index_manager_.test(L"/data/home/dxnu/scripts/bench-test-100.txt"); // dxnu md   md
+    index_manager_.test("/data/home/dxnu/scripts/bench-test-100.txt今天天气不错"); // dxnu md   md
 }
 
 void default_event_handler::handle(fs_event event) {
@@ -107,10 +107,10 @@ void default_event_handler::handle(fs_event event) {
         break;
     case ACT_RENAME_FILE:
     case ACT_RENAME_FOLDER:
-        std::cout << "Not support file action: " << +event.act << "\n";
+        std::cout << "Don't support file action: " << +event.act << "\n";
         return;
     default:
-        std::cout << "Unknow file action: " << +event.act << "\n";
+        std::cout << "Unknown file action: " << +event.act << "\n";
         return;
     }
 
@@ -142,18 +142,14 @@ void default_event_handler::handle(fs_event event) {
                 index_manager_.add_index_delay(std::move(*record));
             // std::cout << "Insert: ";
             // print(record);
-            // LFTManager::instance().insertFileToLFTBuf(QByteArray(event.src.c_str(), event.src.length()));
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
             // std::cout << "Remove: " << event.src << "\n";
             index_manager_.remove_index(event.src);
-            // LFTManager::instance().removeFileFromLFTBuf(QByteArray(event.src.c_str(), event.src.length()));
         } else if (event.act == ACT_RENAME_FILE || event.act == ACT_RENAME_FOLDER) {
             std::cout << "Rename: " << event.src << " --> ";
             auto record = file_helper::generate_file_record(std::move(event.dst));
             if (record)
                 print(*record);
-            // LFTManager::instance().renameFileOfLFTBuf(QByteArray(event.src.c_str(), event.src.length()), 
-            //     QByteArray(event.dst.c_str(), event.dst.length()));
         }
     }
 

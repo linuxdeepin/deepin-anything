@@ -1,14 +1,17 @@
-#ifndef ANYTHING_THREAD_POOL_HPP
-#define ANYTHING_THREAD_POOL_HPP
+#ifndef ANYTHING_THREAD_POOL_HPP_
+#define ANYTHING_THREAD_POOL_HPP_
 
 #include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <queue>
-#include <vector>
 #include <thread>
+#include <vector>
 
-namespace anything {
+#include "anything_fwd.hpp"
+
+
+ANYTHING_NAMESPACE_BEGIN
 
 class thread_pool {
     using job_type = std::function<void()>;
@@ -30,6 +33,6 @@ private:
     std::queue<job_type> jobs_;
 };
 
-} // namesapce anything
+ANYTHING_NAMESPACE_END
 
-#endif // ANYTHING_THREAD_POOL_HPP
+#endif // ANYTHING_THREAD_POOL_HPP_

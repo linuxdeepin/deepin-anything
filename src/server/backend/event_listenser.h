@@ -1,16 +1,17 @@
-#ifndef ANYTHING_EVENT_LISTENSER_H
-#define ANYTHING_EVENT_LISTENSER_H
+#ifndef ANYTHING_EVENT_LISTENSER_H_
+#define ANYTHING_EVENT_LISTENSER_H_
 
 #include <functional>
 
 #include <netlink/attr.h>
 #include <netlink/handlers.h>
 
-#include "vfs_genl.h"
+#include "anything_fwd.hpp"
 #include "fs_event.h"
+#include "vfs_genl.h"
 
 
-namespace anything {
+ANYTHING_NAMESPACE_BEGIN
 
 using nl_sock_ptr = nl_sock*;
 using nl_msg_ptr  = nl_msg*;
@@ -44,6 +45,6 @@ private:
     std::function<void(fs_event)> handler_;
 };
 
-} // namespace anything
+ANYTHING_NAMESPACE_END
 
-#endif // ANYTHING_EVENT_LISTENSER_H
+#endif // ANYTHING_EVENT_LISTENSER_H_

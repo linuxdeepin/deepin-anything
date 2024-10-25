@@ -20,13 +20,12 @@
 #define FS_EVENT_MAX_BATCH 1
 
 
-namespace anything {
+ANYTHING_NAMESPACE_BEGIN
 
 static nla_policy vfs_policy[VFSMONITOR_A_MAX + 1];
 
 event_listenser::event_listenser()
-    : connected_{ connect(mcsk_) }
-{
+    : connected_{ connect(mcsk_) } {
     auto clean_and_abort = [this] {
         disconnect(mcsk_);
         std::abort();
@@ -60,12 +59,6 @@ event_listenser::event_listenser()
         clean_and_abort();
     }
 
-    // Scan the partitions
-    // if (!partitions_.update()) {
-    //     std::cerr << "Ensure you are running in root mode and have loaded the vfs_monitor module (use: sudo modprobe vfs_monitor).\n";
-    //     clean_and_abort();
-    // }
-
     // Initialize policy
     vfs_policy[VFSMONITOR_A_ACT].type = NLA_U8;
     vfs_policy[VFSMONITOR_A_COOKIE].type = NLA_U32;
@@ -75,16 +68,13 @@ event_listenser::event_listenser()
     vfs_policy[VFSMONITOR_A_PATH].maxlen = 4096;
 }
 
-event_listenser::~event_listenser()
-{
+event_listenser::~event_listenser() {
     disconnect(mcsk_);
-    // pool_.wait_for_tasks();
 }
 
-void event_listenser::start_listening()
-{
+void event_listenser::start_listening() {
     should_stop_ = false;
-    printf("listening for messages\n");
+    std::cout << "listening for messages\n";
     int ep_fd = epoll_create1(0);
     if (ep_fd < 0) {
         std::cerr << "Epoll creation failed.\n";
@@ -139,35 +129,29 @@ void event_listenser::set_handler(std::function<void(fs_event)> handler) {
     handler_ = handler;
 }
 
-bool event_listenser::connect(nl_sock_ptr& sk)
-{
+bool event_listenser::connect(nl_sock_ptr& sk) {
     sk = nl_socket_alloc();
     return sk ? genl_connect(sk) == 0 : false;
 }
 
-void event_listenser::disconnect(nl_sock_ptr& sk)
-{
+void event_listenser::disconnect(nl_sock_ptr& sk) {
     nl_socket_free(sk);
 }
 
-bool event_listenser::set_callback(nl_sock_ptr& sk, nl_recvmsg_msg_cb_t func)
-{
+bool event_listenser::set_callback(nl_sock_ptr& sk, nl_recvmsg_msg_cb_t func) {
     return nl_socket_modify_cb(sk, NL_CB_VALID, NL_CB_CUSTOM, func, this) == 0;
 }
 
-int event_listenser::get_fd(nl_sock_ptr& sk) const
-{
+int event_listenser::get_fd(nl_sock_ptr& sk) const {
     return nl_socket_get_fd(sk);
 }
 
-void event_listenser::forward_event_to_handler(fs_event event)
-{
+void event_listenser::forward_event_to_handler(fs_event event) {
     if (handler_)
         std::invoke(handler_, std::move(event));
 }
 
-int event_listenser::event_handler(nl_msg_ptr msg, void* arg)
-{
+int event_listenser::event_handler(nl_msg_ptr msg, void* arg) {
     static std::unordered_map<uint32_t, std::string> rename_from;
 
     nlattr* tb[VFSMONITOR_A_MAX + 1];
@@ -199,4 +183,4 @@ int event_listenser::event_handler(nl_msg_ptr msg, void* arg)
     return NL_OK;
 }
 
-} // namespace anything
+ANYTHING_NAMESPACE_END

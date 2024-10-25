@@ -44,7 +44,7 @@ public:
     // 是否已建立过索引，document size 不为空返回 true
     bool indexed();
 
-    void test(Lucene::String path);
+    void test(std::string path);
 
     int document_size(bool nrt = false) const;
 

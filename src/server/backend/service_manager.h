@@ -1,15 +1,17 @@
-#ifndef ANYTHING_SERVICE_MANAGER_H
-#define ANYTHING_SERVICE_MANAGER_H
+#ifndef ANYTHING_SERVICE_MANAGER_H_
+#define ANYTHING_SERVICE_MANAGER_H_
 
 #include <string>
 
+#include "anything_fwd.hpp"
 
-namespace anything {
+
+ANYTHING_NAMESPACE_BEGIN
 
 struct service_manager {
     bool register_service(std::string path);
 };
 
-} // namespace anything
+ANYTHING_NAMESPACE_END
 
-#endif // ANYTHING_SERVICE_MANAGER_H
+#endif // ANYTHING_SERVICE_MANAGER_H_
