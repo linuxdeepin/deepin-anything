@@ -1,1 +1,0 @@
-#define delta_debug_print(point) std::cout << "Execution reached at point " << #point << "\n";

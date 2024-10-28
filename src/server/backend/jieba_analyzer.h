@@ -11,16 +11,12 @@ using namespace Lucene;
 
 class LPPCONTRIBAPI jieba_analyzer : public Analyzer {
 public:
-    jieba_analyzer(std::string input);
-    virtual ~jieba_analyzer() {}
+    virtual ~jieba_analyzer();
 
     LUCENE_CLASS(jieba_analyzer);
 
-public:
-    TokenStreamPtr tokenStream(const String&, const ReaderPtr&) override;
-
-private:
-    std::string input_;
+    TokenStreamPtr tokenStream(const String& fieldName, const ReaderPtr& reader) override;
+    TokenStreamPtr reusableTokenStream(const String& fieldName, const ReaderPtr& reader) override;
 };
 
 

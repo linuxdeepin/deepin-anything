@@ -12,15 +12,18 @@ using namespace Lucene;
 
 class LPPCONTRIBAPI jieba_tokenizer : public Tokenizer {
 public:
+    jieba_tokenizer(const ReaderPtr& input);
     jieba_tokenizer(const std::string& input);
-
-    virtual ~jieba_tokenizer() {}
+    virtual ~jieba_tokenizer();
 
     LUCENE_CLASS(jieba_tokenizer);
 
     virtual bool incrementToken();
     virtual void end();
     virtual void reset();
+
+private:
+    std::wstring reader_to_wstring(const Lucene::ReaderPtr& reader) const;
 
 protected:
     TermAttributePtr termAtt;

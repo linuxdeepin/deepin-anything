@@ -7,6 +7,7 @@
 #include "lucene++/ChineseAnalyzer.h"
 
 #include "jieba_analyzer.h"
+#include "log.h"
 
 
 ANYTHING_NAMESPACE_BEGIN
@@ -19,7 +20,8 @@ file_index_manager::file_index_manager(std::string index_dir)
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory_));
         auto create = !IndexReader::indexExists(dir);
         writer_ = newLucene<IndexWriter>(dir,
-            newLucene<StandardAnalyzer>(LuceneVersion::LUCENE_CURRENT),
+            // newLucene<jieba_analyzer>(),
+            newLucene<ChineseAnalyzer>(),
             create, IndexWriter::MaxFieldLengthLIMITED);
         reader_  = IndexReader::open(dir, true);
         nrt_reader_ = writer_->getReader();
@@ -27,19 +29,18 @@ file_index_manager::file_index_manager(std::string index_dir)
         nrt_searcher_ = newLucene<IndexSearcher>(nrt_reader_);
         parser_ = newLucene<QueryParser>(
             LuceneVersion::LUCENE_CURRENT, fuzzy_field_,
-            newLucene<StandardAnalyzer>(LuceneVersion::LUCENE_CURRENT));
+            newLucene<ChineseAnalyzer>()); // newLucene<jieba_analyzer>());
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
 }
 
 file_index_manager::~file_index_manager() {
-    std::cout << "file_index_manager::~file_index_manager()\n";
+    log::info("file_index_manager::~file_index_manager()");
     if (writer_) {
         if (!document_batch_.empty()) {
             process_document_batch();
         }
-        std::cout << "All changes are commited\n";
         this->commit();
         writer_->close();
     }
@@ -69,7 +70,7 @@ void file_index_manager::add_index_delay(file_record record, size_t batch_size) 
         if (!document_exists(record.full_path))
             document_batch_.push_back(create_document(record));
         else
-            std::cout << "Already indexed " << record.full_path << "\n";
+            log::debug("Already indexed {}", record.full_path);
 
         if (document_batch_.size() >= batch_size ||
             (std::chrono::steady_clock::now() - last_process_time_) >= batch_interval_) {
@@ -93,7 +94,7 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
         writer_->deleteDocuments(query);
     }
 
-    std::cout << "Removed index: " << term << "\n";
+    log::debug("Removed index: {}", term);
 }
 
 std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -157,25 +158,24 @@ void file_index_manager::update_index(const std::string& old_path, file_record r
 
 void file_index_manager::commit() {
     writer_->commit();
+    log::info("All changes are commited");
 }
 
 bool file_index_manager::indexed() {
     return document_size() > 0;
 }
 
-void file_index_manager::test(std::string path) {
-    // Create an instance of StandardAnalyzer
-    // AnalyzerPtr analyzer = newLucene<SimpleAnalyzer>();
-    std::cout << "test path: " << path << "\n";
-    AnalyzerPtr analyzer = newLucene<jieba_analyzer>(std::move(path));
+void file_index_manager::test(const String& path) {
+    log::info("test path: {}", StringUtils::toUTF8(path));
+    AnalyzerPtr analyzer = newLucene<ChineseAnalyzer>(); // newLucene<jieba_analyzer>();
     
     // Use a StringReader to simulate input
-    TokenStreamPtr tokenStream = analyzer->tokenStream(L"", nullptr);
+    TokenStreamPtr tokenStream = analyzer->tokenStream(L"", newLucene<StringReader>(path));
     TokenPtr token = newLucene<Token>();
     
     // Tokenize and print out the results
     while (tokenStream->incrementToken()) {
-        std::wcout << L"Token: " << tokenStream->toString() << std::endl;
+        log::info("Token: {}", StringUtils::toUTF8(tokenStream->toString()));
     }
 }
 
@@ -274,7 +274,7 @@ Lucene::DocumentPtr file_index_manager::create_document(const file_record& recor
 void file_index_manager::process_document_batch() {
     for (const auto& doc : document_batch_) {
         writer_->addDocument(doc);
-        std::wcout << L"Indexed: " << doc->get(L"full_path") << L"\n";
+        log::debug(L"Indexed: {}", doc->get(L"full_path"));
     }
 
     document_batch_.clear();

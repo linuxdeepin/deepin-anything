@@ -9,6 +9,7 @@
 #include <libmount.h>
 #include <sys/sysmacros.h> // major(), minor()
 
+#include "enum_helper.h"
 #include "string_helper.h"
 
 

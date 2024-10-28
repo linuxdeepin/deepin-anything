@@ -1,16 +1,15 @@
 #include "default_event_handler.h"
 
-#include <iostream>
-
+#include "log.h"
+#include "print_helper.h"
 #include "string_helper.h"
 #include "vfs_change_consts.h"
 
-#include "print_helper.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
 default_event_handler::default_event_handler()
-    : index_manager_("/home/dxnu/log-files/index-data-home-dir") {
+    : index_manager_("/home/dxnu/log-files/index-data-test-dir") {
     mnt_manager_.update();
 
     // 索引未建立，则扫描建立
@@ -26,8 +25,8 @@ default_event_handler::default_event_handler()
             // std::cout << "Iterate: " << mp.target << "\n";
             // 不确定扫描哪些挂载点，先只扫描这三个
             if (mp.target == "/data"/* || mp.target == "/recovery" || mp.target == "/data"*/) {
-                std::cout << "Scanning " << mp.target << "...\n";
-                scanner_.scan("/data/home", [this, &directories, &files](file_record record) {
+                log::info("Scanning {}...", mp.target);
+                scanner_.scan("/data/home/dxnu/Downloads", [this, &directories, &files](file_record record) {
                     // 过滤掉无法解析的文件路径，":" 是非法字符
                     if (contains(record.full_path, ":") || contains(record.full_path, "[") || contains(record.full_path, "]") ||
                         contains(record.full_path, "{") || contains(record.full_path, "}"))
@@ -35,6 +34,7 @@ default_event_handler::default_event_handler()
 
                     record.is_directory ? directories++ : files++;
                     index_manager_.add_index(std::move(record));
+                    print(record);
                     // std::cout << "file_name: " << record.file_name << " full_path: " << record.full_path << " is_directory: " << record.is_directory
                     //     << " modified: " << record.modified << "\n";
                 });
@@ -43,20 +43,19 @@ default_event_handler::default_event_handler()
 
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> duration = end - start;
-        std::cout << "Scan time: " << duration.count() << " seconds\n";
-        std::cout << "Files: " << files << " Directories: " << directories << "\n";
+        log::info("Scan time: {} seconds", duration.count());
+        log::info("Files: {}, Directories: {}", files, directories);
         index_manager_.commit();
     }
 
-    std::wcout << L"Document size: " << index_manager_.document_size() << L"\n";
-    auto results = index_manager_.search_index("不错");
-    std::wcout << L"Found " << results.size() << L" results\n";
+    log::info("Document size: {}", index_manager_.document_size());
+    auto results = index_manager_.search_index("奖学金");
+    log::info("Found {} result(s).", results.size());
     for (const auto& record : results) {
-        std::cout << "file_name: " << record.file_name << " full_path: " << record.full_path << " is_directory: " << record.is_directory
-                        << " modified: " << record.modified << "\n";
+        print(record);
     }
 
-    index_manager_.test("/data/home/dxnu/scripts/bench-test-100.txt今天天气不错"); // dxnu md   md
+    index_manager_.test(L"/data/home/dxnu/Downloads/2024届地区信息.XLSX"); // dxnu md   md
 }
 
 void default_event_handler::handle(fs_event event) {
@@ -72,8 +71,8 @@ void default_event_handler::handle(fs_event event) {
     if (event.act < ACT_MOUNT) {
         unsigned int device = MKDEV(event.major, event.minor);
         if (!mnt_manager_.contains_device(device)) {
-            std::cout << "Unknown device, " << +event.act << ", dev: " << event.major << ":" << event.minor
-                      << ", path: " << event.src << ", cookie: " << event.cookie << "\n";
+            log::warning("Unknown device, {}, dev: {}:{}, path: {}, cookie: {}",
+                +event.act, event.major, event.minor, event.src, event.cookie);
             return;
         }
 
@@ -107,10 +106,10 @@ void default_event_handler::handle(fs_event event) {
         break;
     case ACT_RENAME_FILE:
     case ACT_RENAME_FOLDER:
-        std::cout << "Don't support file action: " << +event.act << "\n";
+        log::warning("Don't support file action: {}", +event.act);
         return;
     default:
-        std::cout << "Unknown file action: " << +event.act << "\n";
+        log::warning("Unknown file action: {}", +event.act);
         return;
     }
 
@@ -132,7 +131,7 @@ void default_event_handler::handle(fs_event event) {
     bool ignored = false;
     ignored = ignored_event(event.dst.empty() ? event.src : event.dst, ignored);
     if (!ignored) {
-        if (contains(event.src, "/data/home/dxnu/log-files/index-data-home-dir/"))
+        if (contains(event.src, "/data/home/dxnu/log-files/index-data-test-dir/"))
             return;
 
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
