@@ -29,11 +29,6 @@ enum class mountinfo_field {
     fs_options = 11        // 挂载选项 (跳过)
 };
 
-template <typename E>
-constexpr auto to_underlying(E e) noexcept {
-    return static_cast<std::underlying_type_t<E>>(e);
-}
-
 struct mount_point {
     std::string source;
     std::string real_device;

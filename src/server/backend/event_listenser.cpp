@@ -14,6 +14,7 @@
 #include <netlink/socket.h>
 
 #include "genl_parser.hpp"
+#include "log.h"
 #include "vfs_change_consts.h"
 
 #define EPOLL_SIZE         10
@@ -74,10 +75,10 @@ event_listenser::~event_listenser() {
 
 void event_listenser::start_listening() {
     should_stop_ = false;
-    std::cout << "listening for messages\n";
+    log::info("listening for messages");
     int ep_fd = epoll_create1(0);
     if (ep_fd < 0) {
-        std::cerr << "Epoll creation failed.\n";
+        log::error("Epoll creation failed.");
         return;
     }
 
@@ -94,7 +95,7 @@ void event_listenser::start_listening() {
         if (event_cnt == -1) {
             if (errno == EINTR)
                 break;
-            std::cerr << "epoll_wait() error\n";
+            log::error("epoll_wait() error");
             break;
         }
 

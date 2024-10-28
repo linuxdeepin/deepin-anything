@@ -39,10 +39,13 @@ find_package(PolkitQt5-1)
 find_library(LUCENEPP_LIB lucene++)
 find_library(LUCENEPP_CONTRIB_LIB lucene++-contrib)
 find_path(LUCENEPP_INCLUDE_DIR lucene++)
+find_package(fmt REQUIRED)
 
 if (LUCENEPP_LIB AND LUCENEPP_INCLUDE_DIR)
-    message("Found Lucene++ library: " ${LUCENEPP_INCLUDE_DIR})
+    message(STATUS "Found Lucene++ library: " ${LUCENEPP_INCLUDE_DIR})
 endif()
+
+message(STATUS "Found fmtlib: ${fmt_FOUND}")
 
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
@@ -106,6 +109,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${LUCENEPP_CONTRIB_LIB}
     pthread
     boost_system
+    fmt::fmt
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC

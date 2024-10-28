@@ -24,8 +24,6 @@ bool service_manager::register_service(std::string path) {
             return false;
         }
     }
-
-    std::cout << "deepin-anything-backend is running\n";
     return true;
 }
 
