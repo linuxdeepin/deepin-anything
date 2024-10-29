@@ -1,0 +1,6 @@
+@PACKAGE_INIT@
+
+set_and_check(MYLIB_LIB_DIR "@PACKAGE_LIB_INSTALL_DIR@")
+include("${MYLIB_LIB_DIR}/cmake/deepin-anything-server-targets.cmake")
+
+check_required_components(deepin-anything-server)
