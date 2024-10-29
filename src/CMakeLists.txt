@@ -7,7 +7,7 @@ endif(NOT CMAKE_BUILD_TYPE)
 
 message("Build type:"${CMAKE_BUILD_TYPE})
 
-add_subdirectory("library")
+# add_subdirectory("library")
 add_subdirectory("server")
 add_subdirectory("kernelmod")
 
