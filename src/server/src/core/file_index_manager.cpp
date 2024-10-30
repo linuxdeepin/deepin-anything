@@ -9,7 +9,6 @@
 // #include "jieba_analyzer.h"
 #include "anything/utils/log.h"
 
-
 ANYTHING_NAMESPACE_BEGIN
 
 using namespace Lucene;

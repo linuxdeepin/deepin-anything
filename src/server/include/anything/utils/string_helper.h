@@ -6,7 +6,6 @@
 
 #include "anything/common/anything_fwd.hpp"
 
-
 ANYTHING_NAMESPACE_BEGIN
 
 inline std::vector<std::string> split(std::string s, const std::string& delimiter) {

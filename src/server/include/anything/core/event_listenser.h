@@ -10,7 +10,6 @@
 #include "anything/common/fs_event.h"
 #include "anything/common/vfs_genl.h"
 
-
 ANYTHING_NAMESPACE_BEGIN
 
 using nl_sock_ptr = nl_sock*;

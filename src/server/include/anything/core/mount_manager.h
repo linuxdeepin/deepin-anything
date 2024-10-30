@@ -8,7 +8,6 @@
 
 #include "anything/common/anything_fwd.hpp"
 
-
 ANYTHING_NAMESPACE_BEGIN
 
 #define MKDEV(ma,mi)    ((ma)<<8 | (mi))

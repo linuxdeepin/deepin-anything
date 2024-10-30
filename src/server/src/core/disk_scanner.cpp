@@ -4,9 +4,7 @@
 
 #include <mntent.h>
 
-
 ANYTHING_NAMESPACE_BEGIN
-
 
 disk_scanner::disk_scanner(const char* mounts)
     : fmounts_(setmntent(mounts, "r")) {
