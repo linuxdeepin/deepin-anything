@@ -12,7 +12,6 @@
 #include "anything/utils/enum_helper.h"
 #include "anything/utils/string_helper.h"
 
-
 ANYTHING_NAMESPACE_BEGIN
 
 mount_manager::mount_manager()

@@ -7,7 +7,6 @@
 
 #include "anything/common/anything_fwd.hpp"
 
-
 ANYTHING_NAMESPACE_BEGIN
 
 struct file_record {

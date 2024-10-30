@@ -8,9 +8,7 @@
 #include "anything/common/anything_fwd.hpp"
 #include "anything/common/file_record.hpp"
 
-
 ANYTHING_NAMESPACE_BEGIN
-
 
 namespace fs = std::filesystem;
 

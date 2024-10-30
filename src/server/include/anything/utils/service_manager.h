@@ -5,7 +5,6 @@
 
 #include "anything/common/anything_fwd.hpp"
 
-
 ANYTHING_NAMESPACE_BEGIN
 
 struct service_manager {

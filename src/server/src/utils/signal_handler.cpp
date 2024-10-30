@@ -3,7 +3,6 @@
 #include <csignal>
 #include <unordered_map>
 
-
 ANYTHING_NAMESPACE_BEGIN
 
 namespace {

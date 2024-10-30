@@ -6,7 +6,6 @@
 
 #include "anything/common/anything_fwd.hpp"
 
-
 ANYTHING_NAMESPACE_BEGIN
 
 using nla_u8     = uint8_t;

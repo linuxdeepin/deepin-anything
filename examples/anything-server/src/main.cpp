@@ -1,37 +1,36 @@
 #include <anything/anything.hpp>
 
-namespace alog = anything::log;
+using namespace anything;
 
-int main() {
-    // alog::set_encode("");
-    alog::set_level(alog::level::all, true);
+int main(int argc, char** argv) {
+    log::set_level(log::level::all, true);
 
-    anything::service_manager manager;
+    service_manager manager;
     auto ret = manager.register_service("com.deepin.anything");
     if (!ret) {
-        alog::error("Failed to register service");
+        log::error("Failed to register service");
         return -1;
     }
 
-    alog::info("register service succeed\n");
+    log::info("register service succeed\n");
 
-    anything::default_event_handler handler;
-    anything::event_listenser listenser;
-    anything::set_signal_handler(SIGINT, [&listenser](int sig) {
-        alog::info("Interrupt signal ({}) received.", sig);
-        alog::info("Performing cleanup tasks...");
+    auto handler = std::make_shared<default_event_handler>();
+    event_listenser listenser;
+    set_signal_handler(SIGINT, [&listenser](int sig) {
+        log::info("Interrupt signal ({}) received.", sig);
+        log::info("Performing cleanup tasks...");
         listenser.stop_listening();
     });
     
-    listenser.set_handler([&handler](anything::fs_event event) {
-        handler.handle(std::move(event));
+    listenser.set_handler([&handler](fs_event event) {
+        handler->handle(std::move(event));
     });
     listenser.set_idle_task([&handler] {
-        handler.process_documents_if_ready();
+        handler->process_documents_if_ready();
     }, 1000);
     listenser.start_listening();
 
-    alog::info("Exit the anything");
+    log::info("Exit anything");
 }
 
 // #include "mount_manager.h"

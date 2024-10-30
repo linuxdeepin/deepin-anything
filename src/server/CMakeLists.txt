@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.1)
 
 # ---------------------------------------------------------------------------------------
 # Start deepin-anything-server project
@@ -20,6 +20,22 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 
+# Generate QDbus file
+message(STATUS "CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
+message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
+set(DBUS_ADAPTOR_SOURCES com.deepin.anything.xml)
+set(ANYTHING_DBUS_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/anything/core/base_event_handler.h")
+qt5_generate_dbus_interface(${ANYTHING_DBUS_HEADER}
+    com.deepin.anything.xml
+    OPTIONS -A
+)
+qt5_add_dbus_adaptor(DBUS_ADAPTOR_SOURCES
+    ${CMAKE_CURRENT_BINARY_DIR}/com.deepin.anything.xml
+    ${ANYTHING_DBUS_HEADER}
+    base_event_handler
+)
+qt5_wrap_cpp(anything_dbus_server_moc ${ANYTHING_DBUS_HEADER})
+
 # Print dependencies
 message(STATUS "Found Lucene++ library: " ${LUCENEPP_INCLUDE_DIR})
 message(STATUS "Found fmtlib: ${fmt_FOUND}")
@@ -32,16 +48,16 @@ foreach(source_file ${SOURCE_FILES})
     message(STATUS "  ${source_file}")
 endforeach()
 
-# Define a shared library target named `deepin-anything-server`
+# Define a shared library
 add_library(${PROJECT_NAME} SHARED)
 
-target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES})
-
+target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES} ${anything_dbus_server_moc} ${DBUS_ADAPTOR_SOURCES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../kernelmod>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     ${LUCENEPP_INCLUDE_DIR}
     ${GNL_INCLUDE_DIRS}
     ${MOUNT_INCLUDE_DIRS}
