@@ -1,7 +1,9 @@
 #ifndef ANYTHING_EVENT_LISTENSER_H_
 #define ANYTHING_EVENT_LISTENSER_H_
 
+#include <atomic>
 #include <functional>
+#include <thread>
 
 #include <netlink/attr.h>
 #include <netlink/handlers.h>
@@ -22,6 +24,8 @@ public:
 
     void start_listening();
 
+    void async_listen();
+
     void stop_listening();
 
     void set_handler(std::function<void(fs_event)> handler);
@@ -41,11 +45,12 @@ private:
 private:
     nl_sock_ptr mcsk_;
     bool connected_;
-    bool should_stop_;
+    std::atomic<bool> should_stop_;
     int fam_;
+    int timeout_;
     std::function<void(fs_event)> handler_;
     std::function<void()> idle_task_;
-    int timeout_;
+    std::thread listening_thread_;
 };
 
 ANYTHING_NAMESPACE_END

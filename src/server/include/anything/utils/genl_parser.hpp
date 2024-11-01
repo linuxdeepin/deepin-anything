@@ -14,7 +14,6 @@ using nla_u32    = uint32_t;
 using nla_u64    = uint64_t;
 using nla_string = char*;
 
-
 class nla_parser {
 public:
     explicit nla_parser(nlattr** tb) : tb_{tb} {}

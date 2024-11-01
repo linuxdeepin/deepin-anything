@@ -1,7 +1,9 @@
 #ifndef ANYTHING_STRING_HELPER_H_
 #define ANYTHING_STRING_HELPER_H_
 
+#include <algorithm>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "anything/common/anything_fwd.hpp"
@@ -31,6 +33,14 @@ inline bool ends_with(const std::string& path, const std::string& ending) {
 
 inline bool contains(const std::string& str, const std::string& substr) {
     return str.find(substr) != std::string::npos;
+}
+
+inline bool contains_invalid_chars(const std::string& path) {
+    // Set of characters that are not allowed in file paths
+    std::unordered_set<char> invalid_chars = { ':', '[', ']', '{', '}' };
+    return std::any_of(path.begin(), path.end(), [&invalid_chars](char c) {
+        return invalid_chars.count(c);
+    });
 }
 
 ANYTHING_NAMESPACE_END

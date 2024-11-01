@@ -1,41 +1,34 @@
-#include <anything/anything.hpp>
+#include <QCoreApplication>
+
+#include "anything/anything.hpp"
 
 using namespace anything;
 
-#include <QCoreApplication>
-
-int main(int argc, char** argv) {
+int main(int argc, char* argv[]) {
     QCoreApplication app(argc, argv);
-    default_event_handler handler;
+
+    log::set_level(log::level::all, true);
+
+    event_listenser listenser;
+    auto handler = std::make_shared<default_event_handler>();
+    listenser.set_handler([&handler](fs_event event) {
+        handler->handle(std::move(event));
+    });
+    listenser.set_idle_task([&handler] {
+        handler->process_documents_if_ready();
+        handler->run_scheduled_task(); // 有同步问题需要处理
+    }, 1000);
+
+    // Process the interrupt signal
+    set_signal_handler(SIGINT, [&listenser, &app](int sig) {
+        log::info("Interrupt signal ({}) received.", sig);
+        log::info("Performing cleanup tasks...");
+        listenser.stop_listening();
+        app.exit();
+    });
+
+    listenser.async_listen();
     app.exec();
-
-    // log::set_level(log::level::all, true);
-
-    // service_manager manager;
-    // auto ret = manager.register_service("com.deepin.anything");
-    // if (!ret) {
-    //     log::error("Failed to register service");
-    //     return -1;
-    // }
-
-    // log::info("register service succeed\n");
-
-    // event_listenser listenser;
-    // set_signal_handler(SIGINT, [&listenser](int sig) {
-    //     log::info("Interrupt signal ({}) received.", sig);
-    //     log::info("Performing cleanup tasks...");
-    //     listenser.stop_listening();
-    // });
-    
-    // listenser.set_handler([&handler](fs_event event) {
-    //     handler->handle(std::move(event));
-    // });
-    // listenser.set_idle_task([&handler] {
-    //     handler->process_documents_if_ready();
-    // }, 1000);
-    // listenser.start_listening();
-
-    // log::info("Exit anything");
 }
 
 // #include "mount_manager.h"
@@ -49,32 +42,41 @@ int main(int argc, char** argv) {
 
 // #include <iostream>
 
-// #include "disk_scanner.h"
-// #include "file_index_manager.h"
-// #include "print_helper.h"
+// #include "anything/core/disk_scanner.h"
+// #include "anything/core/file_index_manager.h"
+// #include "anything/utils/print_helper.h"
 
 // using namespace anything;
 
-
-// int main() {
+// int main()
+// {
 //     int directories = 0;
 //     int files = 0;
-//     file_index_manager index_manager{ "/home/dxnu/log-files/index-test-dir" };
+//     file_index_manager index_manager{ "/home/dxnu/log-files/index-temp-dir" };
 
 //     if (!index_manager.indexed()) {
 //         auto start = std::chrono::high_resolution_clock::now();
 
 //         disk_scanner scanner;
-//         scanner.scan("/data/home/dxnu/dxnu-obsidian", [&directories, &files, &index_manager](auto record) {
-//             if (record.is_directory) {
-//                 directories++;
-//             } else {
-//                 files++;
-//             }
+//         // scanner.scan("/data/home", [&directories, &files, &index_manager](auto record) {
+//         //     if (record.is_directory) {
+//         //         directories++;
+//         //     } else {
+//         //         files++;
+//         //     }
 
-//             print(record);
-//             // index_manager.add_index(std::move(record));
-//         });
+//         //     // print(record);
+//         //     index_manager.add_index_delay(std::move(record));
+//         // });
+//         [[maybe_unused]] auto records = scanner.parallel_scan("/data/home");
+//         files = records.size();
+//         int count = 0;
+//         for (auto&& record : records) {
+//             index_manager.add_index_delay(std::move(record));
+//             if (++count % 200 == 0) {
+//                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
+//             }
+//         }
 
 //         auto end = std::chrono::high_resolution_clock::now();
 //         std::chrono::duration<double> duration = end - start;
@@ -83,13 +85,13 @@ int main(int argc, char** argv) {
 //     }
 
 //     std::cout << "Document size: " << index_manager.document_size() << "\n";
-//     index_manager.search_index("index");
-//     std::cout << "---------------------------------\n";
-//     index_manager.search_index("/data/home/dxnu/dxnu-obsidian/Index", true);
-//     std::cout << "---------------------------------\n";
-//     index_manager.search_index("/data/home/dxnu/dxnu-obsidian/Project", true, true);
-//     std::cout << "---------------------------------\n";
-//     index_manager.test(L"/data/home/dxnu/dxnu-obsidian/Index");
+//     // index_manager.search_index("index");
+//     // std::cout << "---------------------------------\n";
+//     // index_manager.search_index("/data/home/dxnu/dxnu-obsidian/Index", true);
+//     // std::cout << "---------------------------------\n";
+//     // index_manager.search_index("/data/home/dxnu/dxnu-obsidian/Project", true, true);
+//     // std::cout << "---------------------------------\n";
+//     // index_manager.test(L"/data/home/dxnu/dxnu-obsidian/Index");
 // }
 
 

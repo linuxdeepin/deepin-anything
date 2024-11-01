@@ -49,7 +49,7 @@ foreach(source_file ${SOURCE_FILES})
 endforeach()
 
 # Define a shared library
-add_executable(${PROJECT_NAME})
+add_library(${PROJECT_NAME} SHARED)
 
 target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES} ${anything_dbus_server_moc} ${DBUS_ADAPTOR_SOURCES})
 
@@ -76,3 +76,49 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror -Wextra)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+
+include(GNUInstallDirs)
+
+install(TARGETS ${PROJECT_NAME}
+        EXPORT "${PROJECT_NAME}-targets"
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(
+    DIRECTORY ${PROJECT_SOURCE_DIR}/include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(EXPORT "${PROJECT_NAME}-targets"
+    NAMESPACE ${PROJECT_NAME}::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}/cmake
+)
+
+include(CMakePackageConfigHelpers)
+set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME})
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}-config.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}/cmake
+    PATH_VARS LIB_INSTALL_DIR
+)
+
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake" "include(CMakeFindDependencyMacro)\nfind_dependency(fmt)\nfind_dependency(Qt5 REQUIRED Core DBus)")
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}/cmake
+)
+
+include(CMakePackageConfigHelpers)
+
+write_basic_package_version_file(
+    "${PROJECT_NAME}-config-version.cmake"
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}/cmake
+)
