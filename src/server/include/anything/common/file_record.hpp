@@ -16,7 +16,6 @@ struct file_record {
     int64_t modified; // milliseconds time since epoch
 };
 
-
 namespace file_helper {
 
 namespace fs = std::filesystem;
@@ -25,17 +24,17 @@ inline std::optional<file_record> generate_file_record(const fs::path& p) {
     if (!fs::exists(p))
         return std::nullopt;
 
-    auto file_name = p.filename().string();
-    auto is_directory = fs::is_directory(p);
+    auto file_name       = p.filename().string();
+    auto is_directory    = fs::is_directory(p);
     auto last_write_time = fs::last_write_time(p);
-    auto duration = last_write_time.time_since_epoch();
-    auto milliseconds =  std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+    auto duration        = last_write_time.time_since_epoch();
+    auto milliseconds    =  std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
 
     return file_record {
-        .file_name=std::move(file_name),
-        .full_path=p.string(),
-        .is_directory=is_directory,
-        .modified=milliseconds
+        .file_name    = std::move(file_name),
+        .full_path    = p.string(),
+        .is_directory = is_directory,
+        .modified     = milliseconds
     };
 }
 

@@ -1,7 +1,9 @@
 #ifndef ANYTHING_FILE_INDEX_MANAGER_H_
 #define ANYTHING_FILE_INDEX_MANAGER_H_
 
-#include "lucene++/LuceneHeaders.h"
+#include <mutex>
+
+#include <lucene++/LuceneHeaders.h>
 
 #include "anything/common/anything_fwd.hpp"
 #include "anything/common/file_record.hpp"
@@ -94,8 +96,8 @@ private:
     std::chrono::steady_clock::time_point last_process_time_ = std::chrono::steady_clock::now();
     const std::chrono::milliseconds batch_interval_ = std::chrono::milliseconds(100); // 批量时间窗口
     std::size_t batch_size_;
+    std::mutex mtx_;
 };
-
 
 ANYTHING_NAMESPACE_END
 

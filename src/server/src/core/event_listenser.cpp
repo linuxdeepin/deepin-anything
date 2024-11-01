@@ -73,9 +73,11 @@ event_listenser::~event_listenser() {
     disconnect(mcsk_);
 }
 
+/// All member variables, except `should_stop_`, are fully initialized before invoking `start_listening()`.
+/// Therefore, synchronization is required only for `should_stop_`.
 void event_listenser::start_listening() {
     should_stop_ = false;
-    log::info("listening for messages");
+    log::debug("listening for messages");
     int ep_fd = epoll_create1(0);
     if (ep_fd < 0) {
         log::error("Epoll creation failed.");
@@ -114,8 +116,16 @@ void event_listenser::start_listening() {
     delete[] ep_events;
 }
 
+void event_listenser::async_listen() {
+    listening_thread_ = std::thread(&event_listenser::start_listening, this);
+}
+
 void event_listenser::stop_listening() {
     should_stop_ = true;
+
+    if (listening_thread_.joinable()) {
+        listening_thread_.join();
+    }
 }
 
 void event_listenser::set_handler(std::function<void(fs_event)> handler) {

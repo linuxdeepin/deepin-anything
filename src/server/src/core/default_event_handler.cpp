@@ -8,53 +8,54 @@
 ANYTHING_NAMESPACE_BEGIN
 
 default_event_handler::default_event_handler()
-    : base_event_handler("/home/dxnu/log-files/index-data-test-dir") {
+    : base_event_handler("/home/dxnu/log-files/index-data-test-dir"),
+      records_(scanner_.parallel_scan("/home/dxnu")) {
+
     mnt_manager_.update();
-
     // 索引未建立，则扫描建立
-    if (!index_manager_.indexed()) {
-        int directories = 0;
-        int files = 0;
-        auto start = std::chrono::high_resolution_clock::now();
+    // if (!index_manager_.indexed()) {
+    //     int directories = 0;
+    //     int files = 0;
+    //     auto start = std::chrono::high_resolution_clock::now();
 
-        for (const auto& mp : mnt_manager_.get_mount_points()) {
-            // if (mp.target == "/" || mp.root != "/")
-            //     continue;
+    //     for (const auto& mp : mnt_manager_.get_mount_points()) {
+    //         // if (mp.target == "/" || mp.root != "/")
+    //         //     continue;
 
-            // std::cout << "Iterate: " << mp.target << "\n";
-            // 不确定扫描哪些挂载点，先只扫描这三个
-            if (mp.target == "/data"/* || mp.target == "/recovery" || mp.target == "/data"*/) {
-                log::info("Scanning {}...", mp.target);
-                scanner_.scan("/data/home/dxnu/Downloads", [this, &directories, &files](file_record record) {
-                    // 过滤掉无法解析的文件路径，":" 是非法字符
-                    if (contains(record.full_path, ":") || contains(record.full_path, "[") || contains(record.full_path, "]") ||
-                        contains(record.full_path, "{") || contains(record.full_path, "}"))
-                        return;
+    //         // std::cout << "Iterate: " << mp.target << "\n";
+    //         // 不确定扫描哪些挂载点，先只扫描这三个
+    //         // 使用分批处理或多线程来降低 CPU Usage
+    //         if (mp.target == "/data"/* || mp.target == "/recovery" || mp.target == "/data"*/) {
+    //             log::info("Scanning {}...", mp.target);
+    //             scanner_.scan("/data/home/dxnu/Downloads", [this, &directories, &files](file_record record) {
+    //                 // Skip if the path contains any invalid character
+    //                 if (contains_invalid_chars(record.full_path)) {
+    //                     return;
+    //                 }
 
-                    record.is_directory ? directories++ : files++;
-                    index_manager_.add_index(std::move(record));
-                    print(record);
-                    // std::cout << "file_name: " << record.file_name << " full_path: " << record.full_path << " is_directory: " << record.is_directory
-                    //     << " modified: " << record.modified << "\n";
-                });
-            }
-        }
+    //                 record.is_directory ? directories++ : files++;
+    //                 index_manager_.add_index_delay(std::move(record));
+    //                 // print(record);
+    //             });
+    //         }
+    //     }
 
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> duration = end - start;
-        log::info("Scan time: {} seconds", duration.count());
-        log::info("Files: {}, Directories: {}", files, directories);
-        index_manager_.commit();
-    }
+    //     auto end = std::chrono::high_resolution_clock::now();
+    //     std::chrono::duration<double> duration = end - start;
+    //     log::info("Scan time: {} seconds", duration.count());
+    //     log::info("Files: {}, Directories: {}", files, directories);
+    //     index_manager_.commit();
+    // }
 
-    log::info("Document size: {}", index_manager_.document_size());
-    auto results = index_manager_.search_index(".XLSX");
-    log::info("Found {} result(s).", results.size());
-    for (const auto& record : results) {
-        print(record);
-    }
+    log::debug("Record size: {}", records_.size());
+    // log::info("Document size: {}", index_manager_.document_size());
+    // auto results = index_manager_.search_index("bench");
+    // log::info("Found {} result(s).", results.size());
+    // for (const auto& record : results) {
+    //     print(record);
+    // }
 
-    index_manager_.test(L"/data/home/dxnu/Downloads/2024届地区信息.XLSX"); // dxnu md   md
+    // index_manager_.test(L"/data/home/dxnu/Downloads/2024届地区信息.XLSX"); // dxnu md   md
 }
 
 void default_event_handler::handle(fs_event event) {
@@ -136,21 +137,30 @@ void default_event_handler::handle(fs_event event) {
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
             auto record = file_helper::generate_file_record(std::move(event.src));
-            if (record)
+            if (record) {
                 index_manager_.add_index_delay(std::move(*record));
-            // std::cout << "Insert: ";
-            // print(record);
+            }
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
-            // std::cout << "Remove: " << event.src << "\n";
-            index_manager_.remove_index(event.src);
+            // index_manager_.remove_index(event.src);
         } else if (event.act == ACT_RENAME_FILE || event.act == ACT_RENAME_FOLDER) {
-            std::cout << "Rename: " << event.src << " --> ";
-            auto record = file_helper::generate_file_record(std::move(event.dst));
-            if (record)
-                print(*record);
+            // auto record = file_helper::generate_file_record(std::move(event.dst));
+            // if (record) {
+            //     index_manager_.update_index(event.src, std::move(*record));
+            // }
         }
     }
 
+}
+
+// 需要考虑是否需要同步
+void default_event_handler::run_scheduled_task() {
+    if (!records_.empty()) {
+        size_t batch_size = std::min(size_t(500), records_.size());
+        for (size_t i = 0; i < batch_size; ++i) {
+            index_manager_.add_index_delay(std::move(records_.front()));
+            records_.pop_front();
+        }
+    }
 }
 
 ANYTHING_NAMESPACE_END

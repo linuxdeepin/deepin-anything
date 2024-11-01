@@ -11,7 +11,10 @@ public:
     
     void handle(fs_event event) override;
 
+    void run_scheduled_task() override;
+
 private:
+    std::deque<file_record> records_;
     std::unordered_map<uint32_t, std::string> rename_from_;
 };
 

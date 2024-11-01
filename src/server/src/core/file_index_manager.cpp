@@ -67,6 +67,7 @@ void file_index_manager::add_index(file_record record) {
 
 void file_index_manager::add_index_delay(file_record record) {
     try {
+        std::lock_guard<std::mutex> lock(mtx_);
         if (!document_exists(record.full_path))
             document_batch_.push_back(create_document(record));
         else
@@ -79,19 +80,23 @@ void file_index_manager::add_index_delay(file_record record) {
 }
 
 void file_index_manager::remove_index(const std::string& term, bool exact_match) {
-    if (exact_match) {
-        // 精确删除，term 须是路径
-        // TermPtr 是精确删除，field 如果使用了分词，便无法找到，导致删除失败，因此这种方式所对应的 term 必须是 Non-tokenized
-        TermPtr pterm = newLucene<Term>(exact_field_, StringUtils::toUnicode(term));
-        writer_->deleteDocuments(pterm);
-    } else {
-        // 模糊删除，term 可以是文件名
-        // 如果 field 已经是分词，则使用 parser 解析后再删除
-        QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
-        writer_->deleteDocuments(query);
-    }
+    try {
+        if (exact_match) {
+            // 精确删除，term 须是路径
+            // TermPtr 是精确删除，field 如果使用了分词，便无法找到，导致删除失败，因此这种方式所对应的 term 必须是 Non-tokenized
+            TermPtr pterm = newLucene<Term>(exact_field_, StringUtils::toUnicode(term));
+            writer_->deleteDocuments(pterm);
+        } else {
+            // 模糊删除，term 可以是文件名
+            // 如果 field 已经是分词，则使用 parser 解析后再删除
+            QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
+            writer_->deleteDocuments(query);
+        }
 
-    log::debug("Removed index: {}", term);
+        log::debug("Removed index: {}", term);
+    } catch (const LuceneException& e) {
+        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+    }
 }
 
 std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -137,7 +142,7 @@ void file_index_manager::update_index(const std::string& old_path, file_record r
         int64_t indexed_file_time = DateTools::stringToTime(doc->get(L"last_write_time"));
         int64_t insert_file_time = record.modified;
         if (insert_file_time > indexed_file_time) {
-            std::cout << "indexed file time: " << indexed_file_time << " insert file time: " << insert_file_time << "\n";
+            // std::cout << "indexed file time: " << indexed_file_time << " insert file time: " << insert_file_time << "\n";
             // 准备更新
             std::string full_path = record.full_path;
             this->remove_index(old_path); // 手动删除旧路径
@@ -146,7 +151,7 @@ void file_index_manager::update_index(const std::string& old_path, file_record r
         return;
     }
 
-    std::cout << "TotalHits: " << collector->getTotalHits() << "\n";
+    log::debug("TotalHits: {}", collector->getTotalHits());
     // std::cout << "Update index: " << old_path << "\n";
 
     // 新记录不存在，直接更新
@@ -238,18 +243,10 @@ Lucene::TopScoreDocCollectorPtr file_index_manager::nrt_search(const std::string
 }
 
 void file_index_manager::update(const std::string& term, file_record record, bool exact_match) {
+    log::debug("Renamed: {} --> {}", term, record.full_path);
     if (exact_match) {
         // 精确更新，term 必须是路径，否则 updateDocument 无法删除
-        DocumentPtr doc = newLucene<Document>();
-        doc->add(newLucene<Field>(L"file_name",
-            StringUtils::toUnicode(record.file_name),
-            Field::STORE_YES, Field::INDEX_ANALYZED));
-        doc->add(newLucene<Field>(L"full_path",
-            StringUtils::toUnicode(record.full_path),
-            Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-        doc->add(newLucene<Field>(L"last_write_time",
-            DateTools::timeToString(record.modified, DateTools::RESOLUTION_MILLISECOND),
-            Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+        auto doc = create_document(record);
         writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(term)), doc);
     } else {
         // 模糊更新，term 可以是文件名，此时手动调用 remove_index 和 insert_index 来更新

@@ -9,26 +9,32 @@
 #include "anything/core/file_index_manager.h"
 #include "anything/core/mount_manager.h"
 
-class base_event_handler : public QObject {
+class base_event_handler : public QObject
+{
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "com.deepin.IAnything")
+    Q_CLASSINFO("D-Bus Interface", "my.test.IAnything")
 
 public:
-    base_event_handler(std::string index_dir, QObject* parent = nullptr);
+    base_event_handler(std::string index_dir, QObject *parent = nullptr);
     virtual ~base_event_handler();
 
     void process_documents_if_ready();
 
     virtual void handle(anything::fs_event event) = 0;
 
+    virtual void run_scheduled_task();
+
 protected:
     bool ignored_event(const std::string& path, bool ignored);
 
 public slots:
-    void testMethod();
+    double multiply(double factor0, double factor2);
+    double divide(double divident, double divisor);
+    
 
 signals:
-    void testSignal();
+    void newProduct(double product);
+    void newQuotient(double quotient);
 
 protected:
     anything::mount_manager mnt_manager_;
