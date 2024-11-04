@@ -96,7 +96,7 @@ private:
     std::chrono::steady_clock::time_point last_process_time_ = std::chrono::steady_clock::now();
     const std::chrono::milliseconds batch_interval_ = std::chrono::milliseconds(100); // 批量时间窗口
     std::size_t batch_size_;
-    std::mutex mtx_;
+    // std::mutex mtx_;
 };
 
 ANYTHING_NAMESPACE_END

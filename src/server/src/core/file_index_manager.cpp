@@ -36,7 +36,7 @@ file_index_manager::file_index_manager(std::string index_dir)
 }
 
 file_index_manager::~file_index_manager() {
-    log::info("file_index_manager::~file_index_manager()");
+    // log::debug("{}", __PRETTY_FUNCTION__);
     if (writer_) {
         if (!document_batch_.empty()) {
             process_document_batch();
@@ -54,9 +54,8 @@ file_index_manager::~file_index_manager() {
 void file_index_manager::add_index(file_record record) {
     try {
         if (!document_exists(record.full_path)) {
-            auto doc = create_document(record);
             std::cout << "Indexed: " << record.full_path << "\n";
-            writer_->addDocument(doc);
+            writer_->addDocument(create_document(record));
         } else {
             std::cout << "Already indexed " << record.full_path << "\n";
         }
@@ -66,8 +65,9 @@ void file_index_manager::add_index(file_record record) {
 }
 
 void file_index_manager::add_index_delay(file_record record) {
+    // log::debug("{}", __PRETTY_FUNCTION__);
     try {
-        std::lock_guard<std::mutex> lock(mtx_);
+        // std::lock_guard<std::mutex> lock(mtx_);
         if (!document_exists(record.full_path))
             document_batch_.push_back(create_document(record));
         else
@@ -80,6 +80,7 @@ void file_index_manager::add_index_delay(file_record record) {
 }
 
 void file_index_manager::remove_index(const std::string& term, bool exact_match) {
+    // log::debug("{}", __PRETTY_FUNCTION__);
     try {
         if (exact_match) {
             // 精确删除，term 须是路径
@@ -132,30 +133,47 @@ std::vector<file_record> file_index_manager::search_index(const std::string& ter
 }
 
 void file_index_manager::update_index(const std::string& old_path, file_record record) {
-    auto collector = nrt_search(record.full_path, true);
+    log::debug("{}", __PRETTY_FUNCTION__);
 
-    // 新记录已存在，则根据修改时间决定是否更新
-    if (collector->getTotalHits() == 1) {
-        // std::cout << "Already index: " << record.full_path() << "\n";
-        Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
-        DocumentPtr doc = searcher_->doc(hits[0]->doc);
-        int64_t indexed_file_time = DateTools::stringToTime(doc->get(L"last_write_time"));
-        int64_t insert_file_time = record.modified;
-        if (insert_file_time > indexed_file_time) {
-            // std::cout << "indexed file time: " << indexed_file_time << " insert file time: " << insert_file_time << "\n";
-            // 准备更新
-            std::string full_path = record.full_path;
-            this->remove_index(old_path); // 手动删除旧路径
-            this->update(full_path, std::move(record));
-        }
-        return;
-    }
+    // 记录时间本无意义，故注释，后期删除
+    // auto collector = nrt_search(record.full_path, true);
 
-    log::debug("TotalHits: {}", collector->getTotalHits());
+    // log::debug("Excution reached point #1");
+
+    // try {
+
+    // // 新记录已存在，则根据修改时间决定是否更新
+    // if (collector->getTotalHits() == 1) {
+    //     // std::cout << "Already index: " << record.full_path() << "\n";
+    //     Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
+    //     log::debug("Excution reached point #2");
+    //     DocumentPtr doc = nrt_searcher_->doc(hits[0]->doc); 
+    //     log::debug("Excution reached point #3");
+    //     int64_t indexed_file_time = DateTools::stringToTime(doc->get(L"last_write_time"));
+    //     int64_t insert_file_time = record.modified;
+    //     if (insert_file_time > indexed_file_time) {
+    //         log::debug("Excution reached point #4");
+    //         // std::cout << "indexed file time: " << indexed_file_time << " insert file time: " << insert_file_time << "\n";
+    //         // 准备更新
+    //         std::string full_path = record.full_path;
+    //         this->remove_index(old_path); // 手动删除旧路径敛去轻狂
+    //         this->update(full_path, std::move(record));
+    //         log::debug("Excution reached point #5");
+    //     }
+    //     log::debug("Excution reached point #6");
+    //     return;
+    // }
+
+    // } catch (const Lucene::LuceneException& e) {
+    //     std::cerr << "LuceneException caught: " << e.what() << " at " << __FILE__ << ":" << __LINE__ << std::endl;
+    //     throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+    // }
+
+    // log::debug("TotalHits: {}", collector->getTotalHits());
     // std::cout << "Update index: " << old_path << "\n";
 
-    // 新记录不存在，直接更新
-    this->update(old_path, std::move(record));
+    // 直接更新
+    update(old_path, std::move(record));
 }
 
 void file_index_manager::commit() {

@@ -2,10 +2,13 @@
 #define ANYTHING_LOG_H_
 
 #include <iostream>
+#include <thread>
 
 #include <fmt/chrono.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <fmt/ostream.h> // for setting output stream
+#include <fmt/std.h>     // for printing std::this_thread::get_id()
 #include <fmt/xchar.h>
 
 #include "anything/common/anything_fwd.hpp"
@@ -60,7 +63,7 @@ namespace detail {
 
 inline void print_pattern_info(std::string_view level_info) {
     using namespace std::chrono;
-    fmt::print("[{:%Y-%m-%d %H:%M:%S}] [{}] ", system_clock::now(), level_info);
+    fmt::print("[{:%Y-%m-%d %H:%M:%S}] [{}] [Thread {}] ", system_clock::now(), level_info, std::this_thread::get_id());
 }
 
 } // namespace detail
@@ -93,15 +96,15 @@ inline auto info(fmt::format_string<Args...>&& fmt, Args&&... args)
     }
 }
 
-template <typename... Args>
-inline auto info(fmt::wformat_string<Args...>&& fmt, Args&&... args)
-    -> void {
-    if (level_info_enabled) {
-        detail::print_pattern_info("INFO");
-        std::wcout << fmt::format(std::forward<fmt::wformat_string<Args...>>(fmt), std::forward<Args>(args)...);
-        std::wcout << L"\n";
-    }
-}
+// template <typename... Args>
+// inline auto info(fmt::wformat_string<Args...>&& fmt, Args&&... args)
+//     -> void {
+//     if (level_info_enabled) {
+//         detail::print_pattern_info("INFO");
+//         std::wcout << fmt::format(std::forward<fmt::wformat_string<Args...>>(fmt), std::forward<Args>(args)...);
+//         std::wcout << L"\n";
+//     }
+// }
 
 template <typename... Args>
 inline auto warning(fmt::format_string<Args...>&& fmt, Args&&... args)
@@ -130,11 +133,10 @@ inline auto error(fmt::format_string<Args...>&& fmt, Args&&... args)
     }
 }
 
-inline void set_encode(const char* loc = "") {
-    std::ios_base::sync_with_stdio(false);
-    std::wcout.imbue(std::locale(loc));
-}
-
+// inline void set_encode(const char* loc = "") {
+//     std::ios_base::sync_with_stdio(false);
+//     std::wcout.imbue(std::locale(loc));
+// }
 
 } // namespace log
 
