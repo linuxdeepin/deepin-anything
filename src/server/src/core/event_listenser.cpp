@@ -124,7 +124,9 @@ void event_listenser::stop_listening() {
     should_stop_ = true;
 
     if (listening_thread_.joinable()) {
+        auto thread_id = listening_thread_.get_id();
         listening_thread_.join();
+        log::info("Thread {} has exited.", thread_id);
     }
 }
 

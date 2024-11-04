@@ -134,6 +134,8 @@ void default_event_handler::handle(fs_event event) {
         if (contains(event.src, "/data/home/dxnu/log-files/index-data-test-dir/"))
             return;
 
+        // log::info("Received a {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
+
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
             auto record = file_helper::generate_file_record(std::move(event.src));
@@ -141,18 +143,21 @@ void default_event_handler::handle(fs_event event) {
                 index_manager_.add_index_delay(std::move(*record));
             }
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
-            // index_manager_.remove_index(event.src);
+            index_manager_.remove_index(event.src);
         } else if (event.act == ACT_RENAME_FILE || event.act == ACT_RENAME_FOLDER) {
-            // auto record = file_helper::generate_file_record(std::move(event.dst));
-            // if (record) {
-            //     index_manager_.update_index(event.src, std::move(*record));
-            // }
+            auto record = file_helper::generate_file_record(std::move(event.dst));
+            if (record) {
+                index_manager_.update_index(event.src, std::move(*record));
+            }
         }
     }
-
 }
 
-// 需要考虑是否需要同步
+// `records_` is safe because it is accessed exclusively within this function,
+// which is called by only one thread after `records_` is initialized.
+// `index_manager_` is not safe.
+// 此种是否要重新判断文件的存在情况，扫描记录后，未创建索引时，
+// 用户将文件重命名或删除，此时记录便非最新，也就没有必要建立索引了
 void default_event_handler::run_scheduled_task() {
     if (!records_.empty()) {
         size_t batch_size = std::min(size_t(500), records_.size());
