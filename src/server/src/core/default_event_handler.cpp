@@ -1,8 +1,8 @@
-#include "anything/core/default_event_handler.h"
+#include "core/default_event_handler.h"
 
-#include "anything/utils/log.h"
-#include "anything/utils/print_helper.h"
-#include "anything/utils/string_helper.h"
+#include "utils/log.h"
+#include "utils/print_helper.h"
+#include "utils/string_helper.h"
 #include "vfs_change_consts.h"
 
 ANYTHING_NAMESPACE_BEGIN
@@ -48,12 +48,12 @@ default_event_handler::default_event_handler()
     // }
 
     log::debug("Record size: {}", records_.size());
-    // log::info("Document size: {}", index_manager_.document_size());
-    // auto results = index_manager_.search_index("bench");
-    // log::info("Found {} result(s).", results.size());
-    // for (const auto& record : results) {
-    //     print(record);
-    // }
+    log::debug("Document size: {}", index_manager_.document_size());
+    auto results = index_manager_.search_index("test haha");
+    log::debug("Found {} result(s).", results.size());
+    for (const auto& record : results) {
+        print(record);
+    }
 
     // index_manager_.test(L"/data/home/dxnu/Downloads/2024届地区信息.XLSX"); // dxnu md   md
 }
@@ -153,11 +153,7 @@ void default_event_handler::handle(fs_event event) {
     }
 }
 
-// `records_` is safe because it is accessed exclusively within this function,
-// which is called by only one thread after `records_` is initialized.
-// `index_manager_` is not safe.
-// 此种是否要重新判断文件的存在情况，扫描记录后，未创建索引时，
-// 用户将文件重命名或删除，此时记录便非最新，也就没有必要建立索引了
+// 没有线程安全问题，因为所有数据都处于同一线程
 void default_event_handler::run_scheduled_task() {
     if (!records_.empty()) {
         size_t batch_size = std::min(size_t(500), records_.size());

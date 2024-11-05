@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "anything/common/anything_fwd.hpp"
+#include "common/anything_fwd.hpp"
 
 ANYTHING_NAMESPACE_BEGIN
 

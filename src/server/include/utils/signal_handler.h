@@ -3,7 +3,7 @@
 
 #include <functional>
 
-#include "anything/common/anything_fwd.hpp"
+#include "common/anything_fwd.hpp"
 
 ANYTHING_NAMESPACE_BEGIN
 

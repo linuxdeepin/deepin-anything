@@ -8,9 +8,9 @@
 #include <netlink/attr.h>
 #include <netlink/handlers.h>
 
-#include "anything/common/anything_fwd.hpp"
-#include "anything/common/fs_event.h"
-#include "anything/common/vfs_genl.h"
+#include "common/anything_fwd.hpp"
+#include "common/fs_event.h"
+#include "common/vfs_genl.h"
 
 ANYTHING_NAMESPACE_BEGIN
 

@@ -1,10 +1,10 @@
-#include "anything/core/disk_scanner.h"
+#include "core/disk_scanner.h"
 
 #include <string>
 
 #include <mntent.h>
 
-#include "anything/utils/log.h"
+#include "utils/log.h"
 
 ANYTHING_NAMESPACE_BEGIN
 

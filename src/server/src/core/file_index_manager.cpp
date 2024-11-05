@@ -1,4 +1,4 @@
-#include "anything/core/file_index_manager.h"
+#include "core/file_index_manager.h"
 
 #include <filesystem>
 #include <iostream>
@@ -7,7 +7,8 @@
 #include "lucene++/ChineseAnalyzer.h"
 
 // #include "jieba_analyzer.h"
-#include "anything/utils/log.h"
+#include "utils/log.h"
+#include "utils/string_helper.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -68,10 +69,11 @@ void file_index_manager::add_index_delay(file_record record) {
     // log::debug("{}", __PRETTY_FUNCTION__);
     try {
         // std::lock_guard<std::mutex> lock(mtx_);
-        if (!document_exists(record.full_path))
+        if (!document_exists(record.full_path)) {
             document_batch_.push_back(create_document(record));
-        else
-            log::debug("Already indexed {}", record.full_path);
+        } else {
+            // log::info("Already indexed {}", record.full_path);
+        }
 
         process_documents_if_ready();
     } catch (const LuceneException& e) {
@@ -93,11 +95,11 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
             QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
             writer_->deleteDocuments(query);
         }
-
-        log::debug("Removed index: {}", term);
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
+
+    log::debug("Removed index: {}", term);
 }
 
 std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -133,7 +135,7 @@ std::vector<file_record> file_index_manager::search_index(const std::string& ter
 }
 
 void file_index_manager::update_index(const std::string& old_path, file_record record) {
-    log::debug("{}", __PRETTY_FUNCTION__);
+    // log::debug("{}", __PRETTY_FUNCTION__);
 
     // 记录时间本无意义，故注释，后期删除
     // auto collector = nrt_search(record.full_path, true);
@@ -208,6 +210,47 @@ void file_index_manager::process_documents_if_ready() {
         (std::chrono::steady_clock::now() - last_process_time_) >= batch_interval_) {
         process_document_batch();
     }
+}
+
+QStringList file_index_manager::search(
+    const QString& path, const QString& keyword,
+    int32_t offset, int32_t max_count, bool nrt) {
+    log::debug("Search index(path:\"{}\", keywork: \"{}\").", path.toStdString(), keyword.toStdString());
+    if (keyword.isEmpty()) {
+        return {};
+    }
+
+    SearcherPtr searcher;
+    if (nrt) {
+        try_refresh_reader(true);
+        searcher = nrt_searcher_;
+    } else {
+        try_refresh_reader();
+        searcher = searcher_;
+    }
+
+    QueryPtr query = parser_->parse(StringUtils::toUnicode(keyword.toStdString()));
+    TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(offset + max_count, true);
+    searcher->search(query, collector);
+
+    Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
+    if (offset >= hits.size()) {
+        log::debug("No more results(path:\"{}\", keywork: \"{}\").", path.toStdString(), keyword.toStdString());
+        return {};
+    }
+
+    QStringList results;
+    max_count = std::min(offset + max_count, hits.size());
+    results.reserve(max_count);
+    for (int32_t i = offset; i < max_count; ++i) {
+        DocumentPtr doc = searcher->doc(hits[i]->doc);
+        QString full_path = QString::fromStdWString(doc->get(L"full_path"));
+        if (full_path.startsWith(path)) {
+            results.append(full_path);
+        }
+    }
+
+    return results;
 }
 
 bool file_index_manager::document_exists(const std::string& path) {
@@ -293,7 +336,8 @@ Lucene::DocumentPtr file_index_manager::create_document(const file_record& recor
 void file_index_manager::process_document_batch() {
     for (const auto& doc : document_batch_) {
         writer_->addDocument(doc);
-        log::debug(L"Indexed: {}", doc->get(L"full_path"));
+        QString full_path = QString::fromStdWString(doc->get(L"full_path"));
+        log::debug("Indexed: {}", full_path.toStdString());
     }
 
     document_batch_.clear();

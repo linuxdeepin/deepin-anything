@@ -3,8 +3,8 @@
 
 #include <iostream>
 
-#include "anything/common/anything_fwd.hpp"
-#include "anything/common/file_record.hpp"
+#include "common/anything_fwd.hpp"
+#include "common/file_record.hpp"
 
 ANYTHING_NAMESPACE_BEGIN
 

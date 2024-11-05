@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "anything/common/anything_fwd.hpp"
+#include "common/anything_fwd.hpp"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -22,6 +22,10 @@ inline std::vector<std::string> split(std::string s, const std::string& delimite
     tokens.push_back(s);
 
     return tokens;
+}
+
+inline bool starts_with(const std::string& str, const std::string& prefix) {
+    return str.rfind(prefix, 0) == 0;
 }
 
 inline bool ends_with(const std::string& path, const std::string& ending) {

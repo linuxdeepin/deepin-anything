@@ -24,7 +24,7 @@ pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 message(STATUS "CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
 message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
 set(DBUS_ADAPTOR_SOURCES my.test.Anything.xml)
-set(ANYTHING_DBUS_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/anything/core/base_event_handler.h")
+set(ANYTHING_DBUS_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/core/base_event_handler.h")
 qt5_generate_dbus_interface(${ANYTHING_DBUS_HEADER}
     my.test.Anything.xml
     OPTIONS -A
