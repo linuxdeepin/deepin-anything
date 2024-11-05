@@ -1,4 +1,4 @@
-#include "anything/core/mount_manager.h"
+#include "core/mount_manager.h"
 
 #include <algorithm>
 #include <fstream>
@@ -9,8 +9,8 @@
 #include <libmount.h>
 #include <sys/sysmacros.h> // major(), minor()
 
-#include "anything/utils/enum_helper.h"
-#include "anything/utils/string_helper.h"
+#include "utils/enum_helper.h"
+#include "utils/string_helper.h"
 
 ANYTHING_NAMESPACE_BEGIN
 

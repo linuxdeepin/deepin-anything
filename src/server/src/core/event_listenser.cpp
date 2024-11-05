@@ -1,4 +1,4 @@
-#include "anything/core/event_listenser.h"
+#include "core/event_listenser.h"
 
 #include <sys/epoll.h>
 #include <unistd.h> // close()
@@ -13,8 +13,8 @@
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
 
-#include "anything/utils/genl_parser.hpp"
-#include "anything/utils/log.h"
+#include "utils/genl_parser.hpp"
+#include "utils/log.h"
 #include "vfs_change_consts.h"
 
 #define EPOLL_SIZE         10

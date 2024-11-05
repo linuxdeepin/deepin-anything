@@ -1,6 +1,6 @@
 #include <QCoreApplication>
 
-#include "anything/anything.hpp"
+#include "anything.hpp"
 
 using namespace anything;
 
@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
     });
     listenser.set_idle_task([&handler] {
         handler->process_documents_if_ready();
-        handler->run_scheduled_task(); // 是否需要考虑同步问题
+        handler->run_scheduled_task();
     }, 1000);
 
     // Process the interrupt signal

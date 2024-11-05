@@ -1,7 +1,7 @@
 #ifndef ANYTHING_EVENT_HANDLER_H_
 #define ANYTHING_EVENT_HANDLER_H_
 
-#include "anything/core/base_event_handler.h"
+#include "core/base_event_handler.h"
 
 ANYTHING_NAMESPACE_BEGIN
 

@@ -3,10 +3,12 @@
 
 #include <mutex>
 
+#include <QString>
+#include <QStringList>
 #include <lucene++/LuceneHeaders.h>
 
-#include "anything/common/anything_fwd.hpp"
-#include "anything/common/file_record.hpp"
+#include "common/anything_fwd.hpp"
+#include "common/file_record.hpp"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -51,7 +53,10 @@ public:
 
     void process_documents_if_ready();
 
-private:
+    QStringList search(
+        const QString& path, const QString& keyword,
+        int32_t offset, int32_t max_count, bool nrt);
+
     /**
      * Check if the given file path is already indexed using an exact match search.
      * @param path The file path to check.
@@ -59,6 +64,7 @@ private:
      */
     bool document_exists(const std::string& path);
 
+private:
     /// Refresh the index reader if there are changes
     void try_refresh_reader(bool nrt = false);
 

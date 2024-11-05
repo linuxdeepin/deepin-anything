@@ -4,7 +4,7 @@
 #include <optional>
 #include <type_traits>
 
-#include "anything/common/anything_fwd.hpp"
+#include "common/anything_fwd.hpp"
 
 ANYTHING_NAMESPACE_BEGIN
 

@@ -1,7 +1,7 @@
 #ifndef ANYTHING_ENUM_HELPER_H_
 #define ANYTHING_ENUM_HELPER_H_
 
-#include "anything/common/anything_fwd.hpp"
+#include "common/anything_fwd.hpp"
 
 ANYTHING_NAMESPACE_BEGIN
 

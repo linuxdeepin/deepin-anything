@@ -11,8 +11,8 @@
 #include <fmt/std.h>     // for printing std::this_thread::get_id()
 #include <fmt/xchar.h>
 
-#include "anything/common/anything_fwd.hpp"
-#include "anything/utils/enum_helper.h"
+#include "common/anything_fwd.hpp"
+#include "utils/enum_helper.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
