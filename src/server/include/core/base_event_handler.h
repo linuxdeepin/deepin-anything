@@ -27,6 +27,20 @@ public:
 protected:
     bool ignored_event(const std::string& path, bool ignored);
 
+    void insert_pending_records(std::deque<anything::file_record> records);
+
+    std::size_t record_size() const;
+
+    void refresh_mount_status();
+
+    bool device_available(unsigned int device_id) const;
+
+    std::string fetch_mount_point_for_device(unsigned int device_id) const;
+
+    std::string get_index_directory() const;
+
+    void set_index_change_filter(std::function<bool(const std::string&)> filter);
+
 public slots:
     // double multiply(double factor0, double factor2);
     // double divide(double divident, double divisor);
@@ -51,15 +65,20 @@ public slots:
 
     bool addPath(const QString& fullPath);
 
+    void index_files_in_directory(const QString& directory_path);
+
 signals:
     // void newProduct(double product);
     // void newQuotient(double quotient);
     // void newSearch(std::vector<anything::file_record> records);
 
 protected:
-    anything::mount_manager mnt_manager_;
     anything::disk_scanner scanner_;
     anything::file_index_manager index_manager_;
+
+private:
+    anything::mount_manager mnt_manager_;
+    std::deque<anything::file_record> records_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_

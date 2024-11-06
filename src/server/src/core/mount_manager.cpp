@@ -38,7 +38,8 @@ bool mount_manager::update() {
 
         if (mountinfo[to_underlying(mountinfo_field::root)] == "/") {
             std::cout << mountinfo[to_underlying(mountinfo_field::mount_point)] << "\n";
-            mounts_.emplace(MKDEV(major, minor), mountinfo[to_underlying(mountinfo_field::mount_point)]);
+            // mounts_.emplace(MKDEV(major, minor), mountinfo[to_underlying(mountinfo_field::mount_point)]);
+            mounts_[MKDEV(major, minor)] = mountinfo[to_underlying(mountinfo_field::mount_point)];
             if (major == 0 && mountinfo[to_underlying(mountinfo_field::file_system_type)] == "fuse.dlnfs")
                 dlnfs_devs.insert(major_minor[1]);
         }

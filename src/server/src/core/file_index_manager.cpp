@@ -67,6 +67,10 @@ void file_index_manager::add_index(file_record record) {
 
 void file_index_manager::add_index_delay(file_record record) {
     // log::debug("{}", __PRETTY_FUNCTION__);
+    if (should_be_filtered(record)) {
+        return;
+    }
+
     try {
         // std::lock_guard<std::mutex> lock(mtx_);
         if (!document_exists(record.full_path)) {
@@ -83,6 +87,10 @@ void file_index_manager::add_index_delay(file_record record) {
 
 void file_index_manager::remove_index(const std::string& term, bool exact_match) {
     // log::debug("{}", __PRETTY_FUNCTION__);
+    if (should_be_filtered(term)) {
+        return;
+    }
+
     try {
         if (exact_match) {
             // 精确删除，term 须是路径
@@ -95,11 +103,10 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
             QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
             writer_->deleteDocuments(query);
         }
+        log::debug("Removed index: {}", term);
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
-
-    log::debug("Removed index: {}", term);
 }
 
 std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -136,45 +143,10 @@ std::vector<file_record> file_index_manager::search_index(const std::string& ter
 
 void file_index_manager::update_index(const std::string& old_path, file_record record) {
     // log::debug("{}", __PRETTY_FUNCTION__);
+    if (should_be_filtered(old_path)) {
+        return;
+    }
 
-    // 记录时间本无意义，故注释，后期删除
-    // auto collector = nrt_search(record.full_path, true);
-
-    // log::debug("Excution reached point #1");
-
-    // try {
-
-    // // 新记录已存在，则根据修改时间决定是否更新
-    // if (collector->getTotalHits() == 1) {
-    //     // std::cout << "Already index: " << record.full_path() << "\n";
-    //     Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
-    //     log::debug("Excution reached point #2");
-    //     DocumentPtr doc = nrt_searcher_->doc(hits[0]->doc); 
-    //     log::debug("Excution reached point #3");
-    //     int64_t indexed_file_time = DateTools::stringToTime(doc->get(L"last_write_time"));
-    //     int64_t insert_file_time = record.modified;
-    //     if (insert_file_time > indexed_file_time) {
-    //         log::debug("Excution reached point #4");
-    //         // std::cout << "indexed file time: " << indexed_file_time << " insert file time: " << insert_file_time << "\n";
-    //         // 准备更新
-    //         std::string full_path = record.full_path;
-    //         this->remove_index(old_path); // 手动删除旧路径敛去轻狂
-    //         this->update(full_path, std::move(record));
-    //         log::debug("Excution reached point #5");
-    //     }
-    //     log::debug("Excution reached point #6");
-    //     return;
-    // }
-
-    // } catch (const Lucene::LuceneException& e) {
-    //     std::cerr << "LuceneException caught: " << e.what() << " at " << __FILE__ << ":" << __LINE__ << std::endl;
-    //     throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
-    // }
-
-    // log::debug("TotalHits: {}", collector->getTotalHits());
-    // std::cout << "Update index: " << old_path << "\n";
-
-    // 直接更新
     update(old_path, std::move(record));
 }
 
@@ -205,6 +177,10 @@ int file_index_manager::document_size(bool nrt) const {
     return nrt ? nrt_reader_->numDocs() : reader_->numDocs();
 }
 
+std::string file_index_manager::index_directory() const {
+    return index_directory_;
+}
+
 void file_index_manager::process_documents_if_ready() {
     if (document_batch_.size() >= batch_size_ ||
         (std::chrono::steady_clock::now() - last_process_time_) >= batch_interval_) {
@@ -220,42 +196,51 @@ QStringList file_index_manager::search(
         return {};
     }
 
-    SearcherPtr searcher;
-    if (nrt) {
-        try_refresh_reader(true);
-        searcher = nrt_searcher_;
-    } else {
-        try_refresh_reader();
-        searcher = searcher_;
-    }
-
-    QueryPtr query = parser_->parse(StringUtils::toUnicode(keyword.toStdString()));
-    TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(offset + max_count, true);
-    searcher->search(query, collector);
-
-    Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
-    if (offset >= hits.size()) {
-        log::debug("No more results(path:\"{}\", keywork: \"{}\").", path.toStdString(), keyword.toStdString());
-        return {};
-    }
-
-    QStringList results;
-    max_count = std::min(offset + max_count, hits.size());
-    results.reserve(max_count);
-    for (int32_t i = offset; i < max_count; ++i) {
-        DocumentPtr doc = searcher->doc(hits[i]->doc);
-        QString full_path = QString::fromStdWString(doc->get(L"full_path"));
-        if (full_path.startsWith(path)) {
-            results.append(full_path);
+    try {
+        SearcherPtr searcher;
+        if (nrt) {
+            try_refresh_reader(true);
+            searcher = nrt_searcher_;
+        } else {
+            try_refresh_reader();
+            searcher = searcher_;
         }
-    }
 
-    return results;
+        QueryPtr query = parser_->parse(StringUtils::toUnicode(keyword.toStdString()));
+        TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(offset + max_count, true);
+        searcher->search(query, collector);
+
+        Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
+        if (offset >= hits.size()) {
+            log::debug("No more results(path:\"{}\", keywork: \"{}\").", path.toStdString(), keyword.toStdString());
+            return {};
+        }
+
+        QStringList results;
+        max_count = std::min(offset + max_count, hits.size());
+        results.reserve(max_count);
+        for (int32_t i = offset; i < max_count; ++i) {
+            DocumentPtr doc = searcher->doc(hits[i]->doc);
+            QString full_path = QString::fromStdWString(doc->get(L"full_path"));
+            if (full_path.startsWith(path)) {
+                results.append(full_path);
+            }
+        }
+
+        return results;
+    } catch (const LuceneException& e) {
+        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+    }
 }
 
 bool file_index_manager::document_exists(const std::string& path) {
     auto collector = nrt_search(path, true);
     return collector->getTotalHits() > 0;
+}
+
+void file_index_manager::set_index_change_filter(
+    std::function<bool(const std::string&)> filter) {
+    index_change_filter_ = std::move(filter);
 }
 
 void file_index_manager::try_refresh_reader(bool nrt) {
@@ -342,6 +327,18 @@ void file_index_manager::process_document_batch() {
 
     document_batch_.clear();
     last_process_time_ = std::chrono::steady_clock::now();
+}
+
+bool file_index_manager::should_be_filtered(const file_record& record) const {
+    return should_be_filtered(record.full_path);
+}
+
+bool file_index_manager::should_be_filtered(const std::string& path) const {
+    if (index_change_filter_) {
+        return std::invoke(index_change_filter_, path);
+    }
+
+    return false;
 }
 
 ANYTHING_NAMESPACE_END
