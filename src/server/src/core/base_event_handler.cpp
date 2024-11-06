@@ -23,7 +23,16 @@ void base_event_handler::process_documents_if_ready() {
     index_manager_.process_documents_if_ready();
 }
 
-void base_event_handler::run_scheduled_task() {}
+// 没有线程安全问题，因为所有数据都处于同一线程
+void base_event_handler::run_scheduled_task() {
+    if (!records_.empty()) {
+        size_t batch_size = std::min(size_t(500), records_.size());
+        for (size_t i = 0; i < batch_size; ++i) {
+            index_manager_.add_index_delay(std::move(records_.front()));
+            records_.pop_front();
+        }
+    }
+}
 
 bool base_event_handler::ignored_event(const std::string &path, bool ignored)
 {
@@ -40,6 +49,38 @@ bool base_event_handler::ignored_event(const std::string &path, bool ignored)
     }
 
     return false;
+}
+
+void base_event_handler::insert_pending_records(
+    std::deque<anything::file_record> records) {
+    records_.insert(records_.end(),
+        std::make_move_iterator(records.begin()),
+        std::make_move_iterator(records.end()));
+}
+
+std::size_t base_event_handler::record_size() const {
+    return records_.size();
+}
+
+void base_event_handler::refresh_mount_status() {
+    mnt_manager_.update();
+}
+
+bool base_event_handler::device_available(unsigned int device_id) const {
+    return mnt_manager_.contains_device(device_id);
+}
+
+std::string base_event_handler::fetch_mount_point_for_device(unsigned int device_id) const {
+    return mnt_manager_.get_mount_point(device_id);
+}
+
+std::string base_event_handler::get_index_directory() const {
+    return index_manager_.index_directory();
+}
+
+void base_event_handler::set_index_change_filter(
+    std::function<bool(const std::string&)> filter) {
+    index_manager_.set_index_change_filter(std::move(filter));
 }
 
 // double base_event_handler::multiply(double factor0, double factor1)
@@ -87,4 +128,9 @@ bool base_event_handler::addPath(const QString& fullPath) {
     }
 
     return false;
+}
+
+void base_event_handler::index_files_in_directory(const QString& directory_path) {
+    (void)directory_path;
+    // index_manager_.
 }

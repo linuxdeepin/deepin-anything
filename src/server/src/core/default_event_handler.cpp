@@ -7,47 +7,25 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
-default_event_handler::default_event_handler()
-    : base_event_handler("/home/dxnu/log-files/index-data-test-dir"),
-      records_(scanner_.parallel_scan("/home/dxnu")) {
+// /data 和非 data 需要保持一致，最好有一种方式能够获取当前的状态
+default_event_handler::default_event_handler(std::string index_dir)
+    : base_event_handler(std::move(index_dir)) {
+    // Index the default mount point
+    insert_pending_records(scanner_.parallel_scan("/data/home/dxnu"));
 
-    mnt_manager_.update();
-    // 索引未建立，则扫描建立
-    // if (!index_manager_.indexed()) {
-    //     int directories = 0;
-    //     int files = 0;
-    //     auto start = std::chrono::high_resolution_clock::now();
+    // Initialize mount cache
+    refresh_mount_status();
 
-    //     for (const auto& mp : mnt_manager_.get_mount_points()) {
-    //         // if (mp.target == "/" || mp.root != "/")
-    //         //     continue;
+    // index_directory 设置时必须要是完整路径
+    set_index_change_filter([this](const std::string& path) {
+        auto index_directory = get_index_directory();
+        auto names = split(path, "/");
+        return starts_with(path, index_directory) ||
+               (starts_with(index_directory, "/") && starts_with(path, "/data" + index_directory)) ||
+               std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
+    });
 
-    //         // std::cout << "Iterate: " << mp.target << "\n";
-    //         // 不确定扫描哪些挂载点，先只扫描这三个
-    //         // 使用分批处理或多线程来降低 CPU Usage
-    //         if (mp.target == "/data"/* || mp.target == "/recovery" || mp.target == "/data"*/) {
-    //             log::info("Scanning {}...", mp.target);
-    //             scanner_.scan("/data/home/dxnu/Downloads", [this, &directories, &files](file_record record) {
-    //                 // Skip if the path contains any invalid character
-    //                 if (contains_invalid_chars(record.full_path)) {
-    //                     return;
-    //                 }
-
-    //                 record.is_directory ? directories++ : files++;
-    //                 index_manager_.add_index_delay(std::move(record));
-    //                 // print(record);
-    //             });
-    //         }
-    //     }
-
-    //     auto end = std::chrono::high_resolution_clock::now();
-    //     std::chrono::duration<double> duration = end - start;
-    //     log::info("Scan time: {} seconds", duration.count());
-    //     log::info("Files: {}, Directories: {}", files, directories);
-    //     index_manager_.commit();
-    // }
-
-    log::debug("Record size: {}", records_.size());
+    log::debug("Record size: {}", record_size());
     log::debug("Document size: {}", index_manager_.document_size());
     auto results = index_manager_.search_index("test haha");
     log::debug("Found {} result(s).", results.size());
@@ -63,20 +41,21 @@ void default_event_handler::handle(fs_event event) {
 
     // Update partition event
     if (event.act == ACT_MOUNT || event.act == ACT_UNMOUNT) {
-        mnt_manager_.update();
+        log::info(event.act == ACT_MOUNT ? "Mount a device: {}" : "Unmount a device: {}", event.src);
+        refresh_mount_status();
         return;
     }
 
     std::string root;
     if (event.act < ACT_MOUNT) {
-        unsigned int device = MKDEV(event.major, event.minor);
-        if (!mnt_manager_.contains_device(device)) {
+        unsigned int device_id = MKDEV(event.major, event.minor);
+        if (!device_available(device_id)) {
             log::warning("Unknown device, {}, dev: {}:{}, path: {}, cookie: {}",
                 +event.act, event.major, event.minor, event.src, event.cookie);
             return;
         }
 
-        root = mnt_manager_.get_mount_point(device);
+        root = fetch_mount_point_for_device(device_id);
         // std::cout << "root: " << root << "\n";
         if (root == "/")
             root.clear();
@@ -131,9 +110,6 @@ void default_event_handler::handle(fs_event event) {
     bool ignored = false;
     ignored = ignored_event(event.dst.empty() ? event.src : event.dst, ignored);
     if (!ignored) {
-        if (contains(event.src, "/data/home/dxnu/log-files/index-data-test-dir/"))
-            return;
-
         // log::info("Received a {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
 
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
@@ -149,17 +125,6 @@ void default_event_handler::handle(fs_event event) {
             if (record) {
                 index_manager_.update_index(event.src, std::move(*record));
             }
-        }
-    }
-}
-
-// 没有线程安全问题，因为所有数据都处于同一线程
-void default_event_handler::run_scheduled_task() {
-    if (!records_.empty()) {
-        size_t batch_size = std::min(size_t(500), records_.size());
-        for (size_t i = 0; i < batch_size; ++i) {
-            index_manager_.add_index_delay(std::move(records_.front()));
-            records_.pop_front();
         }
     }
 }

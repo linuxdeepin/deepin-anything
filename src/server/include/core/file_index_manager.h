@@ -51,6 +51,8 @@ public:
 
     int document_size(bool nrt = false) const;
 
+    std::string index_directory() const;
+
     void process_documents_if_ready();
 
     QStringList search(
@@ -63,6 +65,8 @@ public:
      * @return true if the file path is already indexed, otherwise false.
      */
     bool document_exists(const std::string& path);
+
+    void set_index_change_filter(std::function<bool(const std::string&)> filter);
 
 private:
     /// Refresh the index reader if there are changes
@@ -88,6 +92,9 @@ private:
 
     void process_document_batch();
 
+    bool should_be_filtered(const file_record& record) const;
+    bool should_be_filtered(const std::string& path) const;
+
 private:
     std::string index_directory_;
     Lucene::IndexWriterPtr writer_;
@@ -103,6 +110,7 @@ private:
     const std::chrono::milliseconds batch_interval_ = std::chrono::milliseconds(100); // 批量时间窗口
     std::size_t batch_size_;
     // std::mutex mtx_;
+    std::function<bool(const std::string&)> index_change_filter_;
 };
 
 ANYTHING_NAMESPACE_END
