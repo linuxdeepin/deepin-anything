@@ -101,7 +101,7 @@ void event_listenser::start_listening() {
 
         // Process the idle task
         if (event_cnt == 0) {
-            if (idle_task_) idle_task_();
+            if (idle_task_) std::invoke(idle_task_);
             continue;
         }
 
