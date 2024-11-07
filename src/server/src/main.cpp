@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
     });
     listenser.set_idle_task([&handler] {
         handler->process_documents_if_ready();
-        handler->run_scheduled_task();
+        // handler->run_scheduled_task();
     }, 1000);
 
     // Process the interrupt signal

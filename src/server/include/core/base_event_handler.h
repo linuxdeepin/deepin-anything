@@ -8,6 +8,7 @@
 #include "core/disk_scanner.h"
 #include "core/file_index_manager.h"
 #include "core/mount_manager.h"
+#include "core/thread_pool.h"
 
 class base_event_handler : public QObject
 {
@@ -40,6 +41,9 @@ protected:
     std::string get_index_directory() const;
 
     void set_index_change_filter(std::function<bool(const std::string&)> filter);
+
+    void add_index_delay(anything::file_record record);
+    void remove_index_delay(std::string term);
 
 public slots:
     // double multiply(double factor0, double factor2);
@@ -79,6 +83,8 @@ protected:
 private:
     anything::mount_manager mnt_manager_;
     std::deque<anything::file_record> records_;
+    anything::thread_pool pool_;
+    std::mutex mtx_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_

@@ -26,18 +26,35 @@ default_event_handler::default_event_handler(std::string index_dir)
     });
 
     log::debug("Record size: {}", record_size());
-    log::debug("Document size: {}", index_manager_.document_size());
-    auto results = index_manager_.search_index("test haha");
-    log::debug("Found {} result(s).", results.size());
-    for (const auto& record : results) {
-        print(record);
-    }
+    // log::debug("Document size: {}", index_manager_.document_size());
+    // auto results = index_manager_.search_index("test haha");
+    // log::debug("Found {} result(s).", results.size());
+    // for (const auto& record : results) {
+    //     print(record);
+    // }
 
     // index_manager_.test(L"/data/home/dxnu/Downloads/2024届地区信息.XLSX"); // dxnu md   md
 }
 
 void default_event_handler::handle(fs_event event) {
-    // const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
+    [[maybe_unused]] const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
+
+    // auto filter = [this](const std::string& path) {
+    //     auto index_directory = get_index_directory();
+    //     auto names = split(path, "/");
+    //     return starts_with(path, index_directory) ||
+    //            (starts_with(index_directory, "/") && starts_with(path, "/data" + index_directory)) ||
+    //            std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
+    // };
+
+    // if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
+    //     event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER  ||
+    //     event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
+    //     if (!filter(event.src)) {
+    //         log::debug("Received a {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
+    //     }
+    // }
+    // return;
 
     // Update partition event
     if (event.act == ACT_MOUNT || event.act == ACT_UNMOUNT) {
@@ -110,21 +127,37 @@ void default_event_handler::handle(fs_event event) {
     bool ignored = false;
     ignored = ignored_event(event.dst.empty() ? event.src : event.dst, ignored);
     if (!ignored) {
-        // log::info("Received a {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
+        // auto filter = [this](const std::string& path) {
+        //     auto index_directory = get_index_directory();
+        //     auto names = split(path, "/");
+        //     return starts_with(path, index_directory) ||
+        //         (starts_with(index_directory, "/") && starts_with(path, "/data" + index_directory)) ||
+        //         std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
+        // };
+
+        // if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
+        //     event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER  ||
+        //     event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
+        //     if (!filter(event.src)) {
+        //         log::debug("Received a {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
+        //     }
+        // }
+        // return;
+        // // 到此收到的事件没有问题
 
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
             auto record = file_helper::generate_file_record(std::move(event.src));
             if (record) {
-                index_manager_.add_index_delay(std::move(*record));
+                add_index_delay(std::move(*record));
             }
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
-            index_manager_.remove_index(event.src);
+            remove_index_delay(std::move(event.src));
         } else if (event.act == ACT_RENAME_FILE || event.act == ACT_RENAME_FOLDER) {
-            auto record = file_helper::generate_file_record(std::move(event.dst));
-            if (record) {
-                index_manager_.update_index(event.src, std::move(*record));
-            }
+            // auto record = file_helper::generate_file_record(std::move(event.dst));
+            // if (record) {
+            //     index_manager_.update_index(event.src, std::move(*record));
+            // }
         }
     }
 }

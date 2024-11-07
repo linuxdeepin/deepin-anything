@@ -8,6 +8,7 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 #include <fmt/ostream.h> // for setting output stream
+#include <fmt/ranges.h>  // Formatted ranges
 #include <fmt/std.h>     // for printing std::this_thread::get_id()
 #include <fmt/xchar.h>
 
