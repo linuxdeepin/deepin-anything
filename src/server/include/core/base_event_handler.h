@@ -1,6 +1,11 @@
 #ifndef ANYTHING_BASE_EVENT_HANDLER_H_
 #define ANYTHING_BASE_EVENT_HANDLER_H_
 
+#include <condition_variable>
+#include <mutex>
+#include <queue>
+#include <thread>
+
 #include <QObject>
 
 #include "common/anything_fwd.hpp"
@@ -8,7 +13,6 @@
 #include "core/disk_scanner.h"
 #include "core/file_index_manager.h"
 #include "core/mount_manager.h"
-#include "core/thread_pool.h"
 
 class base_event_handler : public QObject
 {
@@ -19,7 +23,7 @@ public:
     base_event_handler(std::string index_dir, QObject *parent = nullptr);
     virtual ~base_event_handler();
 
-    void process_documents_if_ready();
+    void terminate_processing();
 
     virtual void handle(anything::fs_event event) = 0;
 
@@ -44,6 +48,12 @@ protected:
 
     void add_index_delay(anything::file_record record);
     void remove_index_delay(std::string term);
+
+private:
+    void worker_loop();
+
+    // This function should only be used within the worker_loop function.
+    void eat_jobs();
 
 public slots:
     // double multiply(double factor0, double factor2);
@@ -83,8 +93,14 @@ protected:
 private:
     anything::mount_manager mnt_manager_;
     std::deque<anything::file_record> records_;
-    anything::thread_pool pool_;
     std::mutex mtx_;
+    std::thread worker_;
+    std::condition_variable cv_;
+    bool should_stop_;
+    std::queue<anything::file_record> addition_jobs_;
+    std::size_t batch_size_;
+    std::chrono::steady_clock::time_point last_addition_time_ = std::chrono::steady_clock::now();
+    std::chrono::milliseconds batch_interval_ = std::chrono::milliseconds(100); // 批量时间窗口
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_

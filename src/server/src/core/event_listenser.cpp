@@ -1,6 +1,7 @@
 #include "core/event_listenser.h"
 
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include <unistd.h> // close()
 
 #include <memory> // unique_ptr
@@ -16,9 +17,6 @@
 #include "utils/genl_parser.hpp"
 #include "utils/log.h"
 #include "vfs_change_consts.h"
-
-#define EPOLL_SIZE         10
-#define FS_EVENT_MAX_BATCH 1
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -60,6 +58,12 @@ event_listenser::event_listenser()
         clean_and_abort();
     }
 
+    stop_fd_ = eventfd(0, EFD_NONBLOCK);
+    if (stop_fd_ == -1) {
+        log::error("Failed to create eventfd");
+        clean_and_abort();
+    }
+
     // Initialize policy
     vfs_policy[VFSMONITOR_A_ACT].type = NLA_U8;
     vfs_policy[VFSMONITOR_A_COOKIE].type = NLA_U32;
@@ -71,12 +75,12 @@ event_listenser::event_listenser()
 
 event_listenser::~event_listenser() {
     disconnect(mcsk_);
+    close(stop_fd_);
 }
 
 /// All member variables, except `should_stop_`, are fully initialized before invoking `start_listening()`.
 /// Therefore, synchronization is required only for `should_stop_`.
 void event_listenser::start_listening() {
-    should_stop_ = false;
     log::debug("listening for messages");
     int ep_fd = epoll_create1(0);
     if (ep_fd < 0) {
@@ -85,29 +89,31 @@ void event_listenser::start_listening() {
     }
 
     int mcsk_fd = get_fd(mcsk_);
-    epoll_event* ep_events = new epoll_event[EPOLL_SIZE];
-    epoll_event event;
-    event.events = EPOLLIN;
-    event.data.fd = mcsk_fd;
-    epoll_ctl(ep_fd, EPOLL_CTL_ADD, mcsk_fd, &event);
+    epoll_event* ep_events = new epoll_event[epoll_size_];
+    epoll_event event[2];
+    event[0].events = EPOLLIN;
+    event[0].data.fd = mcsk_fd;
+    event[1].events = EPOLLIN;
+    event[1].data.fd = stop_fd_;
+    epoll_ctl(ep_fd, EPOLL_CTL_ADD, mcsk_fd, &event[0]);
+    epoll_ctl(ep_fd, EPOLL_CTL_ADD, stop_fd_, &event[1]);
 
-    while (!should_stop_) {
-        int event_cnt = epoll_wait(ep_fd, ep_events, EPOLL_SIZE, timeout_);
+    bool running = true;
+    while (running) {
+        int event_cnt = epoll_wait(ep_fd, ep_events, epoll_size_, timeout_);
         if (event_cnt == -1) {
-            if (errno == EINTR) break;
             log::error("epoll_wait() error");
             break;
-        }
-
-        // Process the idle task
-        if (event_cnt == 0) {
-            if (idle_task_) std::invoke(idle_task_);
-            continue;
         }
 
         for (int i = 0; i < event_cnt; ++i) {
             if (ep_events[i].data.fd == mcsk_fd) {
                 nl_recvmsgs_default(mcsk_);
+            } else if (ep_events[i].data.fd == stop_fd_) {
+                uint64_t u;
+                read(stop_fd_, &u, sizeof(u));
+                running = false;
+                break;
             }
         }
     }
@@ -121,22 +127,18 @@ void event_listenser::async_listen() {
 }
 
 void event_listenser::stop_listening() {
-    should_stop_ = true;
+    uint64_t u = 1;
+    write(stop_fd_, &u, sizeof(u));
 
     if (listening_thread_.joinable()) {
         auto thread_id = listening_thread_.get_id();
         listening_thread_.join();
-        log::info("Thread {} has exited.", thread_id);
+        log::info("Listening thread {} has exited.", thread_id);
     }
 }
 
 void event_listenser::set_handler(std::function<void(fs_event)> handler) {
     handler_ = std::move(handler);
-}
-
-void event_listenser::set_idle_task(std::function<void()> idle_task, int timeout) {
-    idle_task_ = std::move(idle_task);
-    timeout_ = timeout;
 }
 
 bool event_listenser::connect(nl_sock_ptr& sk) {

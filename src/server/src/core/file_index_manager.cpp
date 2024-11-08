@@ -40,25 +40,29 @@ file_index_manager::~file_index_manager() {
     // log::debug("{}", __PRETTY_FUNCTION__);
     if (writer_) {
         if (!addition_batch_.empty()) {
-            process_addition_batch();
+            process_addition_jobs();
         }
         if (!deletion_batch_.empty()) {
-            process_deletion_batch();
+            process_deletion_jobs();
         }
         this->commit();
         writer_->close();
     }
 
-    if (searcher_)
-        searcher_->close();
-    if (reader_)
-        reader_->close();
+    if (searcher_) searcher_->close();
+    if (nrt_searcher_) nrt_searcher_->close();
+    if (reader_) reader_->close();
+    if (nrt_reader_) nrt_reader_->close();
 }
 
 void file_index_manager::add_index(file_record record) {
+    if (should_be_filtered(record)) {
+        return;
+    }
+    
     try {
         if (!document_exists(record.full_path)) {
-            // std::cout << "Indexed: " << record.full_path << "\n";
+            std::cout << "Indexed: " << record.full_path << "\n";
             writer_->addDocument(create_document(record));
         } else {
             // std::cout << "Already indexed " << record.full_path << "\n";
@@ -80,8 +84,6 @@ void file_index_manager::add_index_delay(file_record record) {
     } else {
         // log::info("Already indexed {}", record.full_path);
     }
-
-    process_documents_if_ready();
 }
 
 void file_index_manager::remove_index(const std::string& term, bool exact_match) {
@@ -110,13 +112,10 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
 
 void file_index_manager::remove_index_delay(std::string term, bool exact_match) {
     if (should_be_filtered(term)) {
-        // log::warning("Filtered remove file: {}", term);
         return;
     }
 
-    // log::debug("Removed index: {}", term);
     deletion_batch_.emplace_back(std::move(term), exact_match);
-    process_documents_if_ready();
 }
 
 std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -191,16 +190,45 @@ std::string file_index_manager::index_directory() const {
     return index_directory_;
 }
 
-void file_index_manager::process_documents_if_ready() {
-    if (addition_batch_.size() >= batch_size_ ||
-        (std::chrono::steady_clock::now() - last_addition_time_) >= batch_interval_) {
-        process_addition_batch();
+void file_index_manager::process_addition_jobs() {
+    for (const auto& doc : addition_batch_) {
+        writer_->addDocument(doc);
+        QString full_path = QString::fromStdWString(doc->get(L"full_path"));
+        log::debug("Indexed: {}", full_path.toStdString());
     }
 
-    if (deletion_batch_.size() > batch_size_ ||
-        (std::chrono::steady_clock::now() - last_deletion_time_) >= batch_interval_) {
-        process_deletion_batch();
+    addition_batch_.clear();
+    last_addition_time_ = std::chrono::steady_clock::now();
+}
+
+void file_index_manager::process_deletion_jobs() {
+    for (const auto& [term, exact_match] : deletion_batch_) {
+        try {
+            if (exact_match) {
+                TermPtr pterm = newLucene<Term>(exact_field_, StringUtils::toUnicode(term));
+                writer_->deleteDocuments(pterm);
+            } else {
+                QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
+                writer_->deleteDocuments(query);
+            }
+            log::debug("Removed index: {}", term);
+        } catch (const LuceneException& e) {
+            throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        }
     }
+
+    deletion_batch_.clear();
+    last_deletion_time_ = std::chrono::steady_clock::now();
+}
+
+bool file_index_manager::addition_jobs_ready() const {
+    return addition_batch_.size() >= batch_size_ ||
+        (std::chrono::steady_clock::now() - last_addition_time_) >= batch_interval_;
+}
+
+bool file_index_manager::deletion_jobs_ready() const {
+    return deletion_batch_.size() > batch_size_ ||
+        (std::chrono::steady_clock::now() - last_deletion_time_) >= batch_interval_;
 }
 
 QStringList file_index_manager::search(
@@ -331,37 +359,6 @@ Lucene::DocumentPtr file_index_manager::create_document(const file_record& recor
         DateTools::timeToString(record.modified, DateTools::RESOLUTION_MILLISECOND),
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
     return doc;
-}
-
-void file_index_manager::process_addition_batch() {
-    for (const auto& doc : addition_batch_) {
-        writer_->addDocument(doc);
-        QString full_path = QString::fromStdWString(doc->get(L"full_path"));
-        log::debug("Indexed: {}", full_path.toStdString());
-    }
-
-    addition_batch_.clear();
-    last_addition_time_ = std::chrono::steady_clock::now();
-}
-
-void file_index_manager::process_deletion_batch() {
-    for (const auto& [term, exact_match] : deletion_batch_) {
-        try {
-            if (exact_match) {
-                TermPtr pterm = newLucene<Term>(exact_field_, StringUtils::toUnicode(term));
-                writer_->deleteDocuments(pterm);
-            } else {
-                QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
-                writer_->deleteDocuments(query);
-            }
-            log::debug("Removed index: {}", term);
-        } catch (const LuceneException& e) {
-            throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
-        }
-    }
-
-    deletion_batch_.clear();
-    last_deletion_time_ = std::chrono::steady_clock::now();
 }
 
 bool file_index_manager::should_be_filtered(const file_record& record) const {

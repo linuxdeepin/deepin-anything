@@ -143,7 +143,7 @@ void default_event_handler::handle(fs_event event) {
         //     }
         // }
         // return;
-        // // 到此收到的事件没有问题
+        // 到此收到的事件没有问题
 
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {

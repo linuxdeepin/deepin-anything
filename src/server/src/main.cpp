@@ -14,16 +14,13 @@ int main(int argc, char* argv[]) {
     listenser.set_handler([&handler](fs_event event) {
         handler->handle(std::move(event));
     });
-    listenser.set_idle_task([&handler] {
-        handler->process_documents_if_ready();
-        // handler->run_scheduled_task();
-    }, 1000);
 
     // Process the interrupt signal
-    set_signal_handler(SIGINT, [&listenser, &app](int sig) {
+    set_signal_handler(SIGINT, [&listenser, &handler, &app](int sig) {
         log::info("Interrupt signal ({}) received.", sig);
         log::info("Performing cleanup tasks...");
         listenser.stop_listening();
+        handler->terminate_processing();
         app.exit();
     });
 
