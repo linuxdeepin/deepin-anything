@@ -12,6 +12,12 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
+enum class job_status {
+    pending,
+    ready_for_addition,
+    ready_for_deletion
+};
+
 /**
  * 开启 USE_DOUBLE_FIELD_INDEX 将启用双字段索引，能够精确删除和查找，精确查找比不开启时效率高，但占用空间更多
  * 未开启 USE_DOUBLE_FIELD_INDEX 将启用普通索引，只能模糊删除，每次查找、删除、更新时都得解析词条，影响效率
@@ -55,7 +61,11 @@ public:
 
     std::string index_directory() const;
 
-    void process_documents_if_ready();
+    void process_addition_jobs();
+    void process_deletion_jobs();
+
+    bool addition_jobs_ready() const;
+    bool deletion_jobs_ready() const;
 
     QStringList search(
         const QString& path, const QString& keyword,
@@ -92,9 +102,6 @@ private:
 
     Lucene::DocumentPtr create_document(const file_record& record);
 
-    void process_addition_batch();
-    void process_deletion_batch();
-
     bool should_be_filtered(const file_record& record) const;
     bool should_be_filtered(const std::string& path) const;
 
@@ -114,7 +121,6 @@ private:
     std::chrono::steady_clock::time_point last_deletion_time_ = std::chrono::steady_clock::now();
     const std::chrono::milliseconds batch_interval_ = std::chrono::milliseconds(100); // 批量时间窗口
     std::size_t batch_size_;
-    // std::mutex mtx_;
     std::function<bool(const std::string&)> index_change_filter_;
 };
 

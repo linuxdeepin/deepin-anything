@@ -30,8 +30,6 @@ public:
 
     void set_handler(std::function<void(fs_event)> handler);
 
-    void set_idle_task(std::function<void()> idle_task, int timeout = -1);
-
 private:
     bool connect(nl_sock_ptr& sk);
     void disconnect(nl_sock_ptr& sk);
@@ -45,12 +43,12 @@ private:
 private:
     nl_sock_ptr mcsk_;
     bool connected_;
-    std::atomic<bool> should_stop_;
+    int stop_fd_;
     int fam_;
     int timeout_;
     std::function<void(fs_event)> handler_;
-    std::function<void()> idle_task_;
     std::thread listening_thread_;
+    static constexpr int epoll_size_ = 10;
 };
 
 ANYTHING_NAMESPACE_END
