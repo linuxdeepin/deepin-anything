@@ -58,10 +58,7 @@ std::deque<file_record> disk_scanner::parallel_scan(const fs::path& root) const 
         }
 
         if (std::filesystem::exists(it->path())) {
-            auto record = file_helper::generate_file_record(it->path());
-            if (record) {
-                records.push_back(std::move(*record));
-            }
+            records.push_back({ it->path().filename().string(), it->path().string() });
         }
     }
 

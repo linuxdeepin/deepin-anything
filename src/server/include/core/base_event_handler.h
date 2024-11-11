@@ -14,6 +14,25 @@
 #include "core/file_index_manager.h"
 #include "core/mount_manager.h"
 
+ANYTHING_NAMESPACE_BEGIN
+
+enum class index_job_type {
+    add,
+    remove,
+    update
+};
+
+struct index_job {
+    std::string src;
+    std::optional<std::string> dst;
+    index_job_type type;
+
+    index_job(std::string src, index_job_type type, std::optional<std::string> dst = std::nullopt)
+        : src{ std::move(src) }, dst{ std::move(dst) }, type{ type } {}
+};
+
+ANYTHING_NAMESPACE_END
+
 class base_event_handler : public QObject
 {
     Q_OBJECT
@@ -30,6 +49,8 @@ public:
     virtual void run_scheduled_task();
 
 protected:
+    void set_batch_size(std::size_t size);
+
     bool ignored_event(const std::string& path, bool ignored);
 
     void insert_pending_records(std::deque<anything::file_record> records);
@@ -46,14 +67,14 @@ protected:
 
     void set_index_change_filter(std::function<bool(const std::string&)> filter);
 
-    void add_index_delay(anything::file_record record);
+    void add_index_delay(std::string path);
     void remove_index_delay(std::string term);
 
 private:
     void worker_loop();
 
-    // This function should only be used within the worker_loop function.
-    void eat_jobs();
+    bool should_be_filtered(const anything::file_record& record) const;
+    bool should_be_filtered(const std::string& path) const;
 
 public slots:
     // double multiply(double factor0, double factor2);
@@ -77,7 +98,7 @@ public slots:
 
     bool hasLFT(const QString& path);
 
-    bool addPath(const QString& fullPath);
+    void addPath(const QString& fullPath);
 
     void index_files_in_directory(const QString& directory_path);
 
@@ -88,19 +109,19 @@ signals:
 
 protected:
     anything::disk_scanner scanner_;
-    anything::file_index_manager index_manager_;
 
 private:
     anything::mount_manager mnt_manager_;
-    std::deque<anything::file_record> records_;
-    std::mutex mtx_;
+    anything::file_index_manager index_manager_;
+    std::size_t batch_size_;
+    std::mutex index_jobs_mtx_;
+    std::mutex index_manager_mtx_;
     std::thread worker_;
     std::condition_variable cv_;
     bool should_stop_;
-    std::queue<anything::file_record> addition_jobs_;
-    std::size_t batch_size_;
-    std::chrono::steady_clock::time_point last_addition_time_ = std::chrono::steady_clock::now();
-    std::chrono::milliseconds batch_interval_ = std::chrono::milliseconds(100); // 批量时间窗口
+    std::deque<anything::file_record> records_;
+    std::queue<anything::index_job> index_jobs_;
+    std::function<bool(const std::string&)> index_change_filter_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_
