@@ -29,6 +29,7 @@ public:
 
     /// Add a file record to the index
     void add_index(file_record record);
+    void add_index(const std::filesystem::path& full_path);
 
     // 延迟索引
     void add_index_delay(file_record record);

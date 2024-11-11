@@ -56,18 +56,33 @@ file_index_manager::~file_index_manager() {
 }
 
 void file_index_manager::add_index(file_record record) {
-    if (should_be_filtered(record)) {
-        return;
-    }
-    
+    // std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    log::debug("Indexed {}", record.full_path);
+
+    // try {
+    //     if (!document_exists(record.full_path)) {
+    //         // auto doc = create_document(record);
+    //         // (void)(doc);
+    //         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    //         log::debug("Indexed {}", record.full_path);
+    //         // writer_->addDocument(create_document(record));
+    //     } else {
+    //         log::debug("Already indexed {}", record.full_path);
+    //     }
+    // } catch (const LuceneException& e) {
+    //     log::error("Failed to index {}: {}", record.full_path, StringUtils::toUTF8(e.getError()));
+    //     throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+    // }
+}
+
+void file_index_manager::add_index(const std::filesystem::path& full_path) {
     try {
-        if (!document_exists(record.full_path)) {
-            std::cout << "Indexed: " << record.full_path << "\n";
-            writer_->addDocument(create_document(record));
-        } else {
-            // std::cout << "Already indexed " << record.full_path << "\n";
+        if (!document_exists(full_path)) {
+            auto doc = create_document(file_helper::make_file_record(full_path));
+            writer_->addDocument(doc);
         }
     } catch (const LuceneException& e) {
+        log::error("Failed to index {}: {}", full_path.string(), StringUtils::toUTF8(e.getError()));
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
 }
@@ -87,11 +102,6 @@ void file_index_manager::add_index_delay(file_record record) {
 }
 
 void file_index_manager::remove_index(const std::string& term, bool exact_match) {
-    // log::debug("{}", __PRETTY_FUNCTION__);
-    if (should_be_filtered(term)) {
-        return;
-    }
-
     try {
         if (exact_match) {
             // 精确删除，term 须是路径
@@ -137,9 +147,6 @@ std::vector<file_record> file_index_manager::search_index(const std::string& ter
         String last_write_time = doc->get(L"last_write_time");
         if (!file_name.empty()) record.file_name = StringUtils::toUTF8(file_name);
         if (!full_path.empty()) record.full_path = StringUtils::toUTF8(full_path);
-        if (!last_write_time.empty()) record.modified = DateTools::stringToTime(last_write_time);
-
-        record.is_directory = std::filesystem::is_directory(record.full_path);
         // std::cout << "------------------\n";
         // std::cout << "full_path: " << record.full_path << "\n";
         // std::cout << "modified: " << record.modified << "\n";
@@ -344,7 +351,7 @@ void file_index_manager::update(const std::string& term, file_record record, boo
     }
 }
 
-Lucene::DocumentPtr file_index_manager::create_document(const file_record& record) {
+DocumentPtr file_index_manager::create_document(const file_record& record) {
     DocumentPtr doc = newLucene<Document>();
     // 文件名，模糊匹配，查询和删除时必须使用解析器
     doc->add(newLucene<Field>(L"file_name",
@@ -353,10 +360,6 @@ Lucene::DocumentPtr file_index_manager::create_document(const file_record& recor
     // 路径名，精确匹配，删除和精确搜索时无需使用解析器，效率更高
     doc->add(newLucene<Field>(L"full_path",
         StringUtils::toUnicode(record.full_path),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-    // 修改时间，精确匹配
-    doc->add(newLucene<Field>(L"last_write_time",
-        DateTools::timeToString(record.modified, DateTools::RESOLUTION_MILLISECOND),
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
     return doc;
 }

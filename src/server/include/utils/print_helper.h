@@ -9,8 +9,7 @@
 ANYTHING_NAMESPACE_BEGIN
 
 inline void print(const file_record& record) {
-    std::cout << "file_name: " << record.file_name << " full_path: " << record.full_path
-              << " is_directory: " << record.is_directory << " modified: " << record.modified << "\n";
+    std::cout << "file_name: " << record.file_name << " full_path: " << record.full_path << "\n";
 }
 
 ANYTHING_NAMESPACE_END

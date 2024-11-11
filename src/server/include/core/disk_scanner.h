@@ -54,10 +54,8 @@ public:
             }
 
             if (std::filesystem::exists(it->path())) {
-                auto record = file_helper::generate_file_record(it->path());
-                if (record) {
-                    func(std::move(*record));
-                }
+                auto record = file_helper::make_file_record(it->path());
+                func(std::move(record));
             }
         }
         // 不过滤任务文件用这种写法，更简单

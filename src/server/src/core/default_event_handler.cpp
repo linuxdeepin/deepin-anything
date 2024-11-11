@@ -147,9 +147,8 @@ void default_event_handler::handle(fs_event event) {
 
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
-            auto record = file_helper::generate_file_record(std::move(event.src));
-            if (record) {
-                add_index_delay(std::move(*record));
+            if (fs::exists(event.src)) {
+                add_index_delay(std::move(event.src));
             }
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
             remove_index_delay(std::move(event.src));
