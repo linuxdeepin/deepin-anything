@@ -14,9 +14,8 @@ ANYTHING_NAMESPACE_BEGIN
 
 using namespace Lucene;
 
-file_index_manager::file_index_manager(std::string index_dir, std::size_t batch_size)
-    : index_directory_{ std::move(index_dir) },
-      batch_size_{ batch_size } {
+file_index_manager::file_index_manager(std::string index_dir)
+    : index_directory_{ std::move(index_dir) } {
     try {
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory_));
         auto create = !IndexReader::indexExists(dir);
@@ -39,12 +38,6 @@ file_index_manager::file_index_manager(std::string index_dir, std::size_t batch_
 file_index_manager::~file_index_manager() {
     // log::debug("{}", __PRETTY_FUNCTION__);
     if (writer_) {
-        if (!addition_batch_.empty()) {
-            process_addition_jobs();
-        }
-        if (!deletion_batch_.empty()) {
-            process_deletion_jobs();
-        }
         this->commit();
         writer_->close();
     }
@@ -87,18 +80,8 @@ void file_index_manager::add_index(const std::filesystem::path& full_path) {
     }
 }
 
-void file_index_manager::add_index_delay(file_record record) {
-    // log::debug("{}", __PRETTY_FUNCTION__);
-    if (should_be_filtered(record)) {
-        return;
-    }
-
-    // std::lock_guard<std::mutex> lock(mtx_);
-    if (!document_exists(record.full_path)) {
-        addition_batch_.push_back(create_document(record));
-    } else {
-        // log::info("Already indexed {}", record.full_path);
-    }
+void file_index_manager::add_index(const Lucene::DocumentPtr& doc) {
+    writer_->addDocument(doc);
 }
 
 void file_index_manager::remove_index(const std::string& term, bool exact_match) {
@@ -118,14 +101,6 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
-}
-
-void file_index_manager::remove_index_delay(std::string term, bool exact_match) {
-    if (should_be_filtered(term)) {
-        return;
-    }
-
-    deletion_batch_.emplace_back(std::move(term), exact_match);
 }
 
 std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -159,10 +134,6 @@ std::vector<file_record> file_index_manager::search_index(const std::string& ter
 
 void file_index_manager::update_index(const std::string& old_path, file_record record) {
     // log::debug("{}", __PRETTY_FUNCTION__);
-    if (should_be_filtered(old_path)) {
-        return;
-    }
-
     update(old_path, std::move(record));
 }
 
@@ -195,47 +166,6 @@ int file_index_manager::document_size(bool nrt) const {
 
 std::string file_index_manager::index_directory() const {
     return index_directory_;
-}
-
-void file_index_manager::process_addition_jobs() {
-    for (const auto& doc : addition_batch_) {
-        writer_->addDocument(doc);
-        QString full_path = QString::fromStdWString(doc->get(L"full_path"));
-        log::debug("Indexed: {}", full_path.toStdString());
-    }
-
-    addition_batch_.clear();
-    last_addition_time_ = std::chrono::steady_clock::now();
-}
-
-void file_index_manager::process_deletion_jobs() {
-    for (const auto& [term, exact_match] : deletion_batch_) {
-        try {
-            if (exact_match) {
-                TermPtr pterm = newLucene<Term>(exact_field_, StringUtils::toUnicode(term));
-                writer_->deleteDocuments(pterm);
-            } else {
-                QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
-                writer_->deleteDocuments(query);
-            }
-            log::debug("Removed index: {}", term);
-        } catch (const LuceneException& e) {
-            throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
-        }
-    }
-
-    deletion_batch_.clear();
-    last_deletion_time_ = std::chrono::steady_clock::now();
-}
-
-bool file_index_manager::addition_jobs_ready() const {
-    return addition_batch_.size() >= batch_size_ ||
-        (std::chrono::steady_clock::now() - last_addition_time_) >= batch_interval_;
-}
-
-bool file_index_manager::deletion_jobs_ready() const {
-    return deletion_batch_.size() > batch_size_ ||
-        (std::chrono::steady_clock::now() - last_deletion_time_) >= batch_interval_;
 }
 
 QStringList file_index_manager::search(
@@ -286,11 +216,6 @@ QStringList file_index_manager::search(
 bool file_index_manager::document_exists(const std::string& path) {
     auto collector = nrt_search(path, true);
     return collector->getTotalHits() > 0;
-}
-
-void file_index_manager::set_index_change_filter(
-    std::function<bool(const std::string&)> filter) {
-    index_change_filter_ = std::move(filter);
 }
 
 void file_index_manager::try_refresh_reader(bool nrt) {
@@ -362,18 +287,6 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
         StringUtils::toUnicode(record.full_path),
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
     return doc;
-}
-
-bool file_index_manager::should_be_filtered(const file_record& record) const {
-    return should_be_filtered(record.full_path);
-}
-
-bool file_index_manager::should_be_filtered(const std::string& path) const {
-    if (index_change_filter_) {
-        return std::invoke(index_change_filter_, path);
-    }
-
-    return false;
 }
 
 ANYTHING_NAMESPACE_END

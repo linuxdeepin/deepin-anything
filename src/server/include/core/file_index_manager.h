@@ -24,22 +24,18 @@ enum class job_status {
  */
 class file_index_manager {
 public:
-    explicit file_index_manager(std::string index_dir, std::size_t batch_size = 100);
+    explicit file_index_manager(std::string index_dir);
     ~file_index_manager();
 
     /// Add a file record to the index
     void add_index(file_record record);
     void add_index(const std::filesystem::path& full_path);
-
-    // 延迟索引
-    void add_index_delay(file_record record);
+    void add_index(const Lucene::DocumentPtr& doc);
 
     /// 根据词条移除符合的文件索引
     /// 如果没有开启 USE_DOUBLE_FIELD_INDEX，则只能进行模糊删除，精确词条将删除失败
     /// 如果开启了 USE_DOUBLE_FIELD_INDEX，则会进行精确删除，模糊词条将删除失败
     void remove_index(const std::string& term, bool exact_match = true);
-
-    void remove_index_delay(std::string term, bool exact_match = true);
 
     /// 根据词条搜索文件索引
     /// @exact_match 完全匹配，开启 USE_DOUBLE_FIELD_INDEX 时能够避免解析词条带来的开销
@@ -62,12 +58,6 @@ public:
 
     std::string index_directory() const;
 
-    void process_addition_jobs();
-    void process_deletion_jobs();
-
-    bool addition_jobs_ready() const;
-    bool deletion_jobs_ready() const;
-
     QStringList search(
         const QString& path, const QString& keyword,
         int32_t offset, int32_t max_count, bool nrt);
@@ -79,7 +69,7 @@ public:
      */
     bool document_exists(const std::string& path);
 
-    void set_index_change_filter(std::function<bool(const std::string&)> filter);
+    Lucene::DocumentPtr create_document(const file_record& record);
 
 private:
     /// Refresh the index reader if there are changes
@@ -101,11 +91,6 @@ private:
     
     void update(const std::string& term, file_record record, bool exact_match = true);
 
-    Lucene::DocumentPtr create_document(const file_record& record);
-
-    bool should_be_filtered(const file_record& record) const;
-    bool should_be_filtered(const std::string& path) const;
-
 private:
     std::string index_directory_;
     Lucene::IndexWriterPtr writer_;
@@ -116,13 +101,6 @@ private:
     Lucene::IndexReaderPtr nrt_reader_;
     Lucene::String fuzzy_field_{ L"file_name" };
     Lucene::String exact_field_{ L"full_path" };
-    std::vector<Lucene::DocumentPtr> addition_batch_;
-    std::vector<std::pair<std::string, bool>> deletion_batch_;
-    std::chrono::steady_clock::time_point last_addition_time_ = std::chrono::steady_clock::now();
-    std::chrono::steady_clock::time_point last_deletion_time_ = std::chrono::steady_clock::now();
-    const std::chrono::milliseconds batch_interval_ = std::chrono::milliseconds(100); // 批量时间窗口
-    std::size_t batch_size_;
-    std::function<bool(const std::string&)> index_change_filter_;
 };
 
 ANYTHING_NAMESPACE_END
