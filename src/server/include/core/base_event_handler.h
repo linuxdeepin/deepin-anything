@@ -3,7 +3,7 @@
 
 #include <condition_variable>
 #include <mutex>
-#include <queue>
+#include <vector>
 #include <thread>
 
 #include <QObject>
@@ -120,8 +120,9 @@ private:
     std::condition_variable cv_;
     bool should_stop_;
     std::deque<anything::file_record> records_;
-    std::queue<anything::index_job> index_jobs_;
+    std::vector<anything::index_job> index_jobs_;
     std::function<bool(const std::string&)> index_change_filter_;
+    // std::vector<Lucene::DocumentPtr> document_batch_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_
