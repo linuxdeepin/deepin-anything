@@ -70,11 +70,19 @@ void file_index_manager::add_index(file_record record) {
 
 void file_index_manager::add_index(const std::filesystem::path& full_path) {
     try {
-        if (!document_exists(full_path)) {
-            auto doc = create_document(file_helper::make_file_record(full_path));
-            writer_->addDocument(doc);
-        }
+        // if (!document_exists(full_path)) {
+        //     auto doc = create_document(file_helper::make_file_record(full_path));
+        //     writer_->addDocument(doc);
+
+        //     std::lock_guard<std::mutex> lock(mtx_);
+        //     log::debug("Indexed {}", full_path);
+        // }
+        auto doc = create_document(file_helper::make_file_record(full_path));
+        writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(full_path.string())), doc);
+        std::lock_guard<std::mutex> lock(mtx_);
+        log::debug("Indexed {}", full_path);
     } catch (const LuceneException& e) {
+        std::lock_guard<std::mutex> lock(mtx_);
         log::error("Failed to index {}: {}", full_path.string(), StringUtils::toUTF8(e.getError()));
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
@@ -219,6 +227,7 @@ bool file_index_manager::document_exists(const std::string& path) {
 }
 
 void file_index_manager::try_refresh_reader(bool nrt) {
+    // std::lock_guard<std::mutex> lock(reader_mtx_);
     if (nrt) {
         if (!nrt_reader_->isCurrent()) {
             IndexReaderPtr new_reader = writer_->getReader();
@@ -242,20 +251,26 @@ void file_index_manager::try_refresh_reader(bool nrt) {
 
 TopScoreDocCollectorPtr file_index_manager::search(const std::string& path, bool exact_match, bool nrt) {
     SearcherPtr searcher;
-    if (nrt) {
-        try_refresh_reader(true);
-        searcher = nrt_searcher_;
-    } else {
-        try_refresh_reader();
-        searcher = searcher_;
+    QueryPtr query;
+    TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(10, true);
+    {
+        std::lock_guard<std::mutex> lock(reader_mtx_);
+        if (nrt) {
+            try_refresh_reader(true);
+            searcher = nrt_searcher_;
+        } else {
+            try_refresh_reader();
+            searcher = searcher_;
+        }
+
+        // 精确搜索时搜路径，模糊搜索时搜文件名
+        // 精确搜索只有在 field 为 Field::INDEX_NOT_ANALYZED 才有效，可以避免解析开销
+        query = exact_match ? newLucene<TermQuery>(newLucene<Term>(exact_field_, StringUtils::toUnicode(path)))
+                                    : parser_->parse(StringUtils::toUnicode(path));
+        searcher->search(query, collector);
     }
 
-    // 精确搜索时搜路径，模糊搜索时搜文件名
-    // 精确搜索只有在 field 为 Field::INDEX_NOT_ANALYZED 才有效，可以避免解析开销
-    QueryPtr query = exact_match ? newLucene<TermQuery>(newLucene<Term>(exact_field_, StringUtils::toUnicode(path)))
-                                 : parser_->parse(StringUtils::toUnicode(path));
-    TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(10, true);
-    searcher->search(query, collector);
+    
     return collector;
 }
 
