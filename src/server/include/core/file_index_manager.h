@@ -101,6 +101,8 @@ private:
     Lucene::IndexReaderPtr nrt_reader_;
     Lucene::String fuzzy_field_{ L"file_name" };
     Lucene::String exact_field_{ L"full_path" };
+    std::mutex mtx_;
+    std::mutex reader_mtx_;
 };
 
 ANYTHING_NAMESPACE_END

@@ -1,11 +1,6 @@
 #ifndef ANYTHING_BASE_EVENT_HANDLER_H_
 #define ANYTHING_BASE_EVENT_HANDLER_H_
 
-#include <condition_variable>
-#include <mutex>
-#include <vector>
-#include <thread>
-
 #include <QObject>
 
 #include "common/anything_fwd.hpp"
@@ -13,6 +8,7 @@
 #include "core/disk_scanner.h"
 #include "core/file_index_manager.h"
 #include "core/mount_manager.h"
+#include "core/thread_pool.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -71,10 +67,25 @@ protected:
     void remove_index_delay(std::string term);
 
 private:
-    void worker_loop();
-
     bool should_be_filtered(const anything::file_record& record) const;
     bool should_be_filtered(const std::string& path) const;
+
+    template<typename T>
+    void eat_jobs(T& container, std::size_t number, anything::index_job_type type) {
+        T processing_jobs;
+        processing_jobs.insert(
+            processing_jobs.end(),
+            std::make_move_iterator(addition_jobs_.begin()),
+            std::make_move_iterator(addition_jobs_.begin() + number));
+        addition_jobs_.erase(addition_jobs_.begin(), addition_jobs_.begin() + number);
+        pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
+            for (auto&& job : processing_jobs) {
+                if (type == anything::index_job_type::add) {
+                    index_manager_.add_index(std::move(job));
+                }
+            }
+        });
+    }
 
 public slots:
     // double multiply(double factor0, double factor2);
@@ -114,15 +125,11 @@ private:
     anything::mount_manager mnt_manager_;
     anything::file_index_manager index_manager_;
     std::size_t batch_size_;
-    std::mutex index_jobs_mtx_;
-    std::mutex index_manager_mtx_;
-    std::thread worker_;
-    std::condition_variable cv_;
-    bool should_stop_;
+    std::mutex mtx_;
     std::deque<anything::file_record> records_;
-    std::vector<anything::index_job> index_jobs_;
+    std::vector<std::string> addition_jobs_;
     std::function<bool(const std::string&)> index_change_filter_;
-    // std::vector<Lucene::DocumentPtr> document_batch_;
+    anything::thread_pool pool_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_
