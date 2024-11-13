@@ -48,27 +48,7 @@ file_index_manager::~file_index_manager() {
     if (nrt_reader_) nrt_reader_->close();
 }
 
-void file_index_manager::add_index(file_record record) {
-    // std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    log::debug("Indexed {}", record.full_path);
-
-    // try {
-    //     if (!document_exists(record.full_path)) {
-    //         // auto doc = create_document(record);
-    //         // (void)(doc);
-    //         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    //         log::debug("Indexed {}", record.full_path);
-    //         // writer_->addDocument(create_document(record));
-    //     } else {
-    //         log::debug("Already indexed {}", record.full_path);
-    //     }
-    // } catch (const LuceneException& e) {
-    //     log::error("Failed to index {}: {}", record.full_path, StringUtils::toUTF8(e.getError()));
-    //     throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
-    // }
-}
-
-void file_index_manager::add_index(const std::filesystem::path& full_path) {
+void file_index_manager::add_index(const std::string& path) {
     try {
         // if (!document_exists(full_path)) {
         //     auto doc = create_document(file_helper::make_file_record(full_path));
@@ -77,19 +57,15 @@ void file_index_manager::add_index(const std::filesystem::path& full_path) {
         //     std::lock_guard<std::mutex> lock(mtx_);
         //     log::debug("Indexed {}", full_path);
         // }
-        auto doc = create_document(file_helper::make_file_record(full_path));
-        writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(full_path.string())), doc);
+        auto doc = create_document(file_helper::make_file_record(path));
+        writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(path)), doc);
         std::lock_guard<std::mutex> lock(mtx_);
-        log::debug("Indexed {}", full_path);
+        log::debug("Indexed {}", path);
     } catch (const LuceneException& e) {
         std::lock_guard<std::mutex> lock(mtx_);
-        log::error("Failed to index {}: {}", full_path.string(), StringUtils::toUTF8(e.getError()));
+        log::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
-}
-
-void file_index_manager::add_index(const Lucene::DocumentPtr& doc) {
-    writer_->addDocument(doc);
 }
 
 void file_index_manager::remove_index(const std::string& term, bool exact_match) {
@@ -105,10 +81,29 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
             QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
             writer_->deleteDocuments(query);
         }
-        // log::debug("Removed index: {}", term);
+        std::lock_guard<std::mutex> lock(mtx_);
+        log::debug("Removed index: {}", term);
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
+}
+
+void file_index_manager::update_index(
+    const std::string& old_path,
+    const std::string& new_path,
+    bool exact_match) {
+    if (exact_match) {
+        // 精确更新，term 必须是路径，否则 updateDocument 无法删除
+        auto doc = create_document(file_helper::make_file_record(new_path));
+        writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(old_path)), doc);
+    } else {
+        // 模糊更新，term 可以是文件名，此时手动调用 remove_index 和 insert_index 来更新
+        remove_index(old_path);
+        add_index(new_path);
+    }
+
+    std::lock_guard<std::mutex> lock(mtx_);
+    log::debug("Renamed: {} --> {}", old_path, new_path);
 }
 
 std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -138,11 +133,6 @@ std::vector<file_record> file_index_manager::search_index(const std::string& ter
     }
 
     return results;
-}
-
-void file_index_manager::update_index(const std::string& old_path, file_record record) {
-    // log::debug("{}", __PRETTY_FUNCTION__);
-    update(old_path, std::move(record));
 }
 
 void file_index_manager::commit() {
@@ -276,19 +266,6 @@ TopScoreDocCollectorPtr file_index_manager::search(const std::string& path, bool
 
 Lucene::TopScoreDocCollectorPtr file_index_manager::nrt_search(const std::string& path, bool exact_match) {
     return search(path, exact_match, true);
-}
-
-void file_index_manager::update(const std::string& term, file_record record, bool exact_match) {
-    log::debug("Renamed: {} --> {}", term, record.full_path);
-    if (exact_match) {
-        // 精确更新，term 必须是路径，否则 updateDocument 无法删除
-        auto doc = create_document(record);
-        writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(term)), doc);
-    } else {
-        // 模糊更新，term 可以是文件名，此时手动调用 remove_index 和 insert_index 来更新
-        this->remove_index(term);
-        this->add_index(std::move(record));
-    }
 }
 
 DocumentPtr file_index_manager::create_document(const file_record& record) {

@@ -28,23 +28,21 @@ public:
     ~file_index_manager();
 
     /// Add a file record to the index
-    void add_index(file_record record);
-    void add_index(const std::filesystem::path& full_path);
-    void add_index(const Lucene::DocumentPtr& doc);
+    void add_index(const std::string& path);
 
     /// 根据词条移除符合的文件索引
     /// 如果没有开启 USE_DOUBLE_FIELD_INDEX，则只能进行模糊删除，精确词条将删除失败
     /// 如果开启了 USE_DOUBLE_FIELD_INDEX，则会进行精确删除，模糊词条将删除失败
     void remove_index(const std::string& term, bool exact_match = true);
 
-    /// 根据词条搜索文件索引
-    /// @exact_match 完全匹配，开启 USE_DOUBLE_FIELD_INDEX 时能够避免解析词条带来的开销
-    std::vector<file_record> search_index(const std::string& term, bool exact_match = false, bool nrt = false);
-
     /// Update the index for a given file record
     /// 如果 new record 索引已经存在，则会删除 old path 索引，再更新 new record（和 new record path 中的修改时间对比，更新则更新）
     /// 如果 new record 索引不存在，则会删除 old path 索引，增加 new record 索引
-    void update_index(const std::string& old_path, file_record record);
+    void update_index(const std::string& old_path, const std::string& new_path, bool exact_match = true);
+
+    /// 根据词条搜索文件索引
+    /// @exact_match 完全匹配，开启 USE_DOUBLE_FIELD_INDEX 时能够避免解析词条带来的开销
+    std::vector<file_record> search_index(const std::string& term, bool exact_match = false, bool nrt = false);
 
     /// Commit all changes to the index
     void commit();
@@ -88,8 +86,6 @@ private:
      * 在 NRT 模式下，即便这些数据尚未写入磁盘（commit），也可以通过获取一个近实时的 IndexReader 来从内存中读取最新的索引数据
      */
     Lucene::TopScoreDocCollectorPtr nrt_search(const std::string& path, bool exact_match = false);
-    
-    void update(const std::string& term, file_record record, bool exact_match = true);
 
 private:
     std::string index_directory_;

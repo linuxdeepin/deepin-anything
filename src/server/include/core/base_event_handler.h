@@ -42,16 +42,14 @@ public:
 
     virtual void handle(anything::fs_event event) = 0;
 
-    virtual void run_scheduled_task();
-
 protected:
     void set_batch_size(std::size_t size);
 
     bool ignored_event(const std::string& path, bool ignored);
 
-    void insert_pending_records(std::deque<anything::file_record> records);
+    void insert_pending_paths(std::vector<std::string> paths);
 
-    std::size_t record_size() const;
+    std::size_t pending_paths_count() const;
 
     void refresh_mount_status();
 
@@ -64,28 +62,20 @@ protected:
     void set_index_change_filter(std::function<bool(const std::string&)> filter);
 
     void add_index_delay(std::string path);
-    void remove_index_delay(std::string term);
+    void remove_index_delay(std::string path);
+    void update_index_delay(std::string src_path, std::string dst_path);
 
 private:
     bool should_be_filtered(const anything::file_record& record) const;
     bool should_be_filtered(const std::string& path) const;
 
-    template<typename T>
-    void eat_jobs(T& container, std::size_t number, anything::index_job_type type) {
-        T processing_jobs;
-        processing_jobs.insert(
-            processing_jobs.end(),
-            std::make_move_iterator(addition_jobs_.begin()),
-            std::make_move_iterator(addition_jobs_.begin() + number));
-        addition_jobs_.erase(addition_jobs_.begin(), addition_jobs_.begin() + number);
-        pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
-            for (auto&& job : processing_jobs) {
-                if (type == anything::index_job_type::add) {
-                    index_manager_.add_index(std::move(job));
-                }
-            }
-        });
-    }
+    void eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number);
+
+    void eat_job(const anything::index_job& job);
+
+    void jobs_push(std::string path, anything::index_job_type type, std::optional<std::string> dst = std::nullopt);
+
+    void timer_worker(int64_t interval);
 
 public slots:
     // double multiply(double factor0, double factor2);
@@ -125,11 +115,14 @@ private:
     anything::mount_manager mnt_manager_;
     anything::file_index_manager index_manager_;
     std::size_t batch_size_;
-    std::mutex mtx_;
-    std::deque<anything::file_record> records_;
-    std::vector<std::string> addition_jobs_;
+    std::vector<std::string> pending_paths_;
+    std::vector<anything::index_job> jobs_;
     std::function<bool(const std::string&)> index_change_filter_;
     anything::thread_pool pool_;
+    std::thread timer_;
+    std::mutex jobs_mtx_;
+    std::mutex pending_mtx_;
+    std::atomic<bool> stop_timer_{ false };
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_
