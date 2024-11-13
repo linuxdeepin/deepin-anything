@@ -11,7 +11,7 @@ ANYTHING_NAMESPACE_BEGIN
 default_event_handler::default_event_handler(std::string index_dir)
     : base_event_handler(std::move(index_dir)) {
     // Index the default mount point
-    insert_pending_records(scanner_.parallel_scan("/data/home/dxnu"));
+    insert_pending_paths(scanner_.parallel_scan("/data/home/dxnu"));
 
     // Initialize mount cache
     refresh_mount_status();
@@ -25,7 +25,7 @@ default_event_handler::default_event_handler(std::string index_dir)
                std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
     });
 
-    log::debug("Record size: {}", record_size());
+    log::debug("Pending paths count: {}", pending_paths_count());
     // log::debug("Document size: {}", index_manager_.document_size());
     // auto results = index_manager_.search_index("test haha");
     // log::debug("Found {} result(s).", results.size());
@@ -153,10 +153,9 @@ void default_event_handler::handle(fs_event event) {
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
             remove_index_delay(std::move(event.src));
         } else if (event.act == ACT_RENAME_FILE || event.act == ACT_RENAME_FOLDER) {
-            // auto record = file_helper::generate_file_record(std::move(event.dst));
-            // if (record) {
-            //     index_manager_.update_index(event.src, std::move(*record));
-            // }
+            if (fs::exists(event.dst)) {
+                update_index_delay(std::move(event.src), std::move(event.dst));
+            }
         }
     }
 }

@@ -43,9 +43,9 @@ std::size_t disk_scanner::mounts_size() const {
     return mounted_paths_.size();
 }
 
-std::deque<file_record> disk_scanner::parallel_scan(const fs::path& root) const {
+std::vector<std::string> disk_scanner::parallel_scan(const fs::path& root) const {
     log::debug("Scanning {}...", root.string());
-    std::deque<file_record> records;
+    std::vector<std::string> records;
     fs::recursive_directory_iterator dirpos{ root, fs::directory_options::skip_permission_denied };
     for (auto it = begin(dirpos); it != end(dirpos); ++it) {
         // Skip hidden files and folders
@@ -58,7 +58,7 @@ std::deque<file_record> disk_scanner::parallel_scan(const fs::path& root) const 
         }
 
         if (std::filesystem::exists(it->path())) {
-            records.push_back({ it->path().filename().string(), it->path().string() });
+            records.push_back(it->path().string());
         }
     }
 

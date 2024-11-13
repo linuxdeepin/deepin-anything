@@ -6,7 +6,8 @@
 #include <anythingadaptor.h>
 
 base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
-    : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(100) {
+    : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(100),
+      timer_(std::thread(&base_event_handler::timer_worker, this, 1000)) {
     new IAnythingAdaptor(this);
     QDBusConnection dbus = QDBusConnection::systemBus();
     QString service_name = "my.test.SAnything";
@@ -19,25 +20,22 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
 
 base_event_handler::~base_event_handler() {
     pool_.wait_for_tasks();
+    if (!jobs_.empty()) {
+        // Eat all jobs
+        for (auto&& job : jobs_) {
+            eat_job(std::move(job));
+        }
+    }
 }
 
 void base_event_handler::terminate_processing() {
-    
-}
+    stop_timer_ = true;
 
-void base_event_handler::run_scheduled_task() {
-    // if (!records_.empty()) {
-    //     size_t batch_size = std::min(size_t(500), records_.size());
-    //     for (size_t i = 0; i < batch_size; ++i) {
-    //         {
-    //             std::lock_guard<std::mutex> lock(mtx_);
-    //             index_manager_.add_index_delay(std::move(records_.front()));
-    //         }
-    //         records_.pop_front();
-    //     }
-    // }
-
-    // cv_.notify_one();
+    if (timer_.joinable()) {
+        auto thread_id = timer_.get_id();
+        timer_.join();
+        anything::log::debug("Timer thread {} has exited", thread_id);
+    }
 }
 
 void base_event_handler::set_batch_size(std::size_t size) {
@@ -61,15 +59,16 @@ bool base_event_handler::ignored_event(const std::string& path, bool ignored)
     return false;
 }
 
-void base_event_handler::insert_pending_records(
-    std::deque<anything::file_record> records) {
-    records_.insert(records_.end(),
-                    std::make_move_iterator(records.begin()),
-                    std::make_move_iterator(records.end()));
+void base_event_handler::insert_pending_paths(
+    std::vector<std::string> paths) {
+    std::lock_guard<std::mutex> lock(pending_mtx_);
+    pending_paths_.insert(pending_paths_.end(),
+                    std::make_move_iterator(paths.begin()),
+                    std::make_move_iterator(paths.end()));
 }
 
-std::size_t base_event_handler::record_size() const {
-    return records_.size();
+std::size_t base_event_handler::pending_paths_count() const {
+    return pending_paths_.size();
 }
 
 void base_event_handler::refresh_mount_status() {
@@ -94,55 +93,15 @@ void base_event_handler::set_index_change_filter(
 }
 
 void base_event_handler::add_index_delay(std::string path) {
-    if (should_be_filtered(path)) {
-        return;
-    }
-    // anything::log::debug("{} begin", __PRETTY_FUNCTION__);
-    // index_manager_.add_index(std::move(path));
-    addition_jobs_.push_back(std::move(path));
-    if (addition_jobs_.size() >= batch_size_) {
-        eat_jobs(addition_jobs_, batch_size_);
-        // std::vector<std::string> processing_jobs;
-        // processing_jobs.insert(
-        //     processing_jobs.end(),
-        //     std::make_move_iterator(addition_jobs_.begin()),
-        //     std::make_move_iterator(addition_jobs_.begin() + batch_size_));
-        // addition_jobs_.erase(addition_jobs_.begin(), addition_jobs_.begin() + batch_size_);
-        // pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
-        //     for (auto&& job : processing_jobs) {
-        //         index_manager_.add_index(std::move(job));
-        //     }
-        // });
-    }
+    jobs_push(std::move(path), anything::index_job_type::add);
 }
 
-void base_event_handler::remove_index_delay(std::string term) {
-    if (should_be_filtered(term)) {
-        return;
-    }
-    anything::log::debug("Removed index: {}", term);
-    index_manager_.remove_index(term);
-    // std::lock_guard<std::mutex> lock(index_jobs_mtx_);
-    // index_jobs_.emplace_back(std::move(term), anything::index_job_type::remove);
-    // if (index_jobs_.size() >= batch_size_) {
-    //     std::vector<anything::index_job> processing_jobs;
-    //     processing_jobs.insert(
-    //         processing_jobs.end(),
-    //         std::make_move_iterator(index_jobs_.begin()),
-    //         std::make_move_iterator(index_jobs_.begin() + batch_size_));
-    //     index_jobs_.erase(index_jobs_.begin(), index_jobs_.begin() + batch_size_);
-    //     pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
-    //         for (auto&& job : processing_jobs) {
-    //             if (job.type == anything::index_job_type::add) {
-    //                 anything::log::debug("Indexed {}", job.src);
-    //                 index_manager_.add_index(std::move(job.src));
-    //             } else if (job.type == anything::index_job_type::remove) {
-    //                 anything::log::debug("Removed index: {}", job.src);
-    //                 index_manager_.remove_index(job.src);
-    //             }
-    //         }
-    //     });
-    // }
+void base_event_handler::remove_index_delay(std::string path) {
+    jobs_push(std::move(path), anything::index_job_type::remove);
+}
+
+void base_event_handler::update_index_delay(std::string src_path, std::string dst_path) {
+    jobs_push(std::move(src_path), anything::index_job_type::update, std::move(dst_path));
 }
 
 bool base_event_handler::should_be_filtered(const anything::file_record& record) const {
@@ -155,6 +114,97 @@ bool base_event_handler::should_be_filtered(const std::string& path) const {
     }
 
     return false;
+}
+
+void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number) {
+    std::vector<anything::index_job> processing_jobs;
+    processing_jobs.insert(
+        processing_jobs.end(),
+        std::make_move_iterator(jobs.begin()),
+        std::make_move_iterator(jobs.begin() + number));
+    jobs.erase(jobs.begin(), jobs.begin() + number);
+    pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
+        for (const auto& job : processing_jobs) {
+            eat_job(job);
+        }
+    });
+}
+
+void base_event_handler::eat_job(const anything::index_job& job) {
+    if (job.type == anything::index_job_type::add) {
+        index_manager_.add_index(job.src);
+    } else if (job.type == anything::index_job_type::remove) {
+        index_manager_.remove_index(job.src);
+    } else if (job.type == anything::index_job_type::update) {
+        if (job.dst) {
+            index_manager_.update_index(job.src, *job.dst);
+        }
+    }
+}
+
+void base_event_handler::jobs_push(std::string path, anything::index_job_type type,
+    std::optional<std::string> dst) {
+    if (should_be_filtered(path) || (dst && should_be_filtered(*dst))) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(jobs_mtx_);
+    jobs_.emplace_back(std::move(path), type, std::move(dst));
+    if (jobs_.size() >= batch_size_) {
+        eat_jobs(jobs_, batch_size_);
+    }
+}
+
+void base_event_handler::timer_worker(int64_t interval) {
+    // constexpr std::size_t pending_batch_size = 500;
+    while(!stop_timer_) {
+        {
+            std::lock_guard<std::mutex> lock(jobs_mtx_);
+            if (!jobs_.empty()) {
+                eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+
+
+        // bool idle = false;
+        // {
+        //     std::lock_guard<std::mutex> lock(jobs_mtx_);
+        //     if (!jobs_.empty()) {
+        //         eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
+        //     } else {
+        //         idle = true;
+        //     }
+        // }
+
+        // if (idle) {
+        //     std::vector<std::string> path_batch;
+        //     {
+        //         std::lock_guard<std::mutex> lock(pending_mtx_);
+        //         if (!pending_paths_.empty()) {
+        //             std::size_t batch_size = std::min(pending_batch_size, pending_paths_.size());
+        //             path_batch.insert(
+        //                 path_batch.end(),
+        //                 std::make_move_iterator(pending_paths_.begin()),
+        //                 std::make_move_iterator(pending_paths_.begin() + batch_size));
+        //             pending_paths_.erase(pending_paths_.begin(), pending_paths_.begin() + batch_size);
+        //         }
+        //     }
+
+        //     // anything::log::debug("path batch size: {}", path_batch.size());
+        //     for (auto&& path : path_batch) {
+        //         if (should_be_filtered(path)) {
+        //             continue;
+        //         }
+
+        //         if (!index_manager_.document_exists(path)) {
+        //             add_index_delay(std::move(path));
+        //         }
+        //     }
+        // }
+
+        // std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+    }
 }
 
 QStringList base_event_handler::search(
@@ -170,7 +220,6 @@ QStringList base_event_handler::search(
 // 未特殊处理文件不存在的情况，只要最终不存在，就算成功
 bool base_event_handler::removePath(const QString& fullPath) {
     auto path = fullPath.toStdString();
-
     index_manager_.remove_index(path);
     return !index_manager_.document_exists(path);
 }

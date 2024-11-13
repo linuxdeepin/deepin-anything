@@ -83,7 +83,7 @@ public:
         // }
     }
 
-    std::deque<file_record> parallel_scan(const fs::path& root) const;
+    std::vector<std::string> parallel_scan(const fs::path& root) const;
 
 private:
     bool is_hidden(const fs::path& p) const;
