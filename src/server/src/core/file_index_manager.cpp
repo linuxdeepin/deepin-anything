@@ -57,6 +57,12 @@ void file_index_manager::add_index(const std::string& path) {
         //     std::lock_guard<std::mutex> lock(mtx_);
         //     log::debug("Indexed {}", full_path);
         // }
+        // if (!document_exists(path)) {
+        //     auto doc = create_document(file_helper::make_file_record(path));
+        //     writer_->addDocument(doc);
+        //     std::lock_guard<std::mutex> lock(mtx_);
+        //     log::debug("Indexed {}", path);
+        // }
         auto doc = create_document(file_helper::make_file_record(path));
         writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(path)), doc);
         std::lock_guard<std::mutex> lock(mtx_);
@@ -211,13 +217,23 @@ QStringList file_index_manager::search(
     }
 }
 
-bool file_index_manager::document_exists(const std::string& path) {
-    auto collector = nrt_search(path, true);
-    return collector->getTotalHits() > 0;
+bool file_index_manager::document_exists(const std::string& path, bool only_check_initial_index) {
+    // auto collector = nrt_search(path, true);
+    // return collector->getTotalHits() > 0;
+
+    TermPtr term = newLucene<Term>(L"full_path", StringUtils::toUnicode(path));
+    TermDocsPtr termDocs;
+    if (only_check_initial_index) {
+        termDocs = reader_->termDocs(term);
+    } else {
+        try_refresh_reader(true);
+        termDocs = nrt_reader_->termDocs(term);
+    }
+    return termDocs->next();
 }
 
 void file_index_manager::try_refresh_reader(bool nrt) {
-    // std::lock_guard<std::mutex> lock(reader_mtx_);
+    std::lock_guard<std::mutex> lock(reader_mtx_);
     if (nrt) {
         if (!nrt_reader_->isCurrent()) {
             IndexReaderPtr new_reader = writer_->getReader();
@@ -243,24 +259,19 @@ TopScoreDocCollectorPtr file_index_manager::search(const std::string& path, bool
     SearcherPtr searcher;
     QueryPtr query;
     TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(10, true);
-    {
-        std::lock_guard<std::mutex> lock(reader_mtx_);
-        if (nrt) {
-            try_refresh_reader(true);
-            searcher = nrt_searcher_;
-        } else {
-            try_refresh_reader();
-            searcher = searcher_;
-        }
-
-        // 精确搜索时搜路径，模糊搜索时搜文件名
-        // 精确搜索只有在 field 为 Field::INDEX_NOT_ANALYZED 才有效，可以避免解析开销
-        query = exact_match ? newLucene<TermQuery>(newLucene<Term>(exact_field_, StringUtils::toUnicode(path)))
-                                    : parser_->parse(StringUtils::toUnicode(path));
-        searcher->search(query, collector);
+    if (nrt) {
+        try_refresh_reader(true);
+        searcher = nrt_searcher_;
+    } else {
+        try_refresh_reader();
+        searcher = searcher_;
     }
-
     
+    // 精确搜索时搜路径，模糊搜索时搜文件名
+    // 精确搜索只有在 field 为 Field::INDEX_NOT_ANALYZED 才有效，可以避免解析开销
+    query = exact_match ? newLucene<TermQuery>(newLucene<Term>(exact_field_, StringUtils::toUnicode(path)))
+                                : parser_->parse(StringUtils::toUnicode(path));
+    searcher->search(query, collector);
     return collector;
 }
 
