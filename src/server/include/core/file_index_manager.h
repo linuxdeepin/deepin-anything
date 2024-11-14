@@ -65,7 +65,7 @@ public:
      * @param path The file path to check.
      * @return true if the file path is already indexed, otherwise false.
      */
-    bool document_exists(const std::string& path);
+    bool document_exists(const std::string& path, bool only_check_initial_index = false);
 
     Lucene::DocumentPtr create_document(const file_record& record);
 

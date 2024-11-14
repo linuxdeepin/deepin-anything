@@ -156,54 +156,64 @@ void base_event_handler::jobs_push(std::string path, anything::index_job_type ty
 }
 
 void base_event_handler::timer_worker(int64_t interval) {
-    // constexpr std::size_t pending_batch_size = 500;
+    // pending batch size 小时，CPU Usage 低，全部索引建立完成的时间长
+    // pending batch size 大时，CPU Usage 高，全部索引建立完成的时间短
+    constexpr std::size_t pending_batch_size = 100;
     while(!stop_timer_) {
-        {
-            std::lock_guard<std::mutex> lock(jobs_mtx_);
-            if (!jobs_.empty()) {
-                eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
-            }
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(interval));
-
-
-        // bool idle = false;
         // {
         //     std::lock_guard<std::mutex> lock(jobs_mtx_);
         //     if (!jobs_.empty()) {
         //         eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
-        //     } else {
-        //         idle = true;
         //     }
         // }
-
-        // if (idle) {
-        //     std::vector<std::string> path_batch;
-        //     {
-        //         std::lock_guard<std::mutex> lock(pending_mtx_);
-        //         if (!pending_paths_.empty()) {
-        //             std::size_t batch_size = std::min(pending_batch_size, pending_paths_.size());
-        //             path_batch.insert(
-        //                 path_batch.end(),
-        //                 std::make_move_iterator(pending_paths_.begin()),
-        //                 std::make_move_iterator(pending_paths_.begin() + batch_size));
-        //             pending_paths_.erase(pending_paths_.begin(), pending_paths_.begin() + batch_size);
-        //         }
-        //     }
-
-        //     // anything::log::debug("path batch size: {}", path_batch.size());
-        //     for (auto&& path : path_batch) {
-        //         if (should_be_filtered(path)) {
-        //             continue;
-        //         }
-
-        //         if (!index_manager_.document_exists(path)) {
-        //             add_index_delay(std::move(path));
-        //         }
-        //     }
-        // }
-
         // std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+
+
+        bool idle = false;
+        {
+            std::lock_guard<std::mutex> lock(jobs_mtx_);
+            if (!jobs_.empty()) {
+                eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
+            } else {
+                idle = true;
+            }
+        }
+
+        // 无任务时自动索引未存在的系统文件，维护系统完整性
+        if (idle) {
+            std::vector<std::string> path_batch;
+            {
+                std::lock_guard<std::mutex> lock(pending_mtx_);
+                if (!pending_paths_.empty()) {
+                    std::size_t batch_size = std::min(pending_batch_size, pending_paths_.size());
+                    path_batch.insert(
+                        path_batch.end(),
+                        std::make_move_iterator(pending_paths_.begin()),
+                        std::make_move_iterator(pending_paths_.begin() + batch_size));
+                    pending_paths_.erase(pending_paths_.begin(), pending_paths_.begin() + batch_size);
+                }
+            }
+
+            anything::log::debug("path batch size: {}", path_batch.size());
+            for (auto&& path : path_batch) {
+                if (should_be_filtered(path)) {
+                    continue;
+                }
+
+                // TD: 插入前还需要检查文件是否本地存在，以避免新任务刚删除了索引，这里又插入了该索引
+                // 此处 document_exists 不需要是实时的，只需要是程序刚启动时的状态，以避免线程同步带来的效率问题
+                // 因为已存在却未建索引的文件，不会产生新的插入事件，所以只需和初始状态对比即可
+                // 索引完整性只考虑插入，这里无法考虑删除，逐个检查已建索引是否本地存在效率会很低，放到查询时处理
+                // ! 已完成此 TD !
+                if (!index_manager_.document_exists(path, true)) {
+                    if (std::filesystem::exists(path)) {
+                        add_index_delay(std::move(path));
+                    }
+                }
+            }
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(interval));
     }
 }
 
@@ -214,7 +224,37 @@ QStringList base_event_handler::search(
         return {};
     }
 
-    return index_manager_.search(path, keywords, offset, max_count, true);
+    // TD: 由于没有自动清理无效索引，系统中可能含有一些实际不存在的文件路径
+    // 在此可过滤并清除无效索引，维护索引的有效性
+    // ! 已完成此 TD !
+    QStringList results = index_manager_.search(path, keywords, offset, max_count, true);
+    int old_results_count = results.size();
+    if (!results.empty()) {
+        // anything::log::debug("result size: {}", results.size());
+        // 清除非真实文件
+        std::vector<std::string> remove_list;
+        for (int i = 0; i < results.size();) {
+            std::string path = results[i].toStdString();
+            if (!std::filesystem::exists(path)) {
+                remove_list.push_back(std::move(path));
+                results.removeAt(i);
+            } else {
+                ++i;
+            }
+        }
+
+        // 说明还存在更多结果，继续向后搜索
+        if (old_results_count == max_count) {
+            if (!remove_list.empty()) {
+                // anything::log::debug("remove size: {}", remove_list.size());
+                results.append(search(path, keywords, offset + max_count, remove_list.size()));
+            }
+        }
+        for (auto&& path : remove_list) {
+            remove_index_delay(std::move(path));
+        }
+    }
+    return results;
 }
 
 // 未特殊处理文件不存在的情况，只要最终不存在，就算成功
