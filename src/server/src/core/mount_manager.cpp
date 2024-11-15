@@ -29,8 +29,8 @@ bool mount_manager::update() {
     std::string line;
     std::unordered_set<std::string> dlnfs_devs;
     while (std::getline(file_mountinfo, line)) {
-        auto mountinfo = split(line, " ");
-        auto major_minor = split(mountinfo[to_underlying(mountinfo_field::major_minor)], ":");
+        auto mountinfo = string_helper::split(line, " ");
+        auto major_minor = string_helper::split(mountinfo[to_underlying(mountinfo_field::major_minor)], ":");
         unsigned int major = std::stoul(major_minor[0]);
         unsigned int minor = std::stoul(major_minor[1]);
         if (major == 0 && mountinfo[to_underlying(mountinfo_field::file_system_type)] != "fuse.dlnfs")
@@ -194,7 +194,7 @@ bool mount_manager::read_vfs_unnamed_device(std::unordered_set<std::string> &dev
             return false;
 
         std::cout << "line(read_vfs_unnamed_device): " << line << "\n";
-        auto minors = split(line, ",");
+        auto minors = string_helper::split(line, ",");
         for (auto&& minor : minors)
             devices.insert(std::move(minor));
     }

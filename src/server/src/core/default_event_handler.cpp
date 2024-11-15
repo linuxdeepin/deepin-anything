@@ -19,7 +19,8 @@ default_event_handler::default_event_handler(std::string index_dir)
     // index_directory 设置时必须要是完整路径
     set_index_change_filter([this](const std::string& path) {
         auto index_directory = get_index_directory();
-        auto names = split(path, "/");
+        auto names = string_helper::split(path, "/");
+        using string_helper::starts_with;
         return starts_with(path, index_directory) ||
                (starts_with(index_directory, "/") && starts_with(path, "/data" + index_directory)) ||
                std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
@@ -39,23 +40,6 @@ default_event_handler::default_event_handler(std::string index_dir)
 void default_event_handler::handle(fs_event event) {
     [[maybe_unused]] const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
 
-    // auto filter = [this](const std::string& path) {
-    //     auto index_directory = get_index_directory();
-    //     auto names = split(path, "/");
-    //     return starts_with(path, index_directory) ||
-    //            (starts_with(index_directory, "/") && starts_with(path, "/data" + index_directory)) ||
-    //            std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
-    // };
-
-    // if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
-    //     event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER  ||
-    //     event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
-    //     if (!filter(event.src)) {
-    //         log::debug("Received a {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
-    //     }
-    // }
-    // return;
-
     // Update partition event
     if (event.act == ACT_MOUNT || event.act == ACT_UNMOUNT) {
         log::info(event.act == ACT_MOUNT ? "Mount a device: {}" : "Unmount a device: {}", event.src);
@@ -73,7 +57,6 @@ void default_event_handler::handle(fs_event event) {
         }
 
         root = fetch_mount_point_for_device(device_id);
-        // std::cout << "root: " << root << "\n";
         if (root == "/")
             root.clear();
     }
@@ -119,32 +102,12 @@ void default_event_handler::handle(fs_event event) {
         rename_from_.erase(event.cookie);
     }
 
-    // 事件已完全解析，开始处理
-    // std::cout << "message handling: [act:\"" << act_names[event.act] << "\", src:\"" << event.src
-    //         << "\", dst:\"" << event.dst << "\"]\n";
+    // log::debug("Received a(an) {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
     
     // Preparations are done, starting to process the event.
     bool ignored = false;
     ignored = ignored_event(event.dst.empty() ? event.src : event.dst, ignored);
     if (!ignored) {
-        // auto filter = [this](const std::string& path) {
-        //     auto index_directory = get_index_directory();
-        //     auto names = split(path, "/");
-        //     return starts_with(path, index_directory) ||
-        //         (starts_with(index_directory, "/") && starts_with(path, "/data" + index_directory)) ||
-        //         std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
-        // };
-
-        // if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
-        //     event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER  ||
-        //     event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
-        //     if (!filter(event.src)) {
-        //         log::debug("Received a {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
-        //     }
-        // }
-        // return;
-        // 到此收到的事件没有问题
-
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
             if (fs::exists(event.src)) {

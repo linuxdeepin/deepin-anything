@@ -7,6 +7,7 @@
 
 base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
     : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(100),
+      pool_((std::max)(std::thread::hardware_concurrency() - 3, 1U)),
       timer_(std::thread(&base_event_handler::timer_worker, this, 1000)) {
     new IAnythingAdaptor(this);
     QDBusConnection dbus = QDBusConnection::systemBus();
@@ -44,7 +45,7 @@ void base_event_handler::set_batch_size(std::size_t size) {
 
 bool base_event_handler::ignored_event(const std::string& path, bool ignored)
 {
-    if (anything::ends_with(path, ".longname"))
+    if (anything::string_helper::ends_with(path, ".longname"))
         return true; // 长文件名记录文件，直接忽略
     
     // 没有标记忽略前一条，则检查是否长文件目录
@@ -100,12 +101,8 @@ void base_event_handler::remove_index_delay(std::string path) {
     jobs_push(std::move(path), anything::index_job_type::remove);
 }
 
-void base_event_handler::update_index_delay(std::string src_path, std::string dst_path) {
-    jobs_push(std::move(src_path), anything::index_job_type::update, std::move(dst_path));
-}
-
-bool base_event_handler::should_be_filtered(const anything::file_record& record) const {
-    return should_be_filtered(record.full_path);
+void base_event_handler::update_index_delay(std::string src, std::string dst) {
+    jobs_push(std::move(src), anything::index_job_type::update, std::move(dst));
 }
 
 bool base_event_handler::should_be_filtered(const std::string& path) const {
@@ -142,22 +139,22 @@ void base_event_handler::eat_job(const anything::index_job& job) {
     }
 }
 
-void base_event_handler::jobs_push(std::string path, anything::index_job_type type,
-    std::optional<std::string> dst) {
-    if (should_be_filtered(path) || (dst && should_be_filtered(*dst))) {
+void base_event_handler::jobs_push(std::string src,
+    anything::index_job_type type, std::optional<std::string> dst) {
+    if (should_be_filtered(src) || (dst && should_be_filtered(*dst))) {
         return;
     }
 
     std::lock_guard<std::mutex> lock(jobs_mtx_);
-    jobs_.emplace_back(std::move(path), type, std::move(dst));
+    jobs_.emplace_back(std::move(src), type, std::move(dst));
     if (jobs_.size() >= batch_size_) {
         eat_jobs(jobs_, batch_size_);
     }
 }
 
 void base_event_handler::timer_worker(int64_t interval) {
-    // pending batch size 小时，CPU Usage 低，全部索引建立完成的时间长
-    // pending batch size 大时，CPU Usage 高，全部索引建立完成的时间短
+    // When pending_batch_size is small, CPU usage is low, but total indexing time is longer.
+    // When pending_batch_size is large, CPU usage is high, but total indexing time is shorter.
     constexpr std::size_t pending_batch_size = 100;
     while(!stop_timer_) {
         // {
@@ -179,7 +176,7 @@ void base_event_handler::timer_worker(int64_t interval) {
             }
         }
 
-        // 无任务时自动索引未存在的系统文件，维护系统完整性
+        // Automatically index missing system files to maintain index integrity when there are no jobs.
         if (idle) {
             std::vector<std::string> path_batch;
             {
@@ -200,11 +197,13 @@ void base_event_handler::timer_worker(int64_t interval) {
                     continue;
                 }
 
-                // TD: 插入前还需要检查文件是否本地存在，以避免新任务刚删除了索引，这里又插入了该索引
-                // 此处 document_exists 不需要是实时的，只需要是程序刚启动时的状态，以避免线程同步带来的效率问题
-                // 因为已存在却未建索引的文件，不会产生新的插入事件，所以只需和初始状态对比即可
-                // 索引完整性只考虑插入，这里无法考虑删除，逐个检查已建索引是否本地存在效率会很低，放到查询时处理
-                // ! 已完成此 TD !
+
+                // Before insertion, check if the file actually exists locally to avoid re-adding an index for a recently removed path.
+                // - The document_exists check does not need to be real-time; it only needs to reflect the state at program startup to avoid
+                //   efficiency issues caused by thred synchronization. 
+                // - Since existing files without an index will not trigger new insertion events, only the initial state comparison is necessary.
+                // - Index integrity is considered only for insertion here; deletions are not checked individually, as that would be inefficient.
+                //   Instead, existence checks for indexed paths are handled at query time.
                 if (!index_manager_.document_exists(path, true)) {
                     if (std::filesystem::exists(path)) {
                         add_index_delay(std::move(path));
@@ -217,21 +216,19 @@ void base_event_handler::timer_worker(int64_t interval) {
     }
 }
 
-QStringList base_event_handler::search(
-    const QString& path, const QString& keywords,
-    int offset, int max_count) {
+QStringList base_event_handler::search(const QString& path, const QString& keywords, int offset, int max_count) {
     if (offset < 0) {
         return {};
     }
 
-    // TD: 由于没有自动清理无效索引，系统中可能含有一些实际不存在的文件路径
-    // 在此可过滤并清除无效索引，维护索引的有效性
-    // ! 已完成此 TD !
+    // Since there is no automatic cleanup for invalid indexes,
+    // the system may contain paths that no longer exist.
+    // To maintain index validity, invalid indexes are filtered and removed here.
     QStringList results = index_manager_.search(path, keywords, offset, max_count, true);
     int old_results_count = results.size();
     if (!results.empty()) {
         // anything::log::debug("result size: {}", results.size());
-        // 清除非真实文件
+        // clean up index entries for non-existent files.
         std::vector<std::string> remove_list;
         for (int i = 0; i < results.size();) {
             std::string path = results[i].toStdString();
@@ -243,7 +240,7 @@ QStringList base_event_handler::search(
             }
         }
 
-        // 说明还存在更多结果，继续向后搜索
+        // More results may exist; continue searching
         if (old_results_count == max_count) {
             if (!remove_list.empty()) {
                 // anything::log::debug("remove size: {}", remove_list.size());
@@ -257,7 +254,7 @@ QStringList base_event_handler::search(
     return results;
 }
 
-// 未特殊处理文件不存在的情况，只要最终不存在，就算成功
+// No special handling for non-existent files; success is determined if the path does not exist.
 bool base_event_handler::removePath(const QString& fullPath) {
     auto path = fullPath.toStdString();
     index_manager_.remove_index(path);

@@ -6,7 +6,6 @@
 #include "lucene++/FileUtils.h"
 #include "lucene++/ChineseAnalyzer.h"
 
-// #include "jieba_analyzer.h"
 #include "utils/log.h"
 #include "utils/string_helper.h"
 
@@ -15,12 +14,11 @@ ANYTHING_NAMESPACE_BEGIN
 using namespace Lucene;
 
 file_index_manager::file_index_manager(std::string index_dir)
-    : index_directory_{ std::move(index_dir) } {
+    : index_directory_(std::move(index_dir)) {
     try {
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory_));
         auto create = !IndexReader::indexExists(dir);
         writer_ = newLucene<IndexWriter>(dir,
-            // newLucene<jieba_analyzer>(),
             newLucene<ChineseAnalyzer>(),
             create, IndexWriter::MaxFieldLengthLIMITED);
         reader_  = IndexReader::open(dir, true);
@@ -29,16 +27,15 @@ file_index_manager::file_index_manager(std::string index_dir)
         nrt_searcher_ = newLucene<IndexSearcher>(nrt_reader_);
         parser_ = newLucene<QueryParser>(
             LuceneVersion::LUCENE_CURRENT, fuzzy_field_,
-            newLucene<ChineseAnalyzer>()); // newLucene<jieba_analyzer>());
+            newLucene<ChineseAnalyzer>());
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
 }
 
 file_index_manager::~file_index_manager() {
-    // log::debug("{}", __PRETTY_FUNCTION__);
     if (writer_) {
-        this->commit();
+        commit();
         writer_->close();
     }
 
@@ -50,26 +47,15 @@ file_index_manager::~file_index_manager() {
 
 void file_index_manager::add_index(const std::string& path) {
     try {
-        // if (!document_exists(full_path)) {
-        //     auto doc = create_document(file_helper::make_file_record(full_path));
-        //     writer_->addDocument(doc);
-
-        //     std::lock_guard<std::mutex> lock(mtx_);
-        //     log::debug("Indexed {}", full_path);
-        // }
-        // if (!document_exists(path)) {
-        //     auto doc = create_document(file_helper::make_file_record(path));
-        //     writer_->addDocument(doc);
-        //     std::lock_guard<std::mutex> lock(mtx_);
-        //     log::debug("Indexed {}", path);
-        // }
         auto doc = create_document(file_helper::make_file_record(path));
         writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(path)), doc);
         std::lock_guard<std::mutex> lock(mtx_);
         log::debug("Indexed {}", path);
     } catch (const LuceneException& e) {
-        std::lock_guard<std::mutex> lock(mtx_);
-        log::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
+        {
+            std::lock_guard<std::mutex> lock(mtx_);
+            log::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
+        }
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
 }
@@ -77,13 +63,11 @@ void file_index_manager::add_index(const std::string& path) {
 void file_index_manager::remove_index(const std::string& term, bool exact_match) {
     try {
         if (exact_match) {
-            // 精确删除，term 须是路径
-            // TermPtr 是精确删除，field 如果使用了分词，便无法找到，导致删除失败，因此这种方式所对应的 term 必须是 Non-tokenized
+            // Exact deletion: The field must be non-tokenized, and the term should match the full path exactly.
             TermPtr pterm = newLucene<Term>(exact_field_, StringUtils::toUnicode(term));
             writer_->deleteDocuments(pterm);
         } else {
-            // 模糊删除，term 可以是文件名
-            // 如果 field 已经是分词，则使用 parser 解析后再删除
+            // Fuzzy deletion: Deletes all paths that match the specified term pattern.
             QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
             writer_->deleteDocuments(query);
         }
@@ -99,11 +83,11 @@ void file_index_manager::update_index(
     const std::string& new_path,
     bool exact_match) {
     if (exact_match) {
-        // 精确更新，term 必须是路径，否则 updateDocument 无法删除
+        // Exact updation: The old path must be a full path; otherwise, updateDocument will fail to locate and update the existing document.
         auto doc = create_document(file_helper::make_file_record(new_path));
         writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(old_path)), doc);
     } else {
-        // 模糊更新，term 可以是文件名，此时手动调用 remove_index 和 insert_index 来更新
+        // Fuzzy updation: The old path can be a file name, and all matching paths will be removed before inserting the new path.
         remove_index(old_path);
         add_index(new_path);
     }
@@ -146,7 +130,7 @@ void file_index_manager::commit() {
     log::info("All changes are commited");
 }
 
-bool file_index_manager::indexed() {
+bool file_index_manager::indexed() const {
     return document_size() > 0;
 }
 
@@ -218,9 +202,6 @@ QStringList file_index_manager::search(
 }
 
 bool file_index_manager::document_exists(const std::string& path, bool only_check_initial_index) {
-    // auto collector = nrt_search(path, true);
-    // return collector->getTotalHits() > 0;
-
     TermPtr term = newLucene<Term>(L"full_path", StringUtils::toUnicode(path));
     TermDocsPtr termDocs;
     if (only_check_initial_index) {
@@ -266,9 +247,9 @@ TopScoreDocCollectorPtr file_index_manager::search(const std::string& path, bool
         try_refresh_reader();
         searcher = searcher_;
     }
-    
-    // 精确搜索时搜路径，模糊搜索时搜文件名
-    // 精确搜索只有在 field 为 Field::INDEX_NOT_ANALYZED 才有效，可以避免解析开销
+
+    // Search full path for exact match, and file name for fuzzy match.
+    // Exact search only works when the field is set to Field::INDEX_NOT_ANALYZED, which avoids parsing overhead.
     query = exact_match ? newLucene<TermQuery>(newLucene<Term>(exact_field_, StringUtils::toUnicode(path)))
                                 : parser_->parse(StringUtils::toUnicode(path));
     searcher->search(query, collector);
@@ -281,11 +262,11 @@ Lucene::TopScoreDocCollectorPtr file_index_manager::nrt_search(const std::string
 
 DocumentPtr file_index_manager::create_document(const file_record& record) {
     DocumentPtr doc = newLucene<Document>();
-    // 文件名，模糊匹配，查询和删除时必须使用解析器
+    // File name with fuzzy match; parser is required for searching and deleting.
     doc->add(newLucene<Field>(L"file_name",
         StringUtils::toUnicode(record.file_name),
         Field::STORE_YES, Field::INDEX_ANALYZED));
-    // 路径名，精确匹配，删除和精确搜索时无需使用解析器，效率更高
+    // Full path with exact match; parser is not needed for deleting and exact searching, which improves perferemce.
     doc->add(newLucene<Field>(L"full_path",
         StringUtils::toUnicode(record.full_path),
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));

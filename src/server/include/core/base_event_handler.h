@@ -12,10 +12,8 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
-enum class index_job_type {
-    add,
-    remove,
-    update
+enum class index_job_type : char {
+    add, remove, update
 };
 
 struct index_job {
@@ -24,7 +22,7 @@ struct index_job {
     index_job_type type;
 
     index_job(std::string src, index_job_type type, std::optional<std::string> dst = std::nullopt)
-        : src{ std::move(src) }, dst{ std::move(dst) }, type{ type } {}
+        : src(std::move(src)), dst(std::move(dst)), type(type) {}
 };
 
 ANYTHING_NAMESPACE_END
@@ -38,9 +36,9 @@ public:
     base_event_handler(std::string index_dir, QObject *parent = nullptr);
     virtual ~base_event_handler();
 
-    void terminate_processing();
-
     virtual void handle(anything::fs_event event) = 0;
+
+    void terminate_processing();
 
 protected:
     void set_batch_size(std::size_t size);
@@ -63,24 +61,19 @@ protected:
 
     void add_index_delay(std::string path);
     void remove_index_delay(std::string path);
-    void update_index_delay(std::string src_path, std::string dst_path);
+    void update_index_delay(std::string src, std::string dst);
 
 private:
-    bool should_be_filtered(const anything::file_record& record) const;
     bool should_be_filtered(const std::string& path) const;
 
     void eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number);
-
     void eat_job(const anything::index_job& job);
 
-    void jobs_push(std::string path, anything::index_job_type type, std::optional<std::string> dst = std::nullopt);
+    void jobs_push(std::string src, anything::index_job_type type, std::optional<std::string> dst = std::nullopt);
 
     void timer_worker(int64_t interval);
 
 public slots:
-    // double multiply(double factor0, double factor2);
-    // double divide(double divident, double divisor);
-    
     /**
      * Searches for files containing the specified keyword within a given path,
      * starting from the specified offset, and returns a list of up to max_count results.
@@ -91,9 +84,7 @@ public slots:
      * @param max_count The maximum number of results to return.
      * @return A QStringList containing the paths of the found files.
      */
-    QStringList search(
-        const QString& path, const QString& keywords,
-        int offset, int max_count);
+    QStringList search(const QString& path, const QString& keywords, int offset, int max_count);
     
     bool removePath(const QString& fullPath);
 
@@ -102,11 +93,6 @@ public slots:
     void addPath(const QString& fullPath);
 
     void index_files_in_directory(const QString& directory_path);
-
-signals:
-    // void newProduct(double product);
-    // void newQuotient(double quotient);
-    // void newSearch(std::vector<anything::file_record> records);
 
 protected:
     anything::disk_scanner scanner_;
