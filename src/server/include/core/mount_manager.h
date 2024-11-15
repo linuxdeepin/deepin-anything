@@ -69,7 +69,6 @@ private:
     std::vector<mount_point> mount_points_;
 };
 
-
 ANYTHING_NAMESPACE_END
 
 #endif // ANYTHING_MOUNT_MANAGER_H_

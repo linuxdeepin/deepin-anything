@@ -19,7 +19,7 @@ ANYTHING_NAMESPACE_BEGIN
 
 namespace log {
 
-#if defined(__cplusplus) and __cplusplus >= 202002L
+#if defined(__cplusplus) && __cplusplus >= 202002L
     #define ANYTHING_CONSTINIT constinit
 #else
     #define ANYTHING_CONSTINIT
@@ -34,11 +34,11 @@ enum class level : uint8_t {
     all = debug | info | warning | success | error
 };
 
-inline ANYTHING_CONSTINIT bool level_debug_enabled   = false;
-inline ANYTHING_CONSTINIT bool level_info_enabled    = false;
-inline ANYTHING_CONSTINIT bool level_warning_enabled = false;
-inline ANYTHING_CONSTINIT bool level_success_enabled = false;
-inline ANYTHING_CONSTINIT bool level_error_enabled   = false;
+ANYTHING_CONSTINIT inline auto level_debug_enabled   = false;
+ANYTHING_CONSTINIT inline auto level_info_enabled    = false;
+ANYTHING_CONSTINIT inline auto level_warning_enabled = false;
+ANYTHING_CONSTINIT inline auto level_success_enabled = false;
+ANYTHING_CONSTINIT inline auto level_error_enabled   = false;
 
 inline auto set_level(level log_level, bool enabled = true) -> void {
     if (enabled) {
@@ -97,16 +97,6 @@ inline auto info(fmt::format_string<Args...>&& fmt, Args&&... args)
     }
 }
 
-// template <typename... Args>
-// inline auto info(fmt::wformat_string<Args...>&& fmt, Args&&... args)
-//     -> void {
-//     if (level_info_enabled) {
-//         detail::print_pattern_info("INFO");
-//         std::wcout << fmt::format(std::forward<fmt::wformat_string<Args...>>(fmt), std::forward<Args>(args)...);
-//         std::wcout << L"\n";
-//     }
-// }
-
 template <typename... Args>
 inline auto warning(fmt::format_string<Args...>&& fmt, Args&&... args)
     -> void {
@@ -133,11 +123,6 @@ inline auto error(fmt::format_string<Args...>&& fmt, Args&&... args)
         fmt::println(std::forward<fmt::format_string<Args...>>(fmt), std::forward<Args>(args)...);
     }
 }
-
-// inline void set_encode(const char* loc = "") {
-//     std::ios_base::sync_with_stdio(false);
-//     std::wcout.imbue(std::locale(loc));
-// }
 
 } // namespace log
 

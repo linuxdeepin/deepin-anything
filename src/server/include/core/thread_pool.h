@@ -20,6 +20,7 @@ public:
     void enqueue_detach(job_type job);
 
     void wait_for_tasks();
+
     bool busy();
 
 private:

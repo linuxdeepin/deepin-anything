@@ -1,12 +1,9 @@
 #ifndef ANYTHING_DISK_SCANNER_H_
 #define ANYTHING_DISK_SCANNER_H_
 
-// #include <atomic>
-// #include <execution>
 #include <deque>
 #include <filesystem>
 #include <fstream>
-#include <future>
 
 #include "common/anything_fwd.hpp"
 #include "common/file_record.hpp"

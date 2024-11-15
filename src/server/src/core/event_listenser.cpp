@@ -20,6 +20,7 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
+constexpr int epoll_size = 10;
 static nla_policy vfs_policy[VFSMONITOR_A_MAX + 1];
 
 event_listenser::event_listenser()
@@ -78,8 +79,6 @@ event_listenser::~event_listenser() {
     close(stop_fd_);
 }
 
-/// All member variables, except `should_stop_`, are fully initialized before invoking `start_listening()`.
-/// Therefore, synchronization is required only for `should_stop_`.
 void event_listenser::start_listening() {
     log::debug("listening for messages");
     int ep_fd = epoll_create1(0);
@@ -89,7 +88,7 @@ void event_listenser::start_listening() {
     }
 
     int mcsk_fd = get_fd(mcsk_);
-    epoll_event* ep_events = new epoll_event[epoll_size_];
+    epoll_event* ep_events = new epoll_event[epoll_size];
     epoll_event event[2];
     event[0].events = EPOLLIN;
     event[0].data.fd = mcsk_fd;
@@ -100,7 +99,7 @@ void event_listenser::start_listening() {
 
     bool running = true;
     while (running) {
-        int event_cnt = epoll_wait(ep_fd, ep_events, epoll_size_, timeout_);
+        int event_cnt = epoll_wait(ep_fd, ep_events, epoll_size, timeout_);
         if (event_cnt == -1) {
             log::error("epoll_wait() error");
             break;
@@ -141,12 +140,12 @@ void event_listenser::set_handler(std::function<void(fs_event)> handler) {
     handler_ = std::move(handler);
 }
 
-bool event_listenser::connect(nl_sock_ptr& sk) {
+bool event_listenser::connect(nl_sock_ptr& sk) const {
     sk = nl_socket_alloc();
     return sk ? genl_connect(sk) == 0 : false;
 }
 
-void event_listenser::disconnect(nl_sock_ptr& sk) {
+void event_listenser::disconnect(nl_sock_ptr& sk) const {
     nl_socket_free(sk);
 }
 
@@ -158,7 +157,7 @@ int event_listenser::get_fd(nl_sock_ptr& sk) const {
     return nl_socket_get_fd(sk);
 }
 
-void event_listenser::forward_event_to_handler(fs_event event) {
+void event_listenser::forward_event_to_handler(fs_event event) const {
     if (handler_) {
         std::invoke(handler_, std::move(event));
     }
@@ -174,7 +173,7 @@ int event_listenser::event_handler(nl_msg_ptr msg, void* arg) {
 
     if (!tb[VFSMONITOR_A_PATH]) {
         log::error("Attributes missing from the message");
-		return NL_SKIP;
+        return NL_SKIP;
     }
 
     nla_parser parser(tb);

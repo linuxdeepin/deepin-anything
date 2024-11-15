@@ -1,12 +1,14 @@
 #include "core/thread_pool.h"
+
 #include "utils/log.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
 thread_pool::thread_pool(unsigned int num)
-    : stop_thread_{false} {
-    for (unsigned int i = 0; i < num; ++i)
+    : stop_thread_(false) {
+    for (unsigned int i = 0; i < num; ++i) {
         threads_.emplace_back(std::thread(&thread_pool::thread_loop, this));
+    }
 }
 
 void thread_pool::enqueue_detach(job_type job) {
