@@ -35,7 +35,7 @@ void base_event_handler::terminate_processing() {
     if (timer_.joinable()) {
         auto thread_id = timer_.get_id();
         timer_.join();
-        anything::log::debug("Timer thread {} has exited", thread_id);
+        anything::log::debug() << "Timer thread " << thread_id << " has exited\n";
     }
 }
 
@@ -190,7 +190,7 @@ void base_event_handler::timer_worker(int64_t interval) {
                 }
             }
 
-            anything::log::debug("path batch size: {}", path_batch.size());
+            anything::log::debug() << "path batch size: " << path_batch.size() << "\n";
             for (auto&& path : path_batch) {
                 if (should_be_filtered(path)) {
                     continue;

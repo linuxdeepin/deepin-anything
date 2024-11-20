@@ -44,7 +44,7 @@ std::size_t disk_scanner::mounts_size() const {
 }
 
 std::vector<std::string> disk_scanner::parallel_scan(const fs::path& root) const {
-    log::debug("Scanning {}...", root.string());
+    log::debug() << "Scanning " << root.string() << "...\n";
     std::vector<std::string> records;
     fs::recursive_directory_iterator dirpos{ root, fs::directory_options::skip_permission_denied };
     for (auto it = begin(dirpos); it != end(dirpos); ++it) {

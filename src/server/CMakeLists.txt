@@ -11,7 +11,6 @@ project(
 )
 
 # Find the dependencies
-find_package(fmt REQUIRED)
 find_package(Qt5 CONFIG REQUIRED Core DBus)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
@@ -66,7 +65,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${LUCENE_CONTRIB_LIBRARIES}
     ${GNL_LIBRARIES}
     ${MOUNT_LIBRARIES}
-    fmt::fmt
     Qt5::DBus
     pthread
     stdc++fs

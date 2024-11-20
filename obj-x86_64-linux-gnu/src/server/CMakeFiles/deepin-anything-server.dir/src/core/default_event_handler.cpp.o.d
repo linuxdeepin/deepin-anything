@@ -1844,12 +1844,7 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/default_event_handler.
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/core/thread_pool.h \
  /usr/include/c++/8/queue /usr/include/c++/8/bits/stl_queue.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/log.h \
- /usr/include/c++/8/iostream /usr/local/include/fmt/chrono.h \
- /usr/local/include/fmt/ostream.h /usr/local/include/fmt/format.h \
- /usr/local/include/fmt/core.h /usr/local/include/fmt/core.h \
- /usr/local/include/fmt/format.h /usr/local/include/fmt/ostream.h \
- /usr/local/include/fmt/ranges.h /usr/local/include/fmt/std.h \
- /usr/include/c++/8/bitset /usr/local/include/fmt/xchar.h \
+ /usr/include/c++/8/iomanip /usr/include/c++/8/iostream \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/enum_helper.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/print_helper.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/string_helper.h \

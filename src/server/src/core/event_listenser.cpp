@@ -5,7 +5,6 @@
 #include <unistd.h> // close()
 
 #include <memory> // unique_ptr
-#include <iostream>
 #include <unordered_map>
 
 #include <netlink/genl/ctrl.h>
@@ -32,7 +31,7 @@ event_listenser::event_listenser()
     };
 
     if (!connected_) {
-        std::cerr << "Error: failed to connect to generic netlink\n";
+        log::error() << "Error: failed to connect to generic netlink\n";
         clean_and_abort();
     }
 
@@ -43,25 +42,25 @@ event_listenser::event_listenser()
     // Resolve the multicast group
     int mcgrp = genl_ctrl_resolve_grp(mcsk_, VFSMONITOR_FAMILY_NAME, VFSMONITOR_MCG_DENTRY_NAME);
     if (mcgrp < 0) {
-		std::cerr << "Error: failed to resolve generic netlink multicast group\n";
+		log::error() << "Error: failed to resolve generic netlink multicast group\n";
 		clean_and_abort();
 	}
 
     // Joint the multicast group
     int ret = nl_socket_add_membership(mcsk_, mcgrp);
     if (ret < 0) {
-        std::cerr << "Error: failed to join multicast group\n";
+        log::error() << "Error: failed to join multicast group\n";
         clean_and_abort();
     }
 
     if (!set_callback(mcsk_, event_listenser::event_handler)) {
-        std::cerr << "Error: failed to set callback\n";
+        log::error() << "Error: failed to set callback\n";
         clean_and_abort();
     }
 
     stop_fd_ = eventfd(0, EFD_NONBLOCK);
     if (stop_fd_ == -1) {
-        log::error("Failed to create eventfd");
+        log::error() << "Failed to create eventfd\n";
         clean_and_abort();
     }
 
@@ -80,10 +79,10 @@ event_listenser::~event_listenser() {
 }
 
 void event_listenser::start_listening() {
-    log::debug("listening for messages");
+    log::debug() << "listening for messages\n";
     int ep_fd = epoll_create1(0);
     if (ep_fd < 0) {
-        log::error("Epoll creation failed.");
+        log::error() << "Epoll creation failed.\n";
         return;
     }
 
@@ -101,7 +100,7 @@ void event_listenser::start_listening() {
     while (running) {
         int event_cnt = epoll_wait(ep_fd, ep_events, epoll_size, timeout_);
         if (event_cnt == -1) {
-            log::error("epoll_wait() error");
+            log::error() << "epoll_wait() error\n";
             break;
         }
 
@@ -132,7 +131,7 @@ void event_listenser::stop_listening() {
     if (listening_thread_.joinable()) {
         auto thread_id = listening_thread_.get_id();
         listening_thread_.join();
-        log::info("Listening thread {} has exited.", thread_id);
+        log::info() << "Listening thread " << thread_id << " has exited.\n";
     }
 }
 
@@ -167,12 +166,12 @@ int event_listenser::event_handler(nl_msg_ptr msg, void* arg) {
     nlattr* tb[VFSMONITOR_A_MAX + 1];
     int err = genlmsg_parse(nlmsg_hdr(msg), 0, tb, VFSMONITOR_A_MAX, vfs_policy);
     if (err < 0) {
-        log::error("Unable to parse the message: {}", strerror(-err));
+        log::error() << "Unable to parse the message: " << strerror(-err) << "\n";
         return NL_SKIP;
     }
 
     if (!tb[VFSMONITOR_A_PATH]) {
-        log::error("Attributes missing from the message");
+        log::error() << "Attributes missing from the message\n";
         return NL_SKIP;
     }
 
@@ -183,7 +182,7 @@ int event_listenser::event_handler(nl_msg_ptr msg, void* arg) {
     auto minor  = parser.get_value<nla_u8>(VFSMONITOR_A_MINOR);
     auto src    = parser.get_value<nla_string>(VFSMONITOR_A_PATH);
     if (!act || !cookie || !major || !minor || !src) {
-        log::error("Attributes missing from the message");
+        log::error() << "Attributes missing from the message\n";
         return NL_SKIP;
     }
 

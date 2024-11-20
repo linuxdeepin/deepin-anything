@@ -26,7 +26,7 @@ default_event_handler::default_event_handler(std::string index_dir)
                std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
     });
 
-    log::debug("Pending paths count: {}", pending_paths_count());
+    log::debug() << "Pending paths count: " << pending_paths_count() << "\n";
     // log::debug("Document size: {}", index_manager_.document_size());
     // auto results = index_manager_.search_index("test haha");
     // log::debug("Found {} result(s).", results.size());
@@ -42,7 +42,7 @@ void default_event_handler::handle(fs_event event) {
 
     // Update partition event
     if (event.act == ACT_MOUNT || event.act == ACT_UNMOUNT) {
-        log::info(event.act == ACT_MOUNT ? "Mount a device: {}" : "Unmount a device: {}", event.src);
+        log::info() << (event.act == ACT_MOUNT ? "Mount a device: " : "Unmount a device: ") << event.src << "\n";
         refresh_mount_status();
         return;
     }
@@ -51,8 +51,8 @@ void default_event_handler::handle(fs_event event) {
     if (event.act < ACT_MOUNT) {
         unsigned int device_id = MKDEV(event.major, event.minor);
         if (!device_available(device_id)) {
-            log::warning("Unknown device, {}, dev: {}:{}, path: {}, cookie: {}",
-                +event.act, event.major, event.minor, event.src, event.cookie);
+            log::warning() << "Unknown device: " << +event.act << ", dev: " << event.major << ":" << +event.minor
+                << ", path: " << event.src << ", cookie: " << event.cookie << "\n";
             return;
         }
 
@@ -85,10 +85,10 @@ void default_event_handler::handle(fs_event event) {
         break;
     case ACT_RENAME_FILE:
     case ACT_RENAME_FOLDER:
-        log::warning("Don't support file action: {}", +event.act);
+        log::warning() << "Don't support file action: " << +event.act << "\n";
         return;
     default:
-        log::warning("Unknown file action: {}", +event.act);
+        log::warning() << "Unknown file action: " << +event.act << "\n";
         return;
     }
 

@@ -50,11 +50,11 @@ void file_index_manager::add_index(const std::string& path) {
         auto doc = create_document(file_helper::make_file_record(path));
         writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(path)), doc);
         std::lock_guard<std::mutex> lock(mtx_);
-        log::debug("Indexed {}", path);
+        log::debug() << "Indexed " << path << "\n";
     } catch (const LuceneException& e) {
         {
             std::lock_guard<std::mutex> lock(mtx_);
-            log::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
+            log::error() << "Failed to index " << path << ": " << StringUtils::toUTF8(e.getError()) << "\n";
         }
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
@@ -72,7 +72,7 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
             writer_->deleteDocuments(query);
         }
         std::lock_guard<std::mutex> lock(mtx_);
-        log::debug("Removed index: {}", term);
+        log::debug() << "Removed index: " << term << "\n";
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
@@ -93,7 +93,7 @@ void file_index_manager::update_index(
     }
 
     std::lock_guard<std::mutex> lock(mtx_);
-    log::debug("Renamed: {} --> {}", old_path, new_path);
+    log::debug() << "Renamed: " << old_path << " --> " << new_path << "\n";
 }
 
 std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -101,7 +101,7 @@ std::vector<file_record> file_index_manager::search_index(const std::string& ter
     TopScoreDocCollectorPtr collector = search(term, exact_match, nrt);
 
     if (collector->getTotalHits() == 0) {
-        std::wcout << L"Found no files\n";
+        log::info() << "Found no files\n";
         return results;
     }
 
@@ -127,7 +127,7 @@ std::vector<file_record> file_index_manager::search_index(const std::string& ter
 
 void file_index_manager::commit() {
     writer_->commit();
-    log::info("All changes are commited");
+    log::info() << "All changes are commited\n";
 }
 
 bool file_index_manager::indexed() const {
@@ -135,7 +135,7 @@ bool file_index_manager::indexed() const {
 }
 
 void file_index_manager::test(const String& path) {
-    log::info("test path: {}", StringUtils::toUTF8(path));
+    log::info() << "test path: " << StringUtils::toUTF8(path) << "\n";
     AnalyzerPtr analyzer = newLucene<ChineseAnalyzer>(); // newLucene<jieba_analyzer>();
     
     // Use a StringReader to simulate input
@@ -144,7 +144,7 @@ void file_index_manager::test(const String& path) {
     
     // Tokenize and print out the results
     while (tokenStream->incrementToken()) {
-        log::info("Token: {}", StringUtils::toUTF8(tokenStream->toString()));
+        log::info() << "Token: " << StringUtils::toUTF8(tokenStream->toString()) << "\n";
     }
 }
 
@@ -159,7 +159,7 @@ std::string file_index_manager::index_directory() const {
 QStringList file_index_manager::search(
     const QString& path, const QString& keyword,
     int32_t offset, int32_t max_count, bool nrt) {
-    log::debug("Search index(path:\"{}\", keywork: \"{}\").", path.toStdString(), keyword.toStdString());
+    log::debug() << "Search index(path:\"" << path.toStdString() << "\", keywork: \"" << keyword.toStdString() << "\").\n";
     if (keyword.isEmpty()) {
         return {};
     }
@@ -180,7 +180,7 @@ QStringList file_index_manager::search(
 
         Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
         if (offset >= hits.size()) {
-            log::debug("No more results(path:\"{}\", keywork: \"{}\").", path.toStdString(), keyword.toStdString());
+            log::debug() << "No more results(path:\"" << path.toStdString() << "\", keywork: \"" << keyword.toStdString() << "{}\").\n";
             return {};
         }
 

@@ -260,15 +260,6 @@ CMAKE_STRIP:FILEPATH=/usr/bin/strip
 // Studio IDE projects all commands are done without /nologo.
 CMAKE_VERBOSE_MAKEFILE:BOOL=ON
 
-//Path to a library.
-LUCENEPP_CONTRIB_LIB:FILEPATH=/usr/lib/x86_64-linux-gnu/liblucene++-contrib.so
-
-//Path to a file.
-LUCENEPP_INCLUDE_DIR:PATH=/usr/local/include
-
-//Path to a library.
-LUCENEPP_LIB:FILEPATH=/usr/lib/x86_64-linux-gnu/liblucene++.so
-
 //Arguments to supply to pkg-config
 PKG_CONFIG_ARGN:STRING=
 
@@ -302,14 +293,20 @@ deepin-anything_IS_TOP_LEVEL:STATIC=ON
 //Value Computed by CMake
 deepin-anything_SOURCE_DIR:STATIC=/home/dxnu/dxnu-github/deepin-anything
 
-//The directory containing a CMake configuration file for fmt.
-fmt_DIR:PATH=/usr/local/lib/cmake/fmt
-
 //Path to a library.
 pkgcfg_lib_GNL_nl-3:FILEPATH=/usr/lib/x86_64-linux-gnu/libnl-3.so
 
 //Path to a library.
 pkgcfg_lib_GNL_nl-genl-3:FILEPATH=/usr/lib/x86_64-linux-gnu/libnl-genl-3.so
+
+//Path to a library.
+pkgcfg_lib_LUCENE_CONTRIB_lucene++:FILEPATH=/usr/lib/x86_64-linux-gnu/liblucene++.so
+
+//Path to a library.
+pkgcfg_lib_LUCENE_CONTRIB_lucene++-contrib:FILEPATH=/usr/lib/x86_64-linux-gnu/liblucene++-contrib.so
+
+//Path to a library.
+pkgcfg_lib_LUCENE_lucene++:FILEPATH=/usr/lib/x86_64-linux-gnu/liblucene++.so
 
 //Path to a library.
 pkgcfg_lib_MOUNT_mount:FILEPATH=/usr/lib/x86_64-linux-gnu/libmount.so
@@ -526,6 +523,76 @@ GNL_libnl-genl-3.0_LIBDIR:INTERNAL=/usr/lib/x86_64-linux-gnu
 GNL_libnl-genl-3.0_MODULE_NAME:INTERNAL=libnl-genl-3.0
 GNL_libnl-genl-3.0_PREFIX:INTERNAL=/usr
 GNL_libnl-genl-3.0_VERSION:INTERNAL=3.4.0
+LUCENE_CFLAGS:INTERNAL=-I/usr/include/lucene++
+LUCENE_CFLAGS_I:INTERNAL=
+LUCENE_CFLAGS_OTHER:INTERNAL=
+LUCENE_CONTRIB_CFLAGS:INTERNAL=-I/usr/include/lucene++
+LUCENE_CONTRIB_CFLAGS_I:INTERNAL=
+LUCENE_CONTRIB_CFLAGS_OTHER:INTERNAL=
+LUCENE_CONTRIB_FOUND:INTERNAL=1
+LUCENE_CONTRIB_INCLUDEDIR:INTERNAL=/usr/include/lucene++
+LUCENE_CONTRIB_INCLUDE_DIRS:INTERNAL=/usr/include/lucene++
+LUCENE_CONTRIB_LDFLAGS:INTERNAL=-L/usr/lib/x86_64-linux-gnu;-llucene++-contrib;-llucene++
+LUCENE_CONTRIB_LDFLAGS_OTHER:INTERNAL=
+LUCENE_CONTRIB_LIBDIR:INTERNAL=/usr/lib/x86_64-linux-gnu
+LUCENE_CONTRIB_LIBRARIES:INTERNAL=lucene++-contrib;lucene++
+LUCENE_CONTRIB_LIBRARY_DIRS:INTERNAL=/usr/lib/x86_64-linux-gnu
+LUCENE_CONTRIB_LIBS:INTERNAL=
+LUCENE_CONTRIB_LIBS_L:INTERNAL=
+LUCENE_CONTRIB_LIBS_OTHER:INTERNAL=
+LUCENE_CONTRIB_LIBS_PATHS:INTERNAL=
+LUCENE_CONTRIB_MODULE_NAME:INTERNAL=liblucene++-contrib
+LUCENE_CONTRIB_PREFIX:INTERNAL=/usr
+LUCENE_CONTRIB_STATIC_CFLAGS:INTERNAL=-I/usr/include/lucene++
+LUCENE_CONTRIB_STATIC_CFLAGS_I:INTERNAL=
+LUCENE_CONTRIB_STATIC_CFLAGS_OTHER:INTERNAL=
+LUCENE_CONTRIB_STATIC_INCLUDE_DIRS:INTERNAL=/usr/include/lucene++
+LUCENE_CONTRIB_STATIC_LDFLAGS:INTERNAL=-L/usr/lib/x86_64-linux-gnu;-llucene++-contrib;-llucene++
+LUCENE_CONTRIB_STATIC_LDFLAGS_OTHER:INTERNAL=
+LUCENE_CONTRIB_STATIC_LIBDIR:INTERNAL=
+LUCENE_CONTRIB_STATIC_LIBRARIES:INTERNAL=lucene++-contrib;lucene++
+LUCENE_CONTRIB_STATIC_LIBRARY_DIRS:INTERNAL=/usr/lib/x86_64-linux-gnu
+LUCENE_CONTRIB_STATIC_LIBS:INTERNAL=
+LUCENE_CONTRIB_STATIC_LIBS_L:INTERNAL=
+LUCENE_CONTRIB_STATIC_LIBS_OTHER:INTERNAL=
+LUCENE_CONTRIB_STATIC_LIBS_PATHS:INTERNAL=
+LUCENE_CONTRIB_VERSION:INTERNAL=3.0.7
+LUCENE_CONTRIB_liblucene++-contrib_INCLUDEDIR:INTERNAL=
+LUCENE_CONTRIB_liblucene++-contrib_LIBDIR:INTERNAL=
+LUCENE_CONTRIB_liblucene++-contrib_PREFIX:INTERNAL=
+LUCENE_CONTRIB_liblucene++-contrib_VERSION:INTERNAL=
+LUCENE_FOUND:INTERNAL=1
+LUCENE_INCLUDEDIR:INTERNAL=/usr/include/lucene++
+LUCENE_INCLUDE_DIRS:INTERNAL=/usr/include/lucene++
+LUCENE_LDFLAGS:INTERNAL=-L/usr/lib/x86_64-linux-gnu;-llucene++
+LUCENE_LDFLAGS_OTHER:INTERNAL=
+LUCENE_LIBDIR:INTERNAL=/usr/lib/x86_64-linux-gnu
+LUCENE_LIBRARIES:INTERNAL=lucene++
+LUCENE_LIBRARY_DIRS:INTERNAL=/usr/lib/x86_64-linux-gnu
+LUCENE_LIBS:INTERNAL=
+LUCENE_LIBS_L:INTERNAL=
+LUCENE_LIBS_OTHER:INTERNAL=
+LUCENE_LIBS_PATHS:INTERNAL=
+LUCENE_MODULE_NAME:INTERNAL=liblucene++
+LUCENE_PREFIX:INTERNAL=/usr
+LUCENE_STATIC_CFLAGS:INTERNAL=-I/usr/include/lucene++
+LUCENE_STATIC_CFLAGS_I:INTERNAL=
+LUCENE_STATIC_CFLAGS_OTHER:INTERNAL=
+LUCENE_STATIC_INCLUDE_DIRS:INTERNAL=/usr/include/lucene++
+LUCENE_STATIC_LDFLAGS:INTERNAL=-L/usr/lib/x86_64-linux-gnu;-llucene++
+LUCENE_STATIC_LDFLAGS_OTHER:INTERNAL=
+LUCENE_STATIC_LIBDIR:INTERNAL=
+LUCENE_STATIC_LIBRARIES:INTERNAL=lucene++
+LUCENE_STATIC_LIBRARY_DIRS:INTERNAL=/usr/lib/x86_64-linux-gnu
+LUCENE_STATIC_LIBS:INTERNAL=
+LUCENE_STATIC_LIBS_L:INTERNAL=
+LUCENE_STATIC_LIBS_OTHER:INTERNAL=
+LUCENE_STATIC_LIBS_PATHS:INTERNAL=
+LUCENE_VERSION:INTERNAL=3.0.7
+LUCENE_liblucene++_INCLUDEDIR:INTERNAL=
+LUCENE_liblucene++_LIBDIR:INTERNAL=
+LUCENE_liblucene++_PREFIX:INTERNAL=
+LUCENE_liblucene++_VERSION:INTERNAL=
 MOUNT_CFLAGS:INTERNAL=-I/usr/include/libmount;-I/usr/include/blkid;-I/usr/include/uuid
 MOUNT_CFLAGS_I:INTERNAL=
 MOUNT_CFLAGS_OTHER:INTERNAL=
@@ -566,13 +633,23 @@ PKG_CONFIG_ARGN-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: PKG_CONFIG_EXECUTABLE
 PKG_CONFIG_EXECUTABLE-ADVANCED:INTERNAL=1
 __pkg_config_arguments_GNL:INTERNAL=REQUIRED;libnl-3.0;libnl-genl-3.0
+__pkg_config_arguments_LUCENE:INTERNAL=REQUIRED;liblucene++
+__pkg_config_arguments_LUCENE_CONTRIB:INTERNAL=REQUIRED;liblucene++-contrib
 __pkg_config_arguments_MOUNT:INTERNAL=REQUIRED;mount;IMPORTED_TARGET
 __pkg_config_checked_GNL:INTERNAL=1
+__pkg_config_checked_LUCENE:INTERNAL=1
+__pkg_config_checked_LUCENE_CONTRIB:INTERNAL=1
 __pkg_config_checked_MOUNT:INTERNAL=1
 //ADVANCED property for variable: pkgcfg_lib_GNL_nl-3
 pkgcfg_lib_GNL_nl-3-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: pkgcfg_lib_GNL_nl-genl-3
 pkgcfg_lib_GNL_nl-genl-3-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: pkgcfg_lib_LUCENE_CONTRIB_lucene++
+pkgcfg_lib_LUCENE_CONTRIB_lucene++-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: pkgcfg_lib_LUCENE_CONTRIB_lucene++-contrib
+pkgcfg_lib_LUCENE_CONTRIB_lucene++-contrib-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: pkgcfg_lib_LUCENE_lucene++
+pkgcfg_lib_LUCENE_lucene++-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: pkgcfg_lib_MOUNT_mount
 pkgcfg_lib_MOUNT_mount-ADVANCED:INTERNAL=1
 prefix_result:INTERNAL=/usr/lib/x86_64-linux-gnu

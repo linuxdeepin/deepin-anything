@@ -1870,11 +1870,6 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/main.cpp.o: \
  /usr/include/libnl3/netlink/data.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/common/vfs_genl.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/log.h \
- /usr/include/c++/8/iostream /usr/local/include/fmt/chrono.h \
- /usr/local/include/fmt/ostream.h /usr/local/include/fmt/format.h \
- /usr/local/include/fmt/core.h /usr/local/include/fmt/core.h \
- /usr/local/include/fmt/format.h /usr/local/include/fmt/ostream.h \
- /usr/local/include/fmt/ranges.h /usr/local/include/fmt/std.h \
- /usr/include/c++/8/bitset /usr/local/include/fmt/xchar.h \
+ /usr/include/c++/8/iomanip /usr/include/c++/8/iostream \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/enum_helper.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/signal_handler.h

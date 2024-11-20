@@ -17,8 +17,8 @@ int main(int argc, char* argv[]) {
 
     // Process the interrupt signal
     set_signal_handler(SIGINT, [&listenser, &handler, &app](int sig) {
-        log::info("Interrupt signal ({}) received.", sig);
-        log::info("Performing cleanup tasks...");
+        log::info() << "Interrupt signal (" << sig << "{}) received.\n";
+        log::info() << "Performing cleanup tasks...\n";
         listenser.stop_listening();
         handler->terminate_processing();
         app.exit();

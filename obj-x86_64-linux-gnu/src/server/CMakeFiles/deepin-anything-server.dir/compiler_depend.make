@@ -6182,18 +6182,8 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/base_event_handler.cpp
   /usr/include/c++/8/queue \
   /usr/include/c++/8/bits/stl_queue.h \
   ../src/server/include/utils/log.h \
+  /usr/include/c++/8/iomanip \
   /usr/include/c++/8/iostream \
-  /usr/local/include/fmt/chrono.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/ranges.h \
-  /usr/local/include/fmt/std.h \
-  /usr/include/c++/8/bitset \
-  /usr/local/include/fmt/xchar.h \
   ../src/server/include/utils/enum_helper.h \
   ../src/server/include/utils/string_helper.h \
   src/server/anythingadaptor.h \
@@ -8433,18 +8423,8 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/default_event_handler.
   /usr/include/c++/8/queue \
   /usr/include/c++/8/bits/stl_queue.h \
   ../src/server/include/utils/log.h \
+  /usr/include/c++/8/iomanip \
   /usr/include/c++/8/iostream \
-  /usr/local/include/fmt/chrono.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/ranges.h \
-  /usr/local/include/fmt/std.h \
-  /usr/include/c++/8/bitset \
-  /usr/local/include/fmt/xchar.h \
   ../src/server/include/utils/enum_helper.h \
   ../src/server/include/utils/print_helper.h \
   ../src/server/include/utils/string_helper.h \
@@ -8679,6 +8659,7 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/disk_scanner.cpp.o: ..
   /usr/include/mntent.h \
   /usr/include/paths.h \
   ../src/server/include/utils/log.h \
+  /usr/include/c++/8/iomanip \
   /usr/include/c++/8/iostream \
   /usr/include/c++/8/thread \
   /usr/include/c++/8/memory \
@@ -8688,60 +8669,6 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/disk_scanner.cpp.o: ..
   /usr/include/c++/8/bits/atomic_base.h \
   /usr/include/c++/8/bits/atomic_lockfree_defines.h \
   /usr/include/c++/8/backward/auto_ptr.h \
-  /usr/local/include/fmt/chrono.h \
-  /usr/include/c++/8/algorithm \
-  /usr/include/c++/8/bits/stl_algo.h \
-  /usr/include/c++/8/bits/algorithmfwd.h \
-  /usr/include/c++/8/bits/stl_heap.h \
-  /usr/include/c++/8/bits/uniform_int_dist.h \
-  /usr/include/c++/8/cmath \
-  /usr/include/math.h \
-  /usr/include/x86_64-linux-gnu/bits/math-vector.h \
-  /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h \
-  /usr/include/x86_64-linux-gnu/bits/flt-eval-method.h \
-  /usr/include/x86_64-linux-gnu/bits/fp-logb.h \
-  /usr/include/x86_64-linux-gnu/bits/fp-fast.h \
-  /usr/include/x86_64-linux-gnu/bits/mathcalls-helper-functions.h \
-  /usr/include/x86_64-linux-gnu/bits/mathcalls.h \
-  /usr/include/x86_64-linux-gnu/bits/mathcalls-narrow.h \
-  /usr/include/x86_64-linux-gnu/bits/iscanonical.h \
-  /usr/include/x86_64-linux-gnu/bits/mathinline.h \
-  /usr/include/c++/8/bits/specfun.h \
-  /usr/include/c++/8/tr1/gamma.tcc \
-  /usr/include/c++/8/tr1/special_function_util.h \
-  /usr/include/c++/8/tr1/bessel_function.tcc \
-  /usr/include/c++/8/tr1/special_function_util.h \
-  /usr/include/c++/8/tr1/beta_function.tcc \
-  /usr/include/c++/8/tr1/ell_integral.tcc \
-  /usr/include/c++/8/tr1/exp_integral.tcc \
-  /usr/include/c++/8/tr1/hypergeometric.tcc \
-  /usr/include/c++/8/tr1/legendre_function.tcc \
-  /usr/include/c++/8/tr1/modified_bessel_func.tcc \
-  /usr/include/c++/8/tr1/poly_hermite.tcc \
-  /usr/include/c++/8/tr1/poly_laguerre.tcc \
-  /usr/include/c++/8/tr1/riemann_zeta.tcc \
-  /usr/include/c++/8/cstring \
-  /usr/include/string.h \
-  /usr/include/strings.h \
-  /usr/include/x86_64-linux-gnu/bits/strings_fortified.h \
-  /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
-  /usr/include/c++/8/iterator \
-  /usr/include/c++/8/bits/stream_iterator.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/core.h \
-  /usr/include/c++/8/cstddef \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/ranges.h \
-  /usr/local/include/fmt/std.h \
-  /usr/include/c++/8/atomic \
-  /usr/include/c++/8/bitset \
-  /usr/include/c++/8/variant \
-  /usr/include/c++/8/cxxabi.h \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/cxxabi_tweaks.h \
-  /usr/local/include/fmt/xchar.h \
   ../src/server/include/utils/enum_helper.h
 
 src/server/CMakeFiles/deepin-anything-server.dir/src/core/event_listenser.cpp.o: ../src/server/src/core/event_listenser.cpp \
@@ -9022,29 +8949,6 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/event_listenser.cpp.o:
   /usr/include/x86_64-linux-gnu/bits/getopt_posix.h \
   /usr/include/x86_64-linux-gnu/bits/getopt_core.h \
   /usr/include/x86_64-linux-gnu/bits/unistd.h \
-  /usr/include/c++/8/iostream \
-  /usr/include/c++/8/ostream \
-  /usr/include/c++/8/ios \
-  /usr/include/c++/8/bits/ios_base.h \
-  /usr/include/c++/8/bits/locale_classes.h \
-  /usr/include/c++/8/bits/locale_classes.tcc \
-  /usr/include/c++/8/system_error \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/error_constants.h \
-  /usr/include/c++/8/streambuf \
-  /usr/include/c++/8/bits/streambuf.tcc \
-  /usr/include/c++/8/bits/basic_ios.h \
-  /usr/include/c++/8/bits/locale_facets.h \
-  /usr/include/c++/8/cwctype \
-  /usr/include/wctype.h \
-  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/ctype_base.h \
-  /usr/include/c++/8/bits/streambuf_iterator.h \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/ctype_inline.h \
-  /usr/include/c++/8/bits/locale_facets.tcc \
-  /usr/include/c++/8/bits/basic_ios.tcc \
-  /usr/include/c++/8/bits/ostream.tcc \
-  /usr/include/c++/8/istream \
-  /usr/include/c++/8/bits/istream.tcc \
   /usr/include/libnl3/netlink/genl/ctrl.h \
   /usr/include/libnl3/netlink/cache.h \
   /usr/include/libnl3/netlink/msg.h \
@@ -9052,38 +8956,23 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/event_listenser.cpp.o:
   /usr/include/libnl3/netlink/genl/genl.h \
   ../src/server/include/utils/genl_parser.hpp \
   ../src/server/include/utils/log.h \
-  /usr/local/include/fmt/chrono.h \
-  /usr/include/c++/8/algorithm \
-  /usr/include/c++/8/cmath \
-  /usr/include/math.h \
-  /usr/include/x86_64-linux-gnu/bits/math-vector.h \
-  /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h \
-  /usr/include/x86_64-linux-gnu/bits/flt-eval-method.h \
-  /usr/include/x86_64-linux-gnu/bits/fp-logb.h \
-  /usr/include/x86_64-linux-gnu/bits/fp-fast.h \
-  /usr/include/x86_64-linux-gnu/bits/mathcalls-helper-functions.h \
-  /usr/include/x86_64-linux-gnu/bits/mathcalls.h \
-  /usr/include/x86_64-linux-gnu/bits/mathcalls-narrow.h \
-  /usr/include/x86_64-linux-gnu/bits/iscanonical.h \
-  /usr/include/x86_64-linux-gnu/bits/mathinline.h \
-  /usr/include/c++/8/bits/specfun.h \
-  /usr/include/c++/8/tr1/gamma.tcc \
-  /usr/include/c++/8/tr1/special_function_util.h \
-  /usr/include/c++/8/tr1/bessel_function.tcc \
-  /usr/include/c++/8/tr1/special_function_util.h \
-  /usr/include/c++/8/tr1/beta_function.tcc \
-  /usr/include/c++/8/tr1/ell_integral.tcc \
-  /usr/include/c++/8/tr1/exp_integral.tcc \
-  /usr/include/c++/8/tr1/hypergeometric.tcc \
-  /usr/include/c++/8/tr1/legendre_function.tcc \
-  /usr/include/c++/8/tr1/modified_bessel_func.tcc \
-  /usr/include/c++/8/tr1/poly_hermite.tcc \
-  /usr/include/c++/8/tr1/poly_laguerre.tcc \
-  /usr/include/c++/8/tr1/riemann_zeta.tcc \
-  /usr/include/c++/8/cstring \
-  /usr/include/c++/8/iterator \
-  /usr/include/c++/8/bits/stream_iterator.h \
+  /usr/include/c++/8/iomanip \
+  /usr/include/c++/8/bits/ios_base.h \
+  /usr/include/c++/8/bits/locale_classes.h \
+  /usr/include/c++/8/bits/locale_classes.tcc \
+  /usr/include/c++/8/system_error \
+  /usr/include/x86_64-linux-gnu/c++/8/bits/error_constants.h \
   /usr/include/c++/8/locale \
+  /usr/include/c++/8/bits/locale_facets.h \
+  /usr/include/c++/8/cwctype \
+  /usr/include/wctype.h \
+  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h \
+  /usr/include/x86_64-linux-gnu/c++/8/bits/ctype_base.h \
+  /usr/include/c++/8/streambuf \
+  /usr/include/c++/8/bits/streambuf.tcc \
+  /usr/include/c++/8/bits/streambuf_iterator.h \
+  /usr/include/x86_64-linux-gnu/c++/8/bits/ctype_inline.h \
+  /usr/include/c++/8/bits/locale_facets.tcc \
   /usr/include/c++/8/bits/locale_facets_nonio.h \
   /usr/include/x86_64-linux-gnu/c++/8/bits/time_members.h \
   /usr/include/x86_64-linux-gnu/c++/8/bits/messages_members.h \
@@ -9091,33 +8980,17 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/event_listenser.cpp.o:
   /usr/include/c++/8/bits/codecvt.h \
   /usr/include/c++/8/bits/locale_facets_nonio.tcc \
   /usr/include/c++/8/bits/locale_conv.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/include/c++/8/fstream \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/basic_file.h \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/c++io.h \
-  /usr/include/c++/8/bits/fstream.tcc \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/core.h \
-  /usr/include/c++/8/cstddef \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/ranges.h \
-  /usr/local/include/fmt/std.h \
-  /usr/include/c++/8/bitset \
-  /usr/include/c++/8/filesystem \
-  /usr/include/c++/8/bits/fs_fwd.h \
-  /usr/include/c++/8/bits/fs_path.h \
-  /usr/include/c++/8/codecvt \
   /usr/include/c++/8/bits/quoted_string.h \
   /usr/include/c++/8/sstream \
+  /usr/include/c++/8/istream \
+  /usr/include/c++/8/ios \
+  /usr/include/c++/8/bits/basic_ios.h \
+  /usr/include/c++/8/bits/basic_ios.tcc \
+  /usr/include/c++/8/ostream \
+  /usr/include/c++/8/bits/ostream.tcc \
+  /usr/include/c++/8/bits/istream.tcc \
   /usr/include/c++/8/bits/sstream.tcc \
-  /usr/include/c++/8/bits/fs_dir.h \
-  /usr/include/c++/8/bits/fs_ops.h \
-  /usr/include/c++/8/variant \
-  /usr/include/c++/8/cxxabi.h \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/cxxabi_tweaks.h \
-  /usr/local/include/fmt/xchar.h \
+  /usr/include/c++/8/iostream \
   ../src/server/include/utils/enum_helper.h \
   ../src/kernelmod/vfs_change_consts.h
 
@@ -11074,17 +10947,7 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/file_index_manager.cpp
   /usr/include/lucene++/ChineseAnalyzer.h \
   /usr/include/lucene++/LuceneContrib.h \
   ../src/server/include/utils/log.h \
-  /usr/local/include/fmt/chrono.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/ranges.h \
-  /usr/local/include/fmt/std.h \
-  /usr/include/c++/8/bitset \
-  /usr/local/include/fmt/xchar.h \
+  /usr/include/c++/8/iomanip \
   ../src/server/include/utils/enum_helper.h \
   ../src/server/include/utils/string_helper.h \
   /usr/include/c++/8/unordered_set \
@@ -11539,63 +11402,21 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/thread_pool.cpp.o: ../
   /usr/include/c++/8/backward/auto_ptr.h \
   ../src/server/include/common/anything_fwd.hpp \
   ../src/server/include/utils/log.h \
-  /usr/include/c++/8/iostream \
-  /usr/include/c++/8/ostream \
-  /usr/include/c++/8/ios \
+  /usr/include/c++/8/iomanip \
   /usr/include/c++/8/bits/ios_base.h \
   /usr/include/c++/8/bits/locale_classes.h \
   /usr/include/c++/8/bits/locale_classes.tcc \
-  /usr/include/c++/8/streambuf \
-  /usr/include/c++/8/bits/streambuf.tcc \
-  /usr/include/c++/8/bits/basic_ios.h \
+  /usr/include/c++/8/locale \
   /usr/include/c++/8/bits/locale_facets.h \
   /usr/include/c++/8/cwctype \
   /usr/include/wctype.h \
   /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h \
   /usr/include/x86_64-linux-gnu/c++/8/bits/ctype_base.h \
+  /usr/include/c++/8/streambuf \
+  /usr/include/c++/8/bits/streambuf.tcc \
   /usr/include/c++/8/bits/streambuf_iterator.h \
   /usr/include/x86_64-linux-gnu/c++/8/bits/ctype_inline.h \
   /usr/include/c++/8/bits/locale_facets.tcc \
-  /usr/include/c++/8/bits/basic_ios.tcc \
-  /usr/include/c++/8/bits/ostream.tcc \
-  /usr/include/c++/8/istream \
-  /usr/include/c++/8/bits/istream.tcc \
-  /usr/local/include/fmt/chrono.h \
-  /usr/include/c++/8/algorithm \
-  /usr/include/c++/8/cmath \
-  /usr/include/math.h \
-  /usr/include/x86_64-linux-gnu/bits/math-vector.h \
-  /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h \
-  /usr/include/x86_64-linux-gnu/bits/flt-eval-method.h \
-  /usr/include/x86_64-linux-gnu/bits/fp-logb.h \
-  /usr/include/x86_64-linux-gnu/bits/fp-fast.h \
-  /usr/include/x86_64-linux-gnu/bits/mathcalls-helper-functions.h \
-  /usr/include/x86_64-linux-gnu/bits/mathcalls.h \
-  /usr/include/x86_64-linux-gnu/bits/mathcalls-narrow.h \
-  /usr/include/x86_64-linux-gnu/bits/iscanonical.h \
-  /usr/include/x86_64-linux-gnu/bits/mathinline.h \
-  /usr/include/c++/8/bits/specfun.h \
-  /usr/include/c++/8/tr1/gamma.tcc \
-  /usr/include/c++/8/tr1/special_function_util.h \
-  /usr/include/c++/8/tr1/bessel_function.tcc \
-  /usr/include/c++/8/tr1/special_function_util.h \
-  /usr/include/c++/8/tr1/beta_function.tcc \
-  /usr/include/c++/8/tr1/ell_integral.tcc \
-  /usr/include/c++/8/tr1/exp_integral.tcc \
-  /usr/include/c++/8/tr1/hypergeometric.tcc \
-  /usr/include/c++/8/tr1/legendre_function.tcc \
-  /usr/include/c++/8/tr1/modified_bessel_func.tcc \
-  /usr/include/c++/8/tr1/poly_hermite.tcc \
-  /usr/include/c++/8/tr1/poly_laguerre.tcc \
-  /usr/include/c++/8/tr1/riemann_zeta.tcc \
-  /usr/include/c++/8/cstring \
-  /usr/include/string.h \
-  /usr/include/strings.h \
-  /usr/include/x86_64-linux-gnu/bits/strings_fortified.h \
-  /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
-  /usr/include/c++/8/iterator \
-  /usr/include/c++/8/bits/stream_iterator.h \
-  /usr/include/c++/8/locale \
   /usr/include/c++/8/bits/locale_facets_nonio.h \
   /usr/include/x86_64-linux-gnu/c++/8/bits/time_members.h \
   /usr/include/x86_64-linux-gnu/c++/8/bits/messages_members.h \
@@ -11603,34 +11424,17 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/thread_pool.cpp.o: ../
   /usr/include/c++/8/bits/codecvt.h \
   /usr/include/c++/8/bits/locale_facets_nonio.tcc \
   /usr/include/c++/8/bits/locale_conv.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/include/c++/8/fstream \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/basic_file.h \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/c++io.h \
-  /usr/include/c++/8/bits/fstream.tcc \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/core.h \
-  /usr/include/c++/8/cstddef \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/ranges.h \
-  /usr/local/include/fmt/std.h \
-  /usr/include/c++/8/atomic \
-  /usr/include/c++/8/bitset \
-  /usr/include/c++/8/filesystem \
-  /usr/include/c++/8/bits/fs_fwd.h \
-  /usr/include/c++/8/bits/fs_path.h \
-  /usr/include/c++/8/codecvt \
   /usr/include/c++/8/bits/quoted_string.h \
   /usr/include/c++/8/sstream \
+  /usr/include/c++/8/istream \
+  /usr/include/c++/8/ios \
+  /usr/include/c++/8/bits/basic_ios.h \
+  /usr/include/c++/8/bits/basic_ios.tcc \
+  /usr/include/c++/8/ostream \
+  /usr/include/c++/8/bits/ostream.tcc \
+  /usr/include/c++/8/bits/istream.tcc \
   /usr/include/c++/8/bits/sstream.tcc \
-  /usr/include/c++/8/bits/fs_dir.h \
-  /usr/include/c++/8/bits/fs_ops.h \
-  /usr/include/c++/8/variant \
-  /usr/include/c++/8/cxxabi.h \
-  /usr/include/x86_64-linux-gnu/c++/8/bits/cxxabi_tweaks.h \
-  /usr/local/include/fmt/xchar.h \
+  /usr/include/c++/8/iostream \
   ../src/server/include/utils/enum_helper.h
 
 src/server/CMakeFiles/deepin-anything-server.dir/src/main.cpp.o: ../src/server/src/main.cpp \
@@ -13640,18 +13444,8 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/main.cpp.o: ../src/server/s
   /usr/include/libnl3/netlink/data.h \
   ../src/server/include/common/vfs_genl.h \
   ../src/server/include/utils/log.h \
+  /usr/include/c++/8/iomanip \
   /usr/include/c++/8/iostream \
-  /usr/local/include/fmt/chrono.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/core.h \
-  /usr/local/include/fmt/format.h \
-  /usr/local/include/fmt/ostream.h \
-  /usr/local/include/fmt/ranges.h \
-  /usr/local/include/fmt/std.h \
-  /usr/include/c++/8/bitset \
-  /usr/local/include/fmt/xchar.h \
   ../src/server/include/utils/enum_helper.h \
   ../src/server/include/utils/signal_handler.h
 
@@ -14111,15 +13905,9 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/utils/string_helper.cpp.o: 
 
 ../src/server/include/utils/enum_helper.h:
 
-/usr/include/c++/8/bitset:
-
-/usr/local/include/fmt/core.h:
-
-/usr/local/include/fmt/ostream.h:
-
-/usr/local/include/fmt/chrono.h:
-
 /usr/include/c++/8/iostream:
+
+/usr/include/c++/8/iomanip:
 
 ../src/server/src/core/base_event_handler.cpp:
 
@@ -14208,8 +13996,6 @@ src/server/anythingadaptor.moc:
 /usr/local/include/boost/asio/windows/basic_overlapped_handle.hpp:
 
 /usr/local/include/boost/asio/version.hpp:
-
-/usr/local/include/fmt/format.h:
 
 /usr/local/include/boost/asio/use_awaitable.hpp:
 
@@ -14478,8 +14264,6 @@ src/server/anythingadaptor.moc:
 /usr/local/include/boost/asio/detail/reactive_socket_send_op.hpp:
 
 /usr/local/include/boost/asio/detail/reactive_socket_sendto_op.hpp:
-
-/usr/local/include/fmt/xchar.h:
 
 /usr/local/include/boost/asio/detail/socket_holder.hpp:
 
@@ -15537,8 +15321,6 @@ src/server/anythingadaptor.moc:
 
 /usr/local/include/boost/system/detail/generic_category_message.hpp:
 
-/usr/local/include/fmt/ranges.h:
-
 /usr/include/x86_64-linux-gnu/qt5/QtCore/qsystemsemaphore.h:
 
 /usr/include/x86_64-linux-gnu/bits/mathcalls-helper-functions.h:
@@ -16392,8 +16174,6 @@ src/server/anythingadaptor.h:
 /usr/include/x86_64-linux-gnu/bits/local_lim.h:
 
 /usr/include/x86_64-linux-gnu/bits/waitstatus.h:
-
-/usr/local/include/fmt/std.h:
 
 /usr/include/x86_64-linux-gnu/qt5/QtCore/qlockfile.h:
 

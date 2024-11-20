@@ -163,69 +163,26 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/thread_pool.cpp.o: \
  /usr/include/c++/8/backward/auto_ptr.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/common/anything_fwd.hpp \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/log.h \
- /usr/include/c++/8/iostream /usr/include/c++/8/ostream \
- /usr/include/c++/8/ios /usr/include/c++/8/bits/ios_base.h \
+ /usr/include/c++/8/iomanip /usr/include/c++/8/bits/ios_base.h \
  /usr/include/c++/8/bits/locale_classes.h \
- /usr/include/c++/8/bits/locale_classes.tcc /usr/include/c++/8/streambuf \
- /usr/include/c++/8/bits/streambuf.tcc \
- /usr/include/c++/8/bits/basic_ios.h \
+ /usr/include/c++/8/bits/locale_classes.tcc /usr/include/c++/8/locale \
  /usr/include/c++/8/bits/locale_facets.h /usr/include/c++/8/cwctype \
  /usr/include/wctype.h /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h \
  /usr/include/x86_64-linux-gnu/c++/8/bits/ctype_base.h \
+ /usr/include/c++/8/streambuf /usr/include/c++/8/bits/streambuf.tcc \
  /usr/include/c++/8/bits/streambuf_iterator.h \
  /usr/include/x86_64-linux-gnu/c++/8/bits/ctype_inline.h \
  /usr/include/c++/8/bits/locale_facets.tcc \
- /usr/include/c++/8/bits/basic_ios.tcc \
- /usr/include/c++/8/bits/ostream.tcc /usr/include/c++/8/istream \
- /usr/include/c++/8/bits/istream.tcc /usr/local/include/fmt/chrono.h \
- /usr/include/c++/8/algorithm /usr/include/c++/8/cmath \
- /usr/include/math.h /usr/include/x86_64-linux-gnu/bits/math-vector.h \
- /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h \
- /usr/include/x86_64-linux-gnu/bits/flt-eval-method.h \
- /usr/include/x86_64-linux-gnu/bits/fp-logb.h \
- /usr/include/x86_64-linux-gnu/bits/fp-fast.h \
- /usr/include/x86_64-linux-gnu/bits/mathcalls-helper-functions.h \
- /usr/include/x86_64-linux-gnu/bits/mathcalls.h \
- /usr/include/x86_64-linux-gnu/bits/mathcalls-narrow.h \
- /usr/include/x86_64-linux-gnu/bits/iscanonical.h \
- /usr/include/x86_64-linux-gnu/bits/mathinline.h \
- /usr/include/c++/8/bits/specfun.h /usr/include/c++/8/tr1/gamma.tcc \
- /usr/include/c++/8/tr1/special_function_util.h \
- /usr/include/c++/8/tr1/bessel_function.tcc \
- /usr/include/c++/8/tr1/special_function_util.h \
- /usr/include/c++/8/tr1/beta_function.tcc \
- /usr/include/c++/8/tr1/ell_integral.tcc \
- /usr/include/c++/8/tr1/exp_integral.tcc \
- /usr/include/c++/8/tr1/hypergeometric.tcc \
- /usr/include/c++/8/tr1/legendre_function.tcc \
- /usr/include/c++/8/tr1/modified_bessel_func.tcc \
- /usr/include/c++/8/tr1/poly_hermite.tcc \
- /usr/include/c++/8/tr1/poly_laguerre.tcc \
- /usr/include/c++/8/tr1/riemann_zeta.tcc /usr/include/c++/8/cstring \
- /usr/include/string.h /usr/include/strings.h \
- /usr/include/x86_64-linux-gnu/bits/strings_fortified.h \
- /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
- /usr/include/c++/8/iterator /usr/include/c++/8/bits/stream_iterator.h \
- /usr/include/c++/8/locale /usr/include/c++/8/bits/locale_facets_nonio.h \
+ /usr/include/c++/8/bits/locale_facets_nonio.h \
  /usr/include/x86_64-linux-gnu/c++/8/bits/time_members.h \
  /usr/include/x86_64-linux-gnu/c++/8/bits/messages_members.h \
  /usr/include/libintl.h /usr/include/c++/8/bits/codecvt.h \
  /usr/include/c++/8/bits/locale_facets_nonio.tcc \
- /usr/include/c++/8/bits/locale_conv.h /usr/local/include/fmt/ostream.h \
- /usr/include/c++/8/fstream \
- /usr/include/x86_64-linux-gnu/c++/8/bits/basic_file.h \
- /usr/include/x86_64-linux-gnu/c++/8/bits/c++io.h \
- /usr/include/c++/8/bits/fstream.tcc /usr/local/include/fmt/format.h \
- /usr/local/include/fmt/core.h /usr/include/c++/8/cstddef \
- /usr/local/include/fmt/core.h /usr/local/include/fmt/format.h \
- /usr/local/include/fmt/ostream.h /usr/local/include/fmt/ranges.h \
- /usr/local/include/fmt/std.h /usr/include/c++/8/atomic \
- /usr/include/c++/8/bitset /usr/include/c++/8/filesystem \
- /usr/include/c++/8/bits/fs_fwd.h /usr/include/c++/8/bits/fs_path.h \
- /usr/include/c++/8/codecvt /usr/include/c++/8/bits/quoted_string.h \
- /usr/include/c++/8/sstream /usr/include/c++/8/bits/sstream.tcc \
- /usr/include/c++/8/bits/fs_dir.h /usr/include/c++/8/bits/fs_ops.h \
- /usr/include/c++/8/variant /usr/include/c++/8/cxxabi.h \
- /usr/include/x86_64-linux-gnu/c++/8/bits/cxxabi_tweaks.h \
- /usr/local/include/fmt/xchar.h \
+ /usr/include/c++/8/bits/locale_conv.h \
+ /usr/include/c++/8/bits/quoted_string.h /usr/include/c++/8/sstream \
+ /usr/include/c++/8/istream /usr/include/c++/8/ios \
+ /usr/include/c++/8/bits/basic_ios.h \
+ /usr/include/c++/8/bits/basic_ios.tcc /usr/include/c++/8/ostream \
+ /usr/include/c++/8/bits/ostream.tcc /usr/include/c++/8/bits/istream.tcc \
+ /usr/include/c++/8/bits/sstream.tcc /usr/include/c++/8/iostream \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/enum_helper.h

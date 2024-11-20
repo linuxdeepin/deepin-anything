@@ -178,51 +178,12 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/disk_scanner.cpp.o: \
  /usr/include/c++/8/bits/enable_special_members.h /usr/include/mntent.h \
  /usr/include/paths.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/log.h \
- /usr/include/c++/8/iostream /usr/include/c++/8/thread \
- /usr/include/c++/8/memory /usr/include/c++/8/bits/stl_tempbuf.h \
+ /usr/include/c++/8/iomanip /usr/include/c++/8/iostream \
+ /usr/include/c++/8/thread /usr/include/c++/8/memory \
+ /usr/include/c++/8/bits/stl_tempbuf.h \
  /usr/include/c++/8/bits/stl_raw_storage_iter.h \
  /usr/include/c++/8/bits/shared_ptr_atomic.h \
  /usr/include/c++/8/bits/atomic_base.h \
  /usr/include/c++/8/bits/atomic_lockfree_defines.h \
- /usr/include/c++/8/backward/auto_ptr.h /usr/local/include/fmt/chrono.h \
- /usr/include/c++/8/algorithm /usr/include/c++/8/bits/stl_algo.h \
- /usr/include/c++/8/bits/algorithmfwd.h \
- /usr/include/c++/8/bits/stl_heap.h \
- /usr/include/c++/8/bits/uniform_int_dist.h /usr/include/c++/8/cmath \
- /usr/include/math.h /usr/include/x86_64-linux-gnu/bits/math-vector.h \
- /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h \
- /usr/include/x86_64-linux-gnu/bits/flt-eval-method.h \
- /usr/include/x86_64-linux-gnu/bits/fp-logb.h \
- /usr/include/x86_64-linux-gnu/bits/fp-fast.h \
- /usr/include/x86_64-linux-gnu/bits/mathcalls-helper-functions.h \
- /usr/include/x86_64-linux-gnu/bits/mathcalls.h \
- /usr/include/x86_64-linux-gnu/bits/mathcalls-narrow.h \
- /usr/include/x86_64-linux-gnu/bits/iscanonical.h \
- /usr/include/x86_64-linux-gnu/bits/mathinline.h \
- /usr/include/c++/8/bits/specfun.h /usr/include/c++/8/tr1/gamma.tcc \
- /usr/include/c++/8/tr1/special_function_util.h \
- /usr/include/c++/8/tr1/bessel_function.tcc \
- /usr/include/c++/8/tr1/special_function_util.h \
- /usr/include/c++/8/tr1/beta_function.tcc \
- /usr/include/c++/8/tr1/ell_integral.tcc \
- /usr/include/c++/8/tr1/exp_integral.tcc \
- /usr/include/c++/8/tr1/hypergeometric.tcc \
- /usr/include/c++/8/tr1/legendre_function.tcc \
- /usr/include/c++/8/tr1/modified_bessel_func.tcc \
- /usr/include/c++/8/tr1/poly_hermite.tcc \
- /usr/include/c++/8/tr1/poly_laguerre.tcc \
- /usr/include/c++/8/tr1/riemann_zeta.tcc /usr/include/c++/8/cstring \
- /usr/include/string.h /usr/include/strings.h \
- /usr/include/x86_64-linux-gnu/bits/strings_fortified.h \
- /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
- /usr/include/c++/8/iterator /usr/include/c++/8/bits/stream_iterator.h \
- /usr/local/include/fmt/ostream.h /usr/local/include/fmt/format.h \
- /usr/local/include/fmt/core.h /usr/include/c++/8/cstddef \
- /usr/local/include/fmt/core.h /usr/local/include/fmt/format.h \
- /usr/local/include/fmt/ostream.h /usr/local/include/fmt/ranges.h \
- /usr/local/include/fmt/std.h /usr/include/c++/8/atomic \
- /usr/include/c++/8/bitset /usr/include/c++/8/variant \
- /usr/include/c++/8/cxxabi.h \
- /usr/include/x86_64-linux-gnu/c++/8/bits/cxxabi_tweaks.h \
- /usr/local/include/fmt/xchar.h \
+ /usr/include/c++/8/backward/auto_ptr.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/enum_helper.h

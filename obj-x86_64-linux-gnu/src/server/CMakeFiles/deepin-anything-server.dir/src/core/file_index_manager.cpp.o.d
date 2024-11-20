@@ -1827,12 +1827,7 @@ src/server/CMakeFiles/deepin-anything-server.dir/src/core/file_index_manager.cpp
  /usr/include/lucene++/ChineseAnalyzer.h \
  /usr/include/lucene++/LuceneContrib.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/log.h \
- /usr/local/include/fmt/chrono.h /usr/local/include/fmt/ostream.h \
- /usr/local/include/fmt/format.h /usr/local/include/fmt/core.h \
- /usr/local/include/fmt/core.h /usr/local/include/fmt/format.h \
- /usr/local/include/fmt/ostream.h /usr/local/include/fmt/ranges.h \
- /usr/local/include/fmt/std.h /usr/include/c++/8/bitset \
- /usr/local/include/fmt/xchar.h \
+ /usr/include/c++/8/iomanip \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/enum_helper.h \
  /home/dxnu/dxnu-github/deepin-anything/src/server/include/utils/string_helper.h \
  /usr/include/c++/8/unordered_set /usr/include/c++/8/bits/unordered_set.h
