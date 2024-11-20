@@ -81,3 +81,7 @@ Makefile*
 CMakeLists.txt.user*
 
 debian/deepin-anything-dkms.dkms
+debian/deepin-anything
+debian/.debhelper
+debian/tmp
+debian/deepin-anything-server
