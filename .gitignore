@@ -87,3 +87,4 @@ debian/tmp
 debian/deepin-anything-server
 debian/deepin-anything-dkms
 debian/*.substvars
+/obj-x86_64-linux-gnu/
