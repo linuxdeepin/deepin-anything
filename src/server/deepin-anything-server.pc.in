@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/lib/@HOST_MULTIARCH@
+includedir=${prefix}/include/@PROJECT_NAME@
+
+Name: @PROJECT_NAME@
+Description: Deepin Anything Server
+Version: @PROJECT_VERSION@
+Requires: libnl-genl-3 liblucene++ lucene++-contrib libfmt
+Libs: -l@PROJECT_NAME@
+Cflags: -I${includedir}

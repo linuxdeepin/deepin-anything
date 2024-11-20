@@ -1,0 +1,12 @@
+Package: deepin-anything-dkms
+Source: deepin-anything
+Version: 7.0.0
+Architecture: all
+Maintainer: Deepin Package Builder <packages@deepin.com>
+Installed-Size: 78
+Depends: dkms
+Section: admin
+Priority: optional
+Homepage: http://github.com/linuxdeepin/deepin-anything
+Description: anything module
+ anything kernel module package

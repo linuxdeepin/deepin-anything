@@ -11,18 +11,17 @@ project(
 )
 
 # Find the dependencies
-find_library(LUCENEPP_LIB lucene++)
-find_library(LUCENEPP_CONTRIB_LIB lucene++-contrib)
-find_path(LUCENEPP_INCLUDE_DIR lucene++)
 find_package(fmt REQUIRED)
 find_package(Qt5 CONFIG REQUIRED Core DBus)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
+pkg_check_modules(LUCENE REQUIRED liblucene++)
+pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
 
 # Generate QDbus file
-message(STATUS "CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
-message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
+# message(STATUS "CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
+# message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
 set(DBUS_ADAPTOR_SOURCES my.test.Anything.xml)
 set(ANYTHING_DBUS_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/core/base_event_handler.h")
 qt5_generate_dbus_interface(${ANYTHING_DBUS_HEADER}
@@ -37,7 +36,6 @@ qt5_add_dbus_adaptor(DBUS_ADAPTOR_SOURCES
 qt5_wrap_cpp(anything_dbus_server_moc ${ANYTHING_DBUS_HEADER})
 
 # Print dependencies
-message(STATUS "Found Lucene++ library: " ${LUCENEPP_INCLUDE_DIR})
 message(STATUS "Found fmtlib: ${fmt_FOUND}")
 
 # Found all source files
@@ -58,14 +56,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../kernelmod>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-    ${LUCENEPP_INCLUDE_DIR}
+    ${LUCENE_INCLUDE_DIRS}
     ${GNL_INCLUDE_DIRS}
     ${MOUNT_INCLUDE_DIRS}
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
-    ${LUCENEPP_LIB}
-    ${LUCENEPP_CONTRIB_LIB}
+    ${LUCENE_LIBRARIES}
+    ${LUCENE_CONTRIB_LIBRARIES}
     ${GNL_LIBRARIES}
     ${MOUNT_LIBRARIES}
     fmt::fmt
@@ -76,3 +74,11 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror -Wextra)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+
+configure_file ("${PROJECT_NAME}.pc.in" "${PROJECT_NAME}.pc" @ONLY)
+install(TARGETS ${PROJECT_NAME}
+    COMPONENT linapp
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    DESTINATION lib
+)

@@ -1,6 +1,8 @@
 #ifndef ANYTHING_LOG_H_
 #define ANYTHING_LOG_H_
 
+// #include <iomanip> // std::put_time
+// #include <sstream> // std::ostringstream
 #include <iostream>
 #include <thread>
 
@@ -65,6 +67,12 @@ namespace detail {
 inline void print_pattern_info(std::string_view level_info) {
     using namespace std::chrono;
     fmt::print("[{:%Y-%m-%d %H:%M:%S}] [{}] [Thread {}] ", system_clock::now(), level_info, std::this_thread::get_id());
+    // auto now = std::chrono::system_clock::now();
+    // std::time_t t = std::chrono::system_clock::to_time_t(now);
+    // std::tm tm = *std::localtime(&t);
+    // std::ostringstream ss;
+    // ss << std::this_thread::get_id();
+    // fmt::print("[{}] [{}] [Thread {}] ", std::put_time(&tm, "%Y-%m-%d %H:%M:%S"), level_info, ss.str());
 }
 
 } // namespace detail

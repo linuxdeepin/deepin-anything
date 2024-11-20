@@ -3,26 +3,16 @@ Section: admin
 Priority: optional
 Maintainer: Deepin Package Builder <packages@deepin.com>
 Build-Depends:
- cmake,
- debhelper (>= 9), dh-dkms | dkms, qtbase5-dev,
- pkg-config, libudisks2-qt5-dev, libmount-dev,
- libglib2.0-dev, libpcre3-dev, libnl-genl-3-dev,
- libpolkit-qt5-1-dev
+  cmake,
+  debhelper (>= 10),
+  dh-dkms | dkms,
+  qtbase5-dev,
+  pkg-config,
+  libnl-genl-3-dev,
+  liblucene++-dev,
+  libfmt-dev
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
-
-Package: deepin-anything-libs
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: anything library
- anything library package
-
-Package: deepin-anything-dev
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends},
- deepin-anything-libs( =${binary:Version}),
-Description: anything user interface library
- anything library developer package.
 
 Package: deepin-anything-dkms
 Architecture: all
@@ -33,13 +23,5 @@ Description: anything module
 Package: deepin-anything-server
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, deepin-anything-dkms
-Description: anything server application and lib
- anything server package
-
-Package: deepin-anything-server-dev
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends},
- deepin-anything-server( =${binary:Version}),
-Description: anything server user interface library
- anything server library developer package.
-
+Description: Deepin Anything server package
+ This is the server part of Deepin Anything, which includes core functionality for the application.

@@ -1,0 +1,5 @@
+# Hashes of file build rules.
+565de5201d9dc8e5c639ab71af7f34ed src/server/anythingadaptor.cpp
+aed37f15243ef745adea398d977db572 src/server/anythingadaptor.moc
+f95772b47af051a46c2ae87018089b32 src/server/include/core/moc_base_event_handler.cpp
+de9925660fb23b38d22299146ea7ea50 src/server/my.test.Anything.xml

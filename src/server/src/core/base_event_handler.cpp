@@ -43,8 +43,7 @@ void base_event_handler::set_batch_size(std::size_t size) {
     batch_size_ = size;
 }
 
-bool base_event_handler::ignored_event(const std::string& path, bool ignored)
-{
+bool base_event_handler::ignored_event(const std::string& path, bool ignored) {
     if (anything::string_helper::ends_with(path, ".longname"))
         return true; // 长文件名记录文件，直接忽略
     
@@ -196,7 +195,6 @@ void base_event_handler::timer_worker(int64_t interval) {
                 if (should_be_filtered(path)) {
                     continue;
                 }
-
 
                 // Before insertion, check if the file actually exists locally to avoid re-adding an index for a recently removed path.
                 // - The document_exists check does not need to be real-time; it only needs to reflect the state at program startup to avoid

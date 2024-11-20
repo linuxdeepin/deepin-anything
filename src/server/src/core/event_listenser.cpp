@@ -110,7 +110,7 @@ void event_listenser::start_listening() {
                 nl_recvmsgs_default(mcsk_);
             } else if (ep_events[i].data.fd == stop_fd_) {
                 uint64_t u;
-                read(stop_fd_, &u, sizeof(u));
+                [[maybe_unused]] auto _ = read(stop_fd_, &u, sizeof(u));
                 running = false;
                 break;
             }
@@ -127,7 +127,7 @@ void event_listenser::async_listen() {
 
 void event_listenser::stop_listening() {
     uint64_t u = 1;
-    write(stop_fd_, &u, sizeof(u));
+    [[maybe_unused]] auto _ = write(stop_fd_, &u, sizeof(u));
 
     if (listening_thread_.joinable()) {
         auto thread_id = listening_thread_.get_id();
