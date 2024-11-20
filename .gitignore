@@ -85,3 +85,4 @@ debian/deepin-anything
 debian/.debhelper
 debian/tmp
 debian/deepin-anything-server
+debian/deepin-anything-dkms
