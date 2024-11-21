@@ -11,4 +11,3 @@ all:
 
 clean:
 	make -C ${kdir} M=$(cwd) clean
-
