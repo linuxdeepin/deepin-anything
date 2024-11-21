@@ -1,16 +1,26 @@
 #!/usr/bin/make -f
 
-export QT_SELECT=5
 DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 
 %:
-	dh $@ --parallel --with dkms
+	dh $@ --buildsystem=cmake
 
-override_dh_auto_configure:
-	dh_auto_configure -Scmake -- \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=/usr \
-	-DHOST_MULTIARCH="$(DEB_HOST_MULTIARCH)" \
 
-override_dh_installinit:
-	true
+
+# override_dh_shlibdeps:
+# 	HOST_MULTIARCH="x86_64-linux-gnu" dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
+# dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info -l/usr/lib/x86_64-linux-gnu
+# export QT_SELECT=5
+# DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+
+# %:
+# 	dh $@ --parallel --with dkms
+
+# override_dh_auto_configure:
+# 	dh_auto_configure -Scmake -- \
+# 	-DCMAKE_BUILD_TYPE=Release \
+# 	-DCMAKE_INSTALL_PREFIX=/usr \
+# 	-DHOST_MULTIARCH="$(DEB_HOST_MULTIARCH)" \
+
+# override_dh_installinit:
+# 	true
