@@ -29,7 +29,8 @@ file_index_manager::file_index_manager(std::string index_dir)
             LuceneVersion::LUCENE_CURRENT, fuzzy_field_,
             newLucene<ChineseAnalyzer>());
     } catch (const LuceneException& e) {
-        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()) +
+            ". Make sure you are running the program as root.");
     }
 }
 

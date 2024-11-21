@@ -14,7 +14,7 @@ Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
 
 Package: deepin-anything-dkms
-Architecture: all
+Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, dkms
 Description: anything module
  anything kernel module package
