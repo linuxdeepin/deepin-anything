@@ -53,10 +53,10 @@ configure_file(
 message("CMAKE_CURRENT_BINARY_DIR:" ${CMAKE_CURRENT_BINARY_DIR})
 
  # Install the DKMS file into debian dir
- install(FILES ${CMAKE_CURRENT_BINARY_DIR}/deepin-anything-dkms.dkms DESTINATION ../..)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/deepin-anything-dkms.dkms DESTINATION ../..)
 
  # Install all source files
- install(FILES ${SRC_FILES} DESTINATION ${INSTALL_DIR})
+install(FILES ${SRC_FILES} DESTINATION ${INSTALL_DIR})
 
   # Install the module conf file
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/anything.conf DESTINATION /usr/lib/modules-load.d)
