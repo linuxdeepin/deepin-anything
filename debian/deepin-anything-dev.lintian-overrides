@@ -1,2 +1,0 @@
-deepin-anything-dev: package-name-doesnt-match-sonames libanything1.0.0
-deepin-anything-dev: ldconfig-symlink-missing-for-shlib
