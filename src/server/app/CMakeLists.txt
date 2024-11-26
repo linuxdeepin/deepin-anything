@@ -31,3 +31,5 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 
 # binary
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
+
+install (FILES deepin-anything-server.service DESTINATION lib/systemd/system)

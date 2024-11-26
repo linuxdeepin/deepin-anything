@@ -4,7 +4,7 @@ export QT_SELECT=5
 DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 
 %:
-	dh $@ --parallel --with dkms
+	dh $@ --parallel --with dkms,systemd
 
 override_dh_auto_configure:
 	dh_auto_configure -Scmake -- \

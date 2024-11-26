@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+os_maj_ver=`cat /etc/os-version | grep MajorVersion | cut -d '=' -f2`
+if [ $os_maj_ver -gt 20 ]; then
+#DEBHELPER#
+fi
+
+exit 0

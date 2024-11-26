@@ -1,0 +1,15 @@
+[Unit]
+Description=Deepin anything server service
+After=dbus.service udisks2.service
+
+[Service]
+User=root
+Group=root
+ExecStart=/usr/bin/deepin-anything-server
+ExecStartPre=modprobe vfs_monitor
+ExecStopPost=rmmod vfs_monitor
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
