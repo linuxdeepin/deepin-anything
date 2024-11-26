@@ -23,8 +23,8 @@ int main(int argc, char *argv[])
     app.setOrganizationName("deepin");
 
     if (fireAnything()) {
-        qCritical() << "fireAnything failed!";
-        abort();
+        qWarning() << "fireAnything failed!";
+        return -1;
     }
     signal(SIGTERM, handleSIGTERM);
 

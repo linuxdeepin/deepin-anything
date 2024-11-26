@@ -33,8 +33,8 @@ Files: .gitignore
 Copyright: None
 License: CC0-1.0
 
-# xml toml json conf yaml policy
-Files: *.xml *.toml *.json *conf *.yaml *.policy
+# xml toml json conf yaml policy service
+Files: *.xml *.toml *.json *conf *.yaml *.policy *.service
 Copyright: None
 License: CC0-1.0
 
