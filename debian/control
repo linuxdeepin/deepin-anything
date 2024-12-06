@@ -9,7 +9,8 @@ Build-Depends:
   qtbase5-dev,
   pkg-config,
   libnl-genl-3-dev,
-  liblucene++-dev
+  liblucene++-dev,
+  libmount-dev
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
 

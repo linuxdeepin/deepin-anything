@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "core/base_event_handler.h"
+#include "core/disk_scanner.h"
 
 #include "common/file_record.hpp"
 #include "utils/log.h"
@@ -13,6 +14,7 @@
 base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
     : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(100),
       pool_((std::max)(std::thread::hardware_concurrency() - 3, 1U)),
+      stop_timer_(false),
       timer_(std::thread(&base_event_handler::timer_worker, this, 1000)) {
     new IAnythingAdaptor(this);
     QDBusConnection dbus = QDBusConnection::systemBus();
@@ -36,11 +38,12 @@ base_event_handler::~base_event_handler() {
 
 void base_event_handler::terminate_processing() {
     stop_timer_ = true;
+    anything::disk_scanner::stop_scanning = true;
 
     if (timer_.joinable()) {
         auto thread_id = timer_.get_id();
         timer_.join();
-        anything::log::debug() << "Timer thread " << thread_id << " has exited\n";
+        anything::log::info() << "Timer thread " << thread_id << " has exited\n";
     }
 }
 
@@ -72,6 +75,12 @@ void base_event_handler::insert_pending_paths(
                     std::make_move_iterator(paths.end()));
 }
 
+void base_event_handler::insert_index_directory(std::filesystem::path dir) {
+    pool_.enqueue_detach([this, dir = std::move(dir)]() {
+        this->insert_pending_paths(anything::disk_scanner::scan(dir));
+    });
+}
+
 std::size_t base_event_handler::pending_paths_count() const {
     return pending_paths_.size();
 }
@@ -99,10 +108,18 @@ void base_event_handler::set_index_change_filter(
 
 void base_event_handler::add_index_delay(std::string path) {
     jobs_push(std::move(path), anything::index_job_type::add);
+    // if (should_be_filtered(path)) {
+    //     return;
+    // }
+    // index_manager_.add_index(std::move(path));
 }
 
 void base_event_handler::remove_index_delay(std::string path) {
     jobs_push(std::move(path), anything::index_job_type::remove);
+    // if (should_be_filtered(path)) {
+    //     return;
+    // }
+    // index_manager_.remove_index(path);
 }
 
 void base_event_handler::update_index_delay(std::string src, std::string dst) {
@@ -159,7 +176,7 @@ void base_event_handler::jobs_push(std::string src,
 void base_event_handler::timer_worker(int64_t interval) {
     // When pending_batch_size is small, CPU usage is low, but total indexing time is longer.
     // When pending_batch_size is large, CPU usage is high, but total indexing time is shorter.
-    constexpr std::size_t pending_batch_size = 100;
+    constexpr std::size_t pending_batch_size = 2000;
     while(!stop_timer_) {
         // {
         //     std::lock_guard<std::mutex> lock(jobs_mtx_);
@@ -168,7 +185,6 @@ void base_event_handler::timer_worker(int64_t interval) {
         //     }
         // }
         // std::this_thread::sleep_for(std::chrono::milliseconds(interval));
-
 
         bool idle = false;
         {
@@ -195,7 +211,10 @@ void base_event_handler::timer_worker(int64_t interval) {
                 }
             }
 
-            anything::log::debug() << "path batch size: " << path_batch.size() << "\n";
+            if (path_batch.size() > 0) {
+                anything::log::debug() << "path batch size: " << path_batch.size() << "\n";
+            }
+
             for (auto&& path : path_batch) {
                 if (should_be_filtered(path)) {
                     continue;
@@ -203,7 +222,7 @@ void base_event_handler::timer_worker(int64_t interval) {
 
                 // Before insertion, check if the file actually exists locally to avoid re-adding an index for a recently removed path.
                 // - The document_exists check does not need to be real-time; it only needs to reflect the state at program startup to avoid
-                //   efficiency issues caused by thred synchronization. 
+                //   efficiency issues caused by thread synchronization. 
                 // - Since existing files without an index will not trigger new insertion events, only the initial state comparison is necessary.
                 // - Index integrity is considered only for insertion here; deletions are not checked individually, as that would be inefficient.
                 //   Instead, existence checks for indexed paths are handled at query time.
@@ -254,6 +273,33 @@ QStringList base_event_handler::search(const QString& path, const QString& keywo
             remove_index_delay(std::move(path));
         }
     }
+
+    return results;
+}
+
+QStringList base_event_handler::search(const QString& keywords) {
+    // Since there is no automatic cleanup for invalid indexes,
+    // the system may contain paths that no longer exist.
+    // To maintain index validity, invalid indexes are filtered and removed here.
+    QStringList results = index_manager_.search(keywords, true);
+    if (!results.empty()) {
+        // clean up index entries for non-existent files.
+        std::vector<std::string> remove_list;
+        for (int i = 0; i < results.size();) {
+            std::string path = results[i].toStdString();
+            if (!std::filesystem::exists(path)) {
+                remove_list.push_back(std::move(path));
+                results.removeAt(i);
+            } else {
+                ++i;
+            }
+        }
+
+        for (auto&& path : remove_list) {
+            remove_index_delay(std::move(path));
+        }
+    }
+
     return results;
 }
 
@@ -276,6 +322,5 @@ void base_event_handler::addPath(const QString& fullPath) {
 }
 
 void base_event_handler::index_files_in_directory(const QString& directory_path) {
-    (void)directory_path;
-    // index_manager_.
+    insert_index_directory(directory_path.toStdString());
 }

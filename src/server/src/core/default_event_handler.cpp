@@ -5,6 +5,8 @@
 
 #include "core/default_event_handler.h"
 
+#include <cstdlib> // std::getenv
+
 #include "utils/log.h"
 #include "utils/print_helper.h"
 #include "utils/string_helper.h"
@@ -16,7 +18,10 @@ ANYTHING_NAMESPACE_BEGIN
 default_event_handler::default_event_handler(std::string index_dir)
     : base_event_handler(std::move(index_dir)) {
     // Index the default mount point
-    insert_pending_paths(scanner_.parallel_scan("/data/home/dxnu"));
+    auto home_dir = get_home_directory();
+    if (!home_dir.empty()) {
+        insert_index_directory(home_dir);
+    }
 
     // Initialize mount cache
     refresh_mount_status();
@@ -31,13 +36,10 @@ default_event_handler::default_event_handler(std::string index_dir)
                std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
     });
 
-    log::debug() << "Pending paths count: " << pending_paths_count() << "\n";
     // log::debug("Document size: {}", index_manager_.document_size());
-    // auto results = index_manager_.search_index("test haha");
-    // log::debug("Found {} result(s).", results.size());
-    // for (const auto& record : results) {
-    //     print(record);
-    // }
+    // auto results = index_manager_.search("李", true);
+    // log::debug() << "Found " << results.size() << " result(s).";
+    // qDebug() << results;
 
     // index_manager_.test(L"/data/home/dxnu/Downloads/2024届地区信息.XLSX"); // dxnu md   md
 }
@@ -115,13 +117,13 @@ void default_event_handler::handle(fs_event event) {
     if (!ignored) {
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
-            if (fs::exists(event.src)) {
+            if (std::filesystem::exists(event.src)) {
                 add_index_delay(std::move(event.src));
             }
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
             remove_index_delay(std::move(event.src));
         } else if (event.act == ACT_RENAME_FILE || event.act == ACT_RENAME_FOLDER) {
-            if (fs::exists(event.dst)) {
+            if (std::filesystem::exists(event.dst)) {
                 update_index_delay(std::move(event.src), std::move(event.dst));
             }
         }

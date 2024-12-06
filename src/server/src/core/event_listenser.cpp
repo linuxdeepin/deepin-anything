@@ -105,7 +105,10 @@ void event_listenser::start_listening() {
     while (running) {
         int event_cnt = epoll_wait(ep_fd, ep_events, epoll_size, timeout_);
         if (event_cnt == -1) {
-            log::error() << "epoll_wait() error\n";
+            if (errno == EINTR) {
+                continue;
+            }
+            log::error() << "epoll_wait() error: " << strerror(errno) << " (errno: " << errno << ")\n";
             break;
         }
 

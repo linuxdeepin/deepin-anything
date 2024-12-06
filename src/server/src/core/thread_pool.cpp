@@ -34,7 +34,7 @@ void thread_pool::wait_for_tasks() {
     for (auto& t : threads_) {
         auto thread_id = t.get_id();
         t.join();
-        log::info() << "Pool thread " << thread_id << "{} has exited.\n";
+        log::info() << "Pool thread " << thread_id << " has exited.\n";
     }
 
     threads_.clear();
