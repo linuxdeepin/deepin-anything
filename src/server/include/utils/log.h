@@ -75,7 +75,6 @@ inline void print_pattern_info(std::string_view level_info) {
     auto now = std::chrono::system_clock::now();
     std::time_t t = std::chrono::system_clock::to_time_t(now);
     std::tm tm = *std::localtime(&t);
-
     log_stream << "[" << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "]"
            << " [" << level_info << "]" << " [Thread " << std::this_thread::get_id() << "] ";
 }

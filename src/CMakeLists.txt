@@ -7,6 +7,7 @@ endif(NOT CMAKE_BUILD_TYPE)
 
 message("Build type:" ${CMAKE_BUILD_TYPE})
 
+
 # AddressSanitizer only:
 # add_compile_options(-fsanitize=address -g)
 # add_link_options(-fsanitize=address)

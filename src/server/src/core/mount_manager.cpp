@@ -140,6 +140,7 @@ std::string mount_manager::find_mount_point(const std::string& path, bool hardre
                         break;
                     }
                 }
+
                 if (!find_virtual) {
                     break; // 遍历完但是没有找到虚拟设备，返回当前挂载点
                 }

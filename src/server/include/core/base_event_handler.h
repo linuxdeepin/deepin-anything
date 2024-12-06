@@ -51,7 +51,7 @@ protected:
 
     void insert_pending_paths(std::vector<std::string> paths);
     void insert_index_directory(std::filesystem::path dir);
-    
+
     std::size_t pending_paths_count() const;
 
     void refresh_mount_status();
@@ -99,7 +99,7 @@ public slots:
      *         If no files are found, an empty list is returned.
      */
     QStringList search(const QString& keywords);
-
+    
     bool removePath(const QString& fullPath);
 
     bool hasLFT(const QString& path);
