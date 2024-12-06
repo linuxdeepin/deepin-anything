@@ -87,5 +87,6 @@ debian/tmp
 debian/deepin-anything-server
 debian/deepin-anything-dkms
 debian/*.substvars
+debian/files
 /obj-x86_64-linux-gnu/
 src/server/backend/
