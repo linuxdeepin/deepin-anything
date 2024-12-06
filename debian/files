@@ -1,4 +1,4 @@
-deepin-anything-dkms_7.0.0_all.deb admin optional
+deepin-anything-dkms_7.0.0_amd64.deb admin optional
 deepin-anything-server-dbgsym_7.0.0_amd64.deb debug optional automatic=yes
 deepin-anything-server_7.0.0_amd64.deb admin optional
 deepin-anything_7.0.0_amd64.buildinfo admin optional

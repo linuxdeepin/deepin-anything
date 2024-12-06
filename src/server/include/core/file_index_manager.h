@@ -1,3 +1,8 @@
+// Copyright (C) 2024 UOS Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef ANYTHING_FILE_INDEX_MANAGER_H_
 #define ANYTHING_FILE_INDEX_MANAGER_H_
 
@@ -33,7 +38,7 @@ public:
     ///                    otherwise, performs a fuzzy match.
     void update_index(const std::string& old_path, const std::string& new_path, bool exact_match = true);
 
-    std::vector<file_record> search_index(const std::string& term, bool exact_match = false, bool nrt = false);
+    // std::vector<file_record> search_index(const std::string& term, bool exact_match = false, bool nrt = false);
 
     /// Commit all changes to the index
     void commit();
@@ -62,6 +67,12 @@ public:
     QStringList search(
         const QString& path, const QString& keyword,
         int32_t offset, int32_t max_count, bool nrt);
+    
+    /// Searches all files for a specified keyword and returns a list of matching file names.
+    /// @param keyword The keyword to search for.
+    /// @return A QStringList containing the paths of all files where the keyword is found.
+    ///         If no files are found, an empty list is returned.
+    QStringList search(const QString& keyword, bool nrt);
 
     /**
      * Check if the given file path is already indexed using an exact match search.
@@ -80,13 +91,13 @@ private:
      * (it can still perform an exact match, but requires the overhead of using the analyzer).
      * @return A collection of the search results.
      */
-    Lucene::TopScoreDocCollectorPtr search(const std::string& path, bool exact_match = false, bool nrt = false);
+    // Lucene::TopScoreDocCollectorPtr search(const std::string& path, bool exact_match = false, bool nrt = false);
 
     /**
      * Near Real-Time Search
      * 在 NRT 模式下，即便这些数据尚未写入磁盘（commit），也可以通过获取一个近实时的 IndexReader 来从内存中读取最新的索引数据
      */
-    Lucene::TopScoreDocCollectorPtr nrt_search(const std::string& path, bool exact_match = false);
+    // Lucene::TopScoreDocCollectorPtr nrt_search(const std::string& path, bool exact_match = false);
 
     Lucene::DocumentPtr create_document(const file_record& record);
 

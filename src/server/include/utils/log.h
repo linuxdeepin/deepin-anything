@@ -1,6 +1,12 @@
+// Copyright (C) 2024 UOS Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef ANYTHING_LOG_H_
 #define ANYTHING_LOG_H_
 
+#include <fstream>
 #include <iomanip> // std::put_time
 #include <iostream>
 #include <streambuf>
@@ -58,8 +64,10 @@ public:
     null_stream() : ::std::ostream(&null_buf) {}
 };
 
-inline ::std::ostream& log_os = ::std::cout;
+inline ::std::ostream& log_stream = ::std::cout;
 inline null_stream null_os;
+inline ::std::ofstream log_file;
+inline ::std::string log_file_path;
 
 namespace detail {
 
@@ -67,16 +75,34 @@ inline void print_pattern_info(std::string_view level_info) {
     auto now = std::chrono::system_clock::now();
     std::time_t t = std::chrono::system_clock::to_time_t(now);
     std::tm tm = *std::localtime(&t);
-    log_os << "[" << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "]"
+    log_stream << "[" << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "]"
            << " [" << level_info << "]" << " [Thread " << std::this_thread::get_id() << "] ";
 }
 
 } // namespace detail
 
+inline void set_output_stream(std::ostream& new_stream) {
+    log_stream.rdbuf(new_stream.rdbuf());
+}
+
+inline void set_to_file(std::string path) {
+    if (log_file.is_open()) {
+        log_file.close();
+    }
+
+    log_file.open(path, std::ios::out | std::ios::app);
+    if (!log_file.is_open()) {
+        return;
+    }
+    
+    log_file_path = std::move(path);
+    log_stream.rdbuf(log_file.rdbuf());
+}
+
 inline ::std::ostream& debug() {
     if (level_debug_enabled) {
         detail::print_pattern_info("DEBUG");
-        return log_os;
+        return log_stream;
     }
 
     return null_os;
@@ -85,7 +111,7 @@ inline ::std::ostream& debug() {
 inline ::std::ostream& info() {
     if (level_info_enabled) {
         detail::print_pattern_info("INFO");
-        return log_os;
+        return log_stream;
     }
 
     return null_os;
@@ -94,7 +120,7 @@ inline ::std::ostream& info() {
 inline ::std::ostream& warning() {
     if (level_warning_enabled) {
         detail::print_pattern_info("WARNING");
-        return log_os;
+        return log_stream;
     }
 
     return null_os;
@@ -103,7 +129,7 @@ inline ::std::ostream& warning() {
 inline ::std::ostream& success() {
     if (level_success_enabled) {
         detail::print_pattern_info("SUCCESS");
-        return log_os;
+        return log_stream;
     }
 
     return null_os;
@@ -112,7 +138,7 @@ inline ::std::ostream& success() {
 inline ::std::ostream& error() {
     if (level_error_enabled) {
         detail::print_pattern_info("ERROR");
-        return log_os;
+        return log_stream;
     }
 
     return null_os;

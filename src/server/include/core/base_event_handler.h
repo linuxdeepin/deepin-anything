@@ -1,3 +1,8 @@
+// Copyright (C) 2024 UOS Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef ANYTHING_BASE_EVENT_HANDLER_H_
 #define ANYTHING_BASE_EVENT_HANDLER_H_
 
@@ -5,7 +10,6 @@
 
 #include "common/anything_fwd.hpp"
 #include "common/fs_event.h"
-#include "core/disk_scanner.h"
 #include "core/file_index_manager.h"
 #include "core/mount_manager.h"
 #include "core/thread_pool.h"
@@ -46,6 +50,7 @@ protected:
     bool ignored_event(const std::string& path, bool ignored);
 
     void insert_pending_paths(std::vector<std::string> paths);
+    void insert_index_directory(std::filesystem::path dir);
 
     std::size_t pending_paths_count() const;
 
@@ -86,6 +91,15 @@ public slots:
      */
     QStringList search(const QString& path, const QString& keywords, int offset, int max_count);
     
+    /**
+     * Searches all files for a specified keyword and returns a list of matching file names.
+     * 
+     * @param keyword  The keyword to search for in the files.
+     * @return A QStringList containing the paths of all files where the keyword is found.
+     *         If no files are found, an empty list is returned.
+     */
+    QStringList search(const QString& keywords);
+    
     bool removePath(const QString& fullPath);
 
     bool hasLFT(const QString& path);
@@ -93,9 +107,6 @@ public slots:
     void addPath(const QString& fullPath);
 
     void index_files_in_directory(const QString& directory_path);
-
-protected:
-    anything::disk_scanner scanner_;
 
 private:
     anything::mount_manager mnt_manager_;
@@ -105,10 +116,10 @@ private:
     std::vector<anything::index_job> jobs_;
     std::function<bool(const std::string&)> index_change_filter_;
     anything::thread_pool pool_;
-    std::thread timer_;
+    std::atomic<bool> stop_timer_;
     std::mutex jobs_mtx_;
     std::mutex pending_mtx_;
-    std::atomic<bool> stop_timer_{ false };
+    std::thread timer_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_

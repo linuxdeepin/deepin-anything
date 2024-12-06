@@ -1,3 +1,8 @@
+// Copyright (C) 2024 UOS Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "core/file_index_manager.h"
 
 #include <filesystem>
@@ -29,7 +34,8 @@ file_index_manager::file_index_manager(std::string index_dir)
             LuceneVersion::LUCENE_CURRENT, fuzzy_field_,
             newLucene<ChineseAnalyzer>());
     } catch (const LuceneException& e) {
-        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()) +
+            ". Make sure you are running the program as root.");
     }
 }
 
@@ -96,34 +102,34 @@ void file_index_manager::update_index(
     log::debug() << "Renamed: " << old_path << " --> " << new_path << "\n";
 }
 
-std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
-    std::vector<file_record> results;
-    TopScoreDocCollectorPtr collector = search(term, exact_match, nrt);
+// std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
+//     std::vector<file_record> results;
+//     TopScoreDocCollectorPtr collector = search(term, exact_match, nrt);
 
-    if (collector->getTotalHits() == 0) {
-        log::info() << "Found no files\n";
-        return results;
-    }
+//     if (collector->getTotalHits() == 0) {
+//         log::info() << "Found no files\n";
+//         return results;
+//     }
 
-    SearcherPtr searcher = nrt ? nrt_searcher_ : searcher_;
-    Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
-    for (int32_t i = 0; i < hits.size(); ++i) {
-        DocumentPtr doc = searcher->doc(hits[i]->doc);
-        file_record record;
-        String file_name = doc->get(L"file_name");
-        String full_path = doc->get(L"full_path");
-        String last_write_time = doc->get(L"last_write_time");
-        if (!file_name.empty()) record.file_name = StringUtils::toUTF8(file_name);
-        if (!full_path.empty()) record.full_path = StringUtils::toUTF8(full_path);
-        // std::cout << "------------------\n";
-        // std::cout << "full_path: " << record.full_path << "\n";
-        // std::cout << "modified: " << record.modified << "\n";
-        // std::cout << "------------------\n";
-        results.push_back(std::move(record));
-    }
+//     SearcherPtr searcher = nrt ? nrt_searcher_ : searcher_;
+//     Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
+//     for (int32_t i = 0; i < hits.size(); ++i) {
+//         DocumentPtr doc = searcher->doc(hits[i]->doc);
+//         file_record record;
+//         String file_name = doc->get(L"file_name");
+//         String full_path = doc->get(L"full_path");
+//         String last_write_time = doc->get(L"last_write_time");
+//         if (!file_name.empty()) record.file_name = StringUtils::toUTF8(file_name);
+//         if (!full_path.empty()) record.full_path = StringUtils::toUTF8(full_path);
+//         // std::cout << "------------------\n";
+//         // std::cout << "full_path: " << record.full_path << "\n";
+//         // std::cout << "modified: " << record.modified << "\n";
+//         // std::cout << "------------------\n";
+//         results.push_back(std::move(record));
+//     }
 
-    return results;
-}
+//     return results;
+// }
 
 void file_index_manager::commit() {
     writer_->commit();
@@ -180,7 +186,7 @@ QStringList file_index_manager::search(
 
         Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
         if (offset >= hits.size()) {
-            log::debug() << "No more results(path:\"" << path.toStdString() << "\", keywork: \"" << keyword.toStdString() << "{}\").\n";
+            log::debug() << "No more results(path:\"" << path.toStdString() << "\", keywork: \"" << keyword.toStdString() << "\").\n";
             return {};
         }
 
@@ -193,6 +199,42 @@ QStringList file_index_manager::search(
             if (full_path.startsWith(path)) {
                 results.append(full_path);
             }
+        }
+
+        return results;
+    } catch (const LuceneException& e) {
+        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+    }
+}
+
+QStringList file_index_manager::search(const QString& keyword, bool nrt) {
+    if (keyword.isEmpty()) {
+        return {};
+    }
+
+    log::debug() << "Search index(" << "keywork: \"" << keyword.toStdString() << "\").\n";
+    try {
+        SearcherPtr searcher;
+        int32_t max_results;
+        if (nrt) {
+            try_refresh_reader(true);
+            searcher = nrt_searcher_;
+            max_results = nrt_reader_->numDocs();
+        } else {
+            try_refresh_reader();
+            searcher = searcher_;
+            max_results = reader_->numDocs();
+        }
+
+        QueryPtr query = parser_->parse(StringUtils::toUnicode(keyword.toStdString()));
+        TopDocsPtr search_results = searcher->search(query, max_results);
+
+        QStringList results;
+        results.reserve(search_results->scoreDocs.size());
+        for (const auto& score_doc : search_results->scoreDocs) {
+            DocumentPtr doc = searcher->doc(score_doc->doc);
+            QString full_path = QString::fromStdWString(doc->get(L"full_path"));
+            results.append(full_path);
         }
 
         return results;
@@ -236,29 +278,29 @@ void file_index_manager::try_refresh_reader(bool nrt) {
     }
 }
 
-TopScoreDocCollectorPtr file_index_manager::search(const std::string& path, bool exact_match, bool nrt) {
-    SearcherPtr searcher;
-    QueryPtr query;
-    TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(10, true);
-    if (nrt) {
-        try_refresh_reader(true);
-        searcher = nrt_searcher_;
-    } else {
-        try_refresh_reader();
-        searcher = searcher_;
-    }
+// TopScoreDocCollectorPtr file_index_manager::search(const std::string& path, bool exact_match, bool nrt) {
+//     SearcherPtr searcher;
+//     QueryPtr query;
+//     TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(10, true);
+//     if (nrt) {
+//         try_refresh_reader(true);
+//         searcher = nrt_searcher_;
+//     } else {
+//         try_refresh_reader();
+//         searcher = searcher_;
+//     }
 
-    // Search full path for exact match, and file name for fuzzy match.
-    // Exact search only works when the field is set to Field::INDEX_NOT_ANALYZED, which avoids parsing overhead.
-    query = exact_match ? newLucene<TermQuery>(newLucene<Term>(exact_field_, StringUtils::toUnicode(path)))
-                                : parser_->parse(StringUtils::toUnicode(path));
-    searcher->search(query, collector);
-    return collector;
-}
+//     // Search full path for exact match, and file name for fuzzy match.
+//     // Exact search only works when the field is set to Field::INDEX_NOT_ANALYZED, which avoids parsing overhead.
+//     query = exact_match ? newLucene<TermQuery>(newLucene<Term>(exact_field_, StringUtils::toUnicode(path)))
+//                                 : parser_->parse(StringUtils::toUnicode(path));
+//     searcher->search(query, collector);
+//     return collector;
+// }
 
-Lucene::TopScoreDocCollectorPtr file_index_manager::nrt_search(const std::string& path, bool exact_match) {
-    return search(path, exact_match, true);
-}
+// Lucene::TopScoreDocCollectorPtr file_index_manager::nrt_search(const std::string& path, bool exact_match) {
+//     return search(path, exact_match, true);
+// }
 
 DocumentPtr file_index_manager::create_document(const file_record& record) {
     DocumentPtr doc = newLucene<Document>();

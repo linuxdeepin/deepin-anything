@@ -34,13 +34,10 @@ qt5_add_dbus_adaptor(DBUS_ADAPTOR_SOURCES
 )
 qt5_wrap_cpp(anything_dbus_server_moc ${ANYTHING_DBUS_HEADER})
 
-# Print dependencies
-message(STATUS "Found fmtlib: ${fmt_FOUND}")
-
 # Found all source files
 file(GLOB_RECURSE SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp")
 list(LENGTH SOURCE_FILES SRC_FILES_SIZE)
-message(STATUS "Found ${SRC_FILES_SIZE} source files of okec")
+message(STATUS "Found ${SRC_FILES_SIZE} source files of deepin-server")
 foreach(source_file ${SOURCE_FILES})
     message(STATUS "  ${source_file}")
 endforeach()

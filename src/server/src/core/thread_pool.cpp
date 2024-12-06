@@ -1,3 +1,8 @@
+// Copyright (C) 2024 UOS Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "core/thread_pool.h"
 
 #include "utils/log.h"
@@ -29,7 +34,7 @@ void thread_pool::wait_for_tasks() {
     for (auto& t : threads_) {
         auto thread_id = t.get_id();
         t.join();
-        log::info() << "Pool thread " << thread_id << "{} has exited.\n";
+        log::info() << "Pool thread " << thread_id << " has exited.\n";
     }
 
     threads_.clear();

@@ -1,3 +1,8 @@
+// Copyright (C) 2024 UOS Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "core/mount_manager.h"
 
 #include <algorithm>
@@ -123,6 +128,7 @@ std::string mount_manager::find_mount_point(const std::string& path, bool hardre
         char* mp = mnt_get_mountpoint(result_path.c_str());
         if (mp) {
             result = std::string(mp);
+            free(mp);
             if (hardreal) {
                 bool find_virtual = false;
                 for (const auto& info : mount_points_) {
@@ -134,8 +140,10 @@ std::string mount_manager::find_mount_point(const std::string& path, bool hardre
                         break;
                     }
                 }
-                if (!find_virtual)
+
+                if (!find_virtual) {
                     break; // 遍历完但是没有找到虚拟设备，返回当前挂载点
+                }
             } else {
                 break; // 不需要向上找到真实设备挂载，直接返回
             }
