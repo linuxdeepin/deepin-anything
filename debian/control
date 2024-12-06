@@ -10,7 +10,8 @@ Build-Depends:
   pkg-config,
   libnl-genl-3-dev,
   liblucene++-dev,
-  libmount-dev
+  libmount-dev,
+  libboost-all-dev
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
 
