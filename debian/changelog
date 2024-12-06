@@ -1,8 +1,12 @@
-deepin-anything (6.2.0) unstable; urgency=medium
+deepin-anything (7.0.2) unstable; urgency=medium
 
-  * New version 6.2.0
+  * Major update with a complete refactor and version upgrade.
+  * Fixed high CPU usage issues.
+  * Enhanced real-time updates for improved responsiveness.
+  * Improved index consistency to ensure more reliable performance.
+  * Other bug fixes and optimizations.
 
- -- wangrong <wangrong@uniontech.com>  Sat, 30 Nov 2024 15:07:10 +0800
+ -- Deepin Package Builder <packages@deepin.com>  Tue, 19 Nov 2024 10:32:00 +0800
 
 deepin-anything (6.1.9) unstable; urgency=medium
 

@@ -5,10 +5,14 @@ set(CMAKE_BUILD_TYPE "Release" CACHE STRING
     FORCE)
 endif(NOT CMAKE_BUILD_TYPE)
 
-message("Build type:"${CMAKE_BUILD_TYPE})
+message("Build type:" ${CMAKE_BUILD_TYPE})
 
-add_subdirectory("library")
+# AddressSanitizer only:
+# add_compile_options(-fsanitize=address -g)
+# add_link_options(-fsanitize=address)
+# Or ThreadSanitizer only:
+# add_compile_options(-fsanitize=thread -g)
+# add_link_options(-fsanitize=thread)
+
 add_subdirectory("server")
 add_subdirectory("kernelmod")
-
-# add_subdirectory("cli")
