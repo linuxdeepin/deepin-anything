@@ -1,4 +1,4 @@
-deepin-anything (7.0.1) unstable; urgency=medium
+deepin-anything (7.0.2) unstable; urgency=medium
 
   * Major update with a complete refactor and version upgrade.
   * Fixed high CPU usage issues.
