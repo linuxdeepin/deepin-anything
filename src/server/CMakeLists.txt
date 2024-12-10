@@ -13,6 +13,7 @@ project(
 # Find the dependencies
 find_package(Qt5 CONFIG REQUIRED Core DBus)
 find_package(PkgConfig REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system)
 pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 pkg_check_modules(LUCENE REQUIRED liblucene++)
@@ -62,6 +63,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${LUCENE_CONTRIB_LIBRARIES}
     ${GNL_LIBRARIES}
     ${MOUNT_LIBRARIES}
+    ${Boost_LIBRARIES}
     Qt5::DBus
     pthread
     stdc++fs

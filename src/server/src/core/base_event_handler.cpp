@@ -18,11 +18,21 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
       timer_(std::thread(&base_event_handler::timer_worker, this, 1000)) {
     new IAnythingAdaptor(this);
     QDBusConnection dbus = QDBusConnection::systemBus();
+    if (!dbus.isConnected()) {
+        qWarning() << "Failed to connect to system bus:" << dbus.lastError().message();
+        exit(1);
+    }
     QString service_name = "my.test.SAnything";
     QString object_name = "/my/test/OAnything";
     if (!dbus.interface()->isServiceRegistered(service_name)) {
         dbus.registerService(service_name);
         dbus.registerObject(object_name, this);
+    }
+
+    if (!dbus.registerService(service_name)) {
+        qWarning() << "Failed to register service:" << service_name
+                << dbus.lastError().message();
+        exit(1);
     }
 }
 
