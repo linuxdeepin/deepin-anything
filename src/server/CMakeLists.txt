@@ -14,6 +14,7 @@ project(
 find_package(Qt5 CONFIG REQUIRED Core DBus)
 find_package(PkgConfig REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
+find_package(spdlog REQUIRED)
 pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 pkg_check_modules(LUCENE REQUIRED liblucene++)
@@ -52,7 +53,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../kernelmod>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty>
+    # $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     ${LUCENE_INCLUDE_DIRS}
     ${GNL_INCLUDE_DIRS}
@@ -68,6 +69,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     Qt5::DBus
     pthread
     stdc++fs
+    spdlog::spdlog
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror -Wextra)

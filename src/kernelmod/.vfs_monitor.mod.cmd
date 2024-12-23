@@ -1,1 +1,0 @@
-savedcmd_/home/dxnu/newgit/deepin-anything/src/kernelmod/vfs_monitor.mod := printf '%s\n'   arg_extractor.o event_merge.o event.o module.o vfs_kretprobes.o vfs_fsnotify.o vfs_genl.o vfs_sysfs.o | awk '!x[$$0]++ { print("/home/dxnu/newgit/deepin-anything/src/kernelmod/"$$0) }' > /home/dxnu/newgit/deepin-anything/src/kernelmod/vfs_monitor.mod

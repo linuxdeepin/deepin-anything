@@ -1,1 +1,0 @@
-savedcmd_/home/dxnu/newgit/deepin-anything/src/kernelmod/modules.order := {   echo /home/dxnu/newgit/deepin-anything/src/kernelmod/vfs_monitor.o; :; } > /home/dxnu/newgit/deepin-anything/src/kernelmod/modules.order
