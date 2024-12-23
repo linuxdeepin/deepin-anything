@@ -27,7 +27,7 @@ public:
     std::optional<T> get_value(unsigned int attr) const {
         if (!tb_[attr])
 		    return std::nullopt;
-        
+
         if constexpr (std::is_same_v<T, nla_string>)
             return nla_get_string(tb_[attr]);
         else if constexpr (std::is_same_v<T, nla_u8>)

@@ -40,8 +40,7 @@ default_event_handler::default_event_handler(std::string index_dir)
     // auto results = index_manager_.search("李", true);
     // log::debug() << "Found " << results.size() << " result(s).";
     // qDebug() << results;
-
-    // index_manager_.test(L"/data/home/dxnu/Downloads/2024届地区信息.XLSX"); // dxnu md   md
+    spdlog::debug("cache directory: {}", get_index_directory());
 }
 
 void default_event_handler::handle(fs_event event) {
@@ -49,7 +48,7 @@ void default_event_handler::handle(fs_event event) {
 
     // Update partition event
     if (event.act == ACT_MOUNT || event.act == ACT_UNMOUNT) {
-        log::info() << (event.act == ACT_MOUNT ? "Mount a device: " : "Unmount a device: ") << event.src << "\n";
+        spdlog::info("{}: {}", (event.act == ACT_MOUNT ? "Mount a device" : "Unmount a device"), event.src);
         refresh_mount_status();
         return;
     }
@@ -58,8 +57,8 @@ void default_event_handler::handle(fs_event event) {
     if (event.act < ACT_MOUNT) {
         unsigned int device_id = MKDEV(event.major, event.minor);
         if (!device_available(device_id)) {
-            log::warning() << "Unknown device: " << +event.act << ", dev: " << event.major << ":" << +event.minor
-                << ", path: " << event.src << ", cookie: " << event.cookie << "\n";
+            spdlog::warn("Unknown device: {}, dev: {}:{}, path: {}, cookie: {}",
+                +event.act, event.major, +event.minor, event.src, event.cookie);
             return;
         }
 
@@ -67,6 +66,8 @@ void default_event_handler::handle(fs_event event) {
         if (root == "/")
             root.clear();
     }
+
+    // spdlog::debug("Last Action: {}, src: {}", +event.act, event.src);
 
     switch (event.act) {
     case ACT_NEW_FILE:
@@ -92,10 +93,10 @@ void default_event_handler::handle(fs_event event) {
         break;
     case ACT_RENAME_FILE:
     case ACT_RENAME_FOLDER:
-        log::warning() << "Don't support file action: " << +event.act << "\n";
+        spdlog::warn("Don't support file action: {}", +event.act);
         return;
     default:
-        log::warning() << "Unknown file action: " << +event.act << "\n";
+        spdlog::warn("Unknown file action: {}", +event.act);
         return;
     }
 

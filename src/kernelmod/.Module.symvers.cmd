@@ -1,0 +1,1 @@
+savedcmd_/home/dxnu/newgit/deepin-anything/src/kernelmod/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/dxnu/newgit/deepin-anything/src/kernelmod/Module.symvers -T /home/dxnu/newgit/deepin-anything/src/kernelmod/modules.order -i Module.symvers -e 

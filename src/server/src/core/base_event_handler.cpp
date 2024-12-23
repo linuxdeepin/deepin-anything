@@ -15,7 +15,8 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
     : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(100),
       pool_((std::max)(std::thread::hardware_concurrency() - 3, 1U)),
       stop_timer_(false),
-      timer_(std::thread(&base_event_handler::timer_worker, this, 1000)) {
+      timer_(std::thread(&base_event_handler::timer_worker, this, 1000)),
+      delay_mode_(true/*index_manager_.indexed()*/) {
     new IAnythingAdaptor(this);
     QDBusConnection dbus = QDBusConnection::systemBus();
     if (!dbus.isConnected()) {
@@ -29,11 +30,7 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
         dbus.registerObject(object_name, this);
     }
 
-    if (!dbus.registerService(service_name)) {
-        qWarning() << "Failed to register service:" << service_name
-                << dbus.lastError().message();
-        exit(1);
-    }
+    // index_manager_.test(L"/data/home/dxnu/Downloads/2024届地区信息-1000.XLSX");
 }
 
 base_event_handler::~base_event_handler() {
@@ -53,7 +50,9 @@ void base_event_handler::terminate_processing() {
     if (timer_.joinable()) {
         auto thread_id = timer_.get_id();
         timer_.join();
-        anything::log::info() << "Timer thread " << thread_id << " has exited\n";
+        std::ostringstream oss;
+        oss << thread_id;
+        spdlog::info("Timer thread {} has exited", oss.str());
     }
 }
 
@@ -79,10 +78,21 @@ bool base_event_handler::ignored_event(const std::string& path, bool ignored) {
 
 void base_event_handler::insert_pending_paths(
     std::vector<std::string> paths) {
-    std::lock_guard<std::mutex> lock(pending_mtx_);
-    pending_paths_.insert(pending_paths_.end(),
-                    std::make_move_iterator(paths.begin()),
-                    std::make_move_iterator(paths.end()));
+    if (delay_mode_) {
+        std::lock_guard<std::mutex> lock(pending_mtx_);
+        pending_paths_.insert(pending_paths_.end(),
+            std::make_move_iterator(paths.begin()),
+            std::make_move_iterator(paths.end()));
+    } else {
+        for (auto&& path : paths) {
+            add_index_delay(std::move(path));
+            // if (should_be_filtered(path)) {
+            //     return;
+            // }
+
+            // index_manager_.add_index(std::move(path));
+        }
+    }
 }
 
 void base_event_handler::insert_index_directory(std::filesystem::path dir) {
@@ -222,7 +232,7 @@ void base_event_handler::timer_worker(int64_t interval) {
             }
 
             if (path_batch.size() > 0) {
-                anything::log::debug() << "path batch size: " << path_batch.size() << "\n";
+                spdlog::debug("path batch size: {}", path_batch.size());
             }
 
             for (auto&& path : path_batch) {
@@ -333,4 +343,12 @@ void base_event_handler::addPath(const QString& fullPath) {
 
 void base_event_handler::index_files_in_directory(const QString& directory_path) {
     insert_index_directory(directory_path.toStdString());
+}
+
+void base_event_handler::delay_indexing(bool delay) {
+    delay_mode_ = delay;
+}
+
+QString base_event_handler::cache_directory() {
+    return QString::fromStdString(index_manager_.index_directory());
 }
