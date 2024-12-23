@@ -14,7 +14,7 @@
 ANYTHING_NAMESPACE_BEGIN
 
 std::vector<std::string> disk_scanner::scan(const fs::path& root) {
-    log::info() << "Scanning " << root.string() << "...\n";
+    spdlog::info("Scanning {}...", root.string());
     std::vector<std::string> records;
     fs::recursive_directory_iterator dirpos{ root, fs::directory_options::skip_permission_denied };
     for (auto it = begin(dirpos); it != end(dirpos); ++it) {
@@ -32,12 +32,12 @@ std::vector<std::string> disk_scanner::scan(const fs::path& root) {
         }
 
         if (disk_scanner::stop_scanning) {
-            log::info() << "Scanning interrupted\n";
+            spdlog::info("Scanning interrupted");
             return records;
         }
     }
 
-    log::info() << "Scanning " << root.string() << " completed\n";
+    spdlog::info("Scanning {} completed", root.string());
     return records;
 }
 

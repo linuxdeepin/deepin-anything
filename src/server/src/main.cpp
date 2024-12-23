@@ -12,8 +12,9 @@ using namespace anything;
 int main(int argc, char* argv[]) {
     QCoreApplication app(argc, argv);
 
-    log::set_level(log::level::all, true);
-    // log::set_to_file("/data/home/dxnu/.cache/findex/findex.log");
+    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [thread %t] %v");
+    spdlog::info("Qt version: {}", qVersion());
 
     event_listenser listenser;
     default_event_handler handler;
@@ -23,8 +24,8 @@ int main(int argc, char* argv[]) {
 
     // Process the interrupt signal
     set_signal_handler(SIGINT, [&listenser, &handler, &app](int sig) {
-        log::info() << "Interrupt signal (" << sig << ") received.\n";
-        log::info() << "Performing cleanup tasks...\n";
+        spdlog::info("Interrupt signal ({}) received.", sig);
+        spdlog::info("Performing cleanup tasks...");
         listenser.stop_listening();
         handler.terminate_processing();
         app.exit();

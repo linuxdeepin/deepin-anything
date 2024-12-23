@@ -55,13 +55,9 @@ void file_index_manager::add_index(const std::string& path) {
     try {
         auto doc = create_document(file_helper::make_file_record(path));
         writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(path)), doc);
-        std::lock_guard<std::mutex> lock(mtx_);
-        log::debug() << "Indexed " << path << "\n";
+        spdlog::debug("Indexed {}", path);
     } catch (const LuceneException& e) {
-        {
-            std::lock_guard<std::mutex> lock(mtx_);
-            log::error() << "Failed to index " << path << ": " << StringUtils::toUTF8(e.getError()) << "\n";
-        }
+        spdlog::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
 }
@@ -77,8 +73,7 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
             QueryPtr query = parser_->parse(StringUtils::toUnicode(term));
             writer_->deleteDocuments(query);
         }
-        std::lock_guard<std::mutex> lock(mtx_);
-        log::debug() << "Removed index: " << term << "\n";
+        spdlog::debug("Removed index: {}", term);
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }
@@ -98,8 +93,7 @@ void file_index_manager::update_index(
         add_index(new_path);
     }
 
-    std::lock_guard<std::mutex> lock(mtx_);
-    log::debug() << "Renamed: " << old_path << " --> " << new_path << "\n";
+    spdlog::debug("Renamed: {} --> {}", old_path, new_path);
 }
 
 // std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -133,7 +127,7 @@ void file_index_manager::update_index(
 
 void file_index_manager::commit() {
     writer_->commit();
-    log::info() << "All changes are commited\n";
+    spdlog::info("All changes are commited");
 }
 
 bool file_index_manager::indexed() const {
@@ -141,7 +135,7 @@ bool file_index_manager::indexed() const {
 }
 
 void file_index_manager::test(const String& path) {
-    log::info() << "test path: " << StringUtils::toUTF8(path) << "\n";
+    spdlog::info("test path: {}", StringUtils::toUTF8(path));
     AnalyzerPtr analyzer = newLucene<ChineseAnalyzer>(); // newLucene<jieba_analyzer>();
     
     // Use a StringReader to simulate input
@@ -150,7 +144,7 @@ void file_index_manager::test(const String& path) {
     
     // Tokenize and print out the results
     while (tokenStream->incrementToken()) {
-        log::info() << "Token: " << StringUtils::toUTF8(tokenStream->toString()) << "\n";
+        spdlog::info("Token: {}", StringUtils::toUTF8(tokenStream->toString()));
     }
 }
 
@@ -165,7 +159,7 @@ std::string file_index_manager::index_directory() const {
 QStringList file_index_manager::search(
     const QString& path, const QString& keyword,
     int32_t offset, int32_t max_count, bool nrt) {
-    log::debug() << "Search index(path:\"" << path.toStdString() << "\", keywork: \"" << keyword.toStdString() << "\").\n";
+    spdlog::debug("Search index(path:\"{}\", keywork: \"{}\").", path.toStdString(), keyword.toStdString());
     if (keyword.isEmpty()) {
         return {};
     }
@@ -186,7 +180,8 @@ QStringList file_index_manager::search(
 
         Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
         if (offset >= hits.size()) {
-            log::debug() << "No more results(path:\"" << path.toStdString() << "\", keywork: \"" << keyword.toStdString() << "\").\n";
+            spdlog::debug("No more results(path:\"{}\", keywork: \"{}\").",
+                path.toStdString(), keyword.toStdString());
             return {};
         }
 
@@ -212,7 +207,7 @@ QStringList file_index_manager::search(const QString& keyword, bool nrt) {
         return {};
     }
 
-    log::debug() << "Search index(" << "keywork: \"" << keyword.toStdString() << "\").\n";
+    spdlog::debug("Search index(keywork: \"{}\").", keyword.toStdString());
     try {
         SearcherPtr searcher;
         int32_t max_results;

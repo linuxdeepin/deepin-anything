@@ -108,6 +108,10 @@ public slots:
 
     void index_files_in_directory(const QString& directory_path);
 
+    void delay_indexing(bool delay);
+
+    QString cache_directory();
+
 private:
     anything::mount_manager mnt_manager_;
     anything::file_index_manager index_manager_;
@@ -120,6 +124,7 @@ private:
     std::mutex jobs_mtx_;
     std::mutex pending_mtx_;
     std::thread timer_;
+    bool delay_mode_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_

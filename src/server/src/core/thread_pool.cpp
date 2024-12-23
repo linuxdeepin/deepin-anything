@@ -5,6 +5,8 @@
 
 #include "core/thread_pool.h"
 
+#include <sstream>
+
 #include "utils/log.h"
 
 ANYTHING_NAMESPACE_BEGIN
@@ -34,7 +36,9 @@ void thread_pool::wait_for_tasks() {
     for (auto& t : threads_) {
         auto thread_id = t.get_id();
         t.join();
-        log::info() << "Pool thread " << thread_id << " has exited.\n";
+        std::ostringstream oss;
+        oss << thread_id;
+        spdlog::info("Pool thread {} has exited.", oss.str());
     }
 
     threads_.clear();
