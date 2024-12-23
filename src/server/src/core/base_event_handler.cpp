@@ -29,8 +29,6 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
         dbus.registerService(service_name);
         dbus.registerObject(object_name, this);
     }
-
-    // index_manager_.test(L"/data/home/dxnu/Downloads/2024届地区信息-1000.XLSX");
 }
 
 base_event_handler::~base_event_handler() {
