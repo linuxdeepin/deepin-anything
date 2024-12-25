@@ -1,3 +1,9 @@
+deepin-anything (6.2.1) unstable; urgency=medium
+
+  * adapt kernel module for LOONGARCH architecture.
+
+ -- wangrong <wangrong@uniontech.com>  Wed, 25 Dec 2024 09:19:04 +0800
+
 deepin-anything (6.2.0) unstable; urgency=medium
 
   * New version 6.2.0
