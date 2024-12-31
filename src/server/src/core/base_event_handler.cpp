@@ -12,23 +12,25 @@
 #include <anythingadaptor.h>
 
 base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
-    : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(100),
+    : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(200),
       pool_((std::max)(std::thread::hardware_concurrency() - 3, 1U)),
       stop_timer_(false),
       timer_(std::thread(&base_event_handler::timer_worker, this, 1000)),
       delay_mode_(true/*index_manager_.indexed()*/) {
-    new IAnythingAdaptor(this);
+    new AnythingAdaptor(this);
     QDBusConnection dbus = QDBusConnection::systemBus();
     if (!dbus.isConnected()) {
         qWarning() << "Failed to connect to system bus:" << dbus.lastError().message();
         exit(1);
     }
-    QString service_name = "my.test.SAnything";
-    QString object_name = "/my/test/OAnything";
+    QString service_name = "com.deepin.anything";
+    QString object_name = "/com/deepin/anything";
     if (!dbus.interface()->isServiceRegistered(service_name)) {
         dbus.registerService(service_name);
         dbus.registerObject(object_name, this);
     }
+
+    index_manager_.test(L"C++ Move Semantics - The Complete Guide (2022) (Nicolai M. Josuttis)");
 }
 
 base_event_handler::~base_event_handler() {
@@ -180,6 +182,7 @@ void base_event_handler::eat_job(const anything::index_job& job) {
 
 void base_event_handler::jobs_push(std::string src,
     anything::index_job_type type, std::optional<std::string> dst) {
+    // spdlog::debug("jobs_push: src({}), dst({})", src, dst ? *dst : "");
     if (should_be_filtered(src) || (dst && should_be_filtered(*dst))) {
         return;
     }
@@ -332,7 +335,14 @@ bool base_event_handler::hasLFT(const QString& path) {
     return index_manager_.document_exists(path.toStdString());
 }
 
-void base_event_handler::addPath(const QString& fullPath) {
+QStringList base_event_handler::hasLFTSubdirectories(QString path) const
+{
+    (void)path;
+    return {};
+}
+
+void base_event_handler::addPath(const QString &fullPath)
+{
     auto path = fullPath.toStdString();
     if (std::filesystem::exists(path)) {
         add_index_delay(path);
@@ -350,3 +360,50 @@ void base_event_handler::delay_indexing(bool delay) {
 QString base_event_handler::cache_directory() {
     return QString::fromStdString(index_manager_.index_directory());
 }
+
+QStringList base_event_handler::search(
+    int maxCount, qint64 icase, quint32 startOffset,
+    quint32 endOffset, const QString &path,
+    const QString &keyword, bool useRegExp,
+    quint32 &startOffsetReturn, quint32 &endOffsetReturn) {
+    auto result = search(path, keyword, startOffset, maxCount);
+    (void)icase;
+    (void)endOffset;
+    (void)useRegExp;
+    startOffsetReturn = startOffset + 1;
+    endOffsetReturn = result.size() == maxCount
+                    ? startOffsetReturn + 1
+                    : startOffsetReturn;
+    return result;
+}
+
+QStringList base_event_handler::parallelsearch(
+    const QString &path, quint32 startOffset,
+    quint32 endOffset, const QString &keyword,
+    const QStringList &rules, quint32 &startOffsetReturn,
+    quint32 &endOffsetReturn) {
+    // if (!rules.isEmpty()) {
+    //     QString firstElement = rules.at(0);
+    //     qDebug() << "First element:" << firstElement;
+    // } else {
+    //     qDebug() << "List is empty!";
+    // }
+    (void)rules;
+    return search(100, 0, startOffset, endOffset, path, keyword, true, startOffsetReturn, endOffsetReturn);
+}
+// bool base_event_handler::autoIndexExternal() const {
+//     return true;
+// }
+
+// bool base_event_handler::autoIndexInternal() const
+// {
+//     return true;
+// }
+
+// void base_event_handler::setAutoIndexExternal(bool autoIndexExternal) {
+//     (void)autoIndexExternal;
+// }
+
+// void base_event_handler::setAutoIndexInternal(bool autoIndexInternal) {
+//     (void)autoIndexInternal;
+// }

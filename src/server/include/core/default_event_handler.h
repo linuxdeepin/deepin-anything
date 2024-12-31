@@ -14,7 +14,7 @@ ANYTHING_NAMESPACE_BEGIN
 class default_event_handler : public base_event_handler {
 public:
     explicit default_event_handler(std::string index_dir =
-        get_sys_cache_directory() + "/deepin-anything-dxnu-version");
+        get_sys_cache_directory() + "/deepin-anything-server");
     
     void handle(fs_event event) override;
 
