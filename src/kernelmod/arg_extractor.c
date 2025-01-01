@@ -42,7 +42,7 @@ unsigned long get_arg(struct pt_regs* regs, int n)
 		case 3: return regs->r18;
 		case 4: return regs->r19;
 
-#elif defined(CONFIG_ARM64)
+#elif defined(CONFIG_ARM64) || defined (CONFIG_AARCH64)
 
 		/*修改ARM上anything不能使用的问题,寄存器地址不正确*/
 		case 1: return regs->regs[0];
