@@ -126,7 +126,7 @@ public slots:
     // Adapter
 
     QStringList search(int maxCount, qint64 icase, quint32 startOffset, quint32 endOffset,
-                       const QString &path, const QString &keyword, bool useRegExp,
+                       const QString &path, QString keyword, bool useRegExp,
                        quint32 &startOffsetReturn, quint32 &endOffsetReturn);
 
     QStringList parallelsearch(const QString &path, quint32 startOffset, quint32 endOffset,

@@ -30,7 +30,11 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
         dbus.registerObject(object_name, this);
     }
 
-    index_manager_.test(L"C++ Move Semantics - The Complete Guide (2022) (Nicolai M. Josuttis)");
+    // index_manager_.test(L"C++ Move Semantics - The Complete Guide (2022) (Nicolai M. Josuttis)");
+    // index_manager_.test(L"/home/dxnu/.cache/google-chrome/Default/Cache/Cache_Data/4e84e27cef874346_0");
+    // index_manager_.test(L"/home/dxnu/dxnu-obsidian/Pasted image 20241014162010..p.ng......");
+    index_manager_.test(L"/home/dxnu/dxnu-obsidian/C++.Generative.Metaprogramming.pdf");
+    index_manager_.test(L"/home/dxnu/dxnu-obsidian/C#");
 }
 
 base_event_handler::~base_event_handler() {
@@ -335,14 +339,12 @@ bool base_event_handler::hasLFT(const QString& path) {
     return index_manager_.document_exists(path.toStdString());
 }
 
-QStringList base_event_handler::hasLFTSubdirectories(QString path) const
-{
+QStringList base_event_handler::hasLFTSubdirectories(QString path) const {
     (void)path;
     return {};
 }
 
-void base_event_handler::addPath(const QString &fullPath)
-{
+void base_event_handler::addPath(const QString &fullPath) {
     auto path = fullPath.toStdString();
     if (std::filesystem::exists(path)) {
         add_index_delay(path);
@@ -363,9 +365,16 @@ QString base_event_handler::cache_directory() {
 
 QStringList base_event_handler::search(
     int maxCount, qint64 icase, quint32 startOffset,
-    quint32 endOffset, const QString &path,
-    const QString &keyword, bool useRegExp,
-    quint32 &startOffsetReturn, quint32 &endOffsetReturn) {
+    quint32 endOffset, const QString& path,
+    QString keyword, bool useRegExp,
+    quint32& startOffsetReturn, quint32& endOffsetReturn) {
+    QString prefix = "\\A(?:[^/]*";
+    QString suffix = "[^/]*)\\z";
+    spdlog::info("Original path: {}, keyword:{}, maxCount: {}", path.toStdString(), keyword.toStdString(), maxCount);
+    if (keyword.startsWith(prefix) && keyword.endsWith(suffix)) {
+        keyword.remove(0, prefix.length());
+        keyword.remove(keyword.length() - suffix.length(), suffix.length());
+    }
     auto result = search(path, keyword, startOffset, maxCount);
     (void)icase;
     (void)endOffset;

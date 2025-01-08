@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "core/file_index_manager.h"
+#include "analyzers/AnythingAnalyzer.h"
 
 #include <filesystem>
 #include <iostream>
@@ -24,7 +25,7 @@ file_index_manager::file_index_manager(std::string index_dir)
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory_));
         auto create = !IndexReader::indexExists(dir);
         writer_ = newLucene<IndexWriter>(dir,
-            newLucene<ChineseAnalyzer>(),
+            newLucene<AnythingAnalyzer>(),
             create, IndexWriter::MaxFieldLengthLIMITED);
         reader_  = IndexReader::open(dir, true);
         nrt_reader_ = writer_->getReader();
@@ -32,7 +33,7 @@ file_index_manager::file_index_manager(std::string index_dir)
         nrt_searcher_ = newLucene<IndexSearcher>(nrt_reader_);
         parser_ = newLucene<QueryParser>(
             LuceneVersion::LUCENE_CURRENT, fuzzy_field_,
-            newLucene<ChineseAnalyzer>());
+            newLucene<AnythingAnalyzer>());
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()) +
             ". Make sure you are running the program as root.");
@@ -136,11 +137,11 @@ bool file_index_manager::indexed() const {
 
 void file_index_manager::test(const String& path) {
     spdlog::info("test path: {}", StringUtils::toUTF8(path));
-    AnalyzerPtr analyzer = newLucene<ChineseAnalyzer>(); // newLucene<jieba_analyzer>();
+    AnalyzerPtr analyzer = newLucene<AnythingAnalyzer>(); // newLucene<jieba_analyzer>();
     
     // Use a StringReader to simulate input
     TokenStreamPtr tokenStream = analyzer->tokenStream(L"", newLucene<StringReader>(path));
-    TokenPtr token = newLucene<Token>();
+    // TokenPtr token = newLucene<Token>();
     
     // Tokenize and print out the results
     while (tokenStream->incrementToken()) {
@@ -175,6 +176,7 @@ QStringList file_index_manager::search(
         }
 
         QueryPtr query = parser_->parse(StringUtils::toUnicode(keyword.toStdString()));
+        // QueryPtr query = newLucene<RegexQuery>(newLucene<Term>(fuzzy_field_, keyword.toStdString()));
         TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(offset + max_count, true);
         searcher->search(query, collector);
 
