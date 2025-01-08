@@ -1,3 +1,12 @@
+deepin-anything (6.2.2) unstable; urgency=medium
+
+  * New version 6.2.2.
+  * Fix log files take up a lot of space.
+  * Add support for s360x, ppc64le and riscv.
+  * Optimize recoginizing ARM.
+
+ -- wangrong <wangrong@uniontech.com>  Tue, 07 Jan 2025 20:41:36 +0800
+
 deepin-anything (6.2.1) unstable; urgency=medium
 
   * adapt kernel module for LOONGARCH architecture.

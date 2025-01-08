@@ -35,7 +35,7 @@ private:
     static QMutex logMutex;     // 同步使用的 mutex
 
     int logLimitSize = 10 * 1024 * 1024; // 10M
-    int logExpiredDay = -30; // 30天过期
+    qsizetype logMaxFiles = 10; // 最多保存 10 个最新的备份日志文件
 };
 
 QMutex LogSaverPrivate::logMutex;
@@ -48,12 +48,12 @@ LogSaverPrivate::LogSaverPrivate(LogSaver *qq)
     QString logPath = logDir.absoluteFilePath("app.log"); // 获取日志的路径
     logFileCreatedDate = QFileInfo(logPath).lastModified().date(); // 若日志文件不存在，返回nullptr
 
-    // 10分钟检查一次日志文件创建时间
-    renameLogFileTimer.setInterval(1000 * 60 * 10);
+    // 3分钟检查一次日志文件创建时间
+    renameLogFileTimer.setInterval(1000 * 60 * 3);
     QObject::connect(&renameLogFileTimer, &QTimer::timeout, [this] {
         QMutexLocker locker(&LogSaverPrivate::logMutex);
         backupLog();
-        autoDeleteLog(); // 自动删除7天前的日志
+        autoDeleteLog();
     });
 }
 
@@ -129,20 +129,15 @@ void LogSaverPrivate::autoDeleteLog()
     if (logDir.isEmpty()) {
         return;
     }
-    QDateTime now = QDateTime::currentDateTime();
-    QDateTime dateTime1 = now.addDays(logExpiredDay);
 
-    QFileInfoList fileList = logDir.entryInfoList();
-    for (QFileInfo f: fileList) {
-        // "."和".."跳过
-        if (f.baseName() == "")
-            continue;
+    QFileInfoList fileList = logDir.entryInfoList(QStringList() << "app.log.*", QDir::Files, QDir::Time|QDir::Reversed);
+    int delCount = fileList.count() - logMaxFiles;
+    if (delCount <= 0) {
+        return;
+    }
 
-        // 从日志文件后缀获取创建时间（例如 app.log.2023-04-14-00-04-12 > 2023-04-14-00-04-12）
-        QDateTime dateTime2 = QDateTime::fromString(f.suffix(), "yyyy-MM-dd-hh-mm-ss");
-        if (dateTime2.isValid() && dateTime2 < dateTime1) {
-            logDir.remove(f.absoluteFilePath());
-        }
+    for (auto it = fileList.begin(); it != fileList.end() && --delCount >= 0; ++it) {
+        logDir.remove(it->absoluteFilePath());
     }
 }
 
