@@ -6,7 +6,7 @@
 #include "core/base_event_handler.h"
 #include "core/disk_scanner.h"
 
-#include "common/file_record.hpp"
+#include "common/file_record.h"
 #include "utils/log.h"
 #include "utils/string_helper.h"
 #include <anythingadaptor.h>
@@ -30,11 +30,12 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
         dbus.registerObject(object_name, this);
     }
 
-    // index_manager_.test(L"C++ Move Semantics - The Complete Guide (2022) (Nicolai M. Josuttis)");
-    // index_manager_.test(L"/home/dxnu/.cache/google-chrome/Default/Cache/Cache_Data/4e84e27cef874346_0");
-    // index_manager_.test(L"/home/dxnu/dxnu-obsidian/Pasted image 20241014162010..p.ng......");
+    index_manager_.test(L"C++ Move Semantics - The Complete Guide (2022) (Nicolai M. Josuttis)");
+    index_manager_.test(L"/home/dxnu/.cache/google-chrome/Default/Cache/Cache_Data/4e84e27cef874346_0");
+    index_manager_.test(L"/home/dxnu/dxnu-obsidian/Pasted image 20241014162010..p.ng......");
     index_manager_.test(L"/home/dxnu/dxnu-obsidian/C++.Generative.Metaprogramming.pdf");
-    index_manager_.test(L"/home/dxnu/dxnu-obsidian/C#");
+    index_manager_.test(L"/home/dxnu/dxnu-obsidian/C# Book.pdf");
+    index_manager_.test(L"/books/Lucene/从Lucene到Elasticsearch——全文检索实战 (姚攀).pdf");
 }
 
 base_event_handler::~base_event_handler() {
@@ -307,6 +308,58 @@ QStringList base_event_handler::search(const QString& keywords) {
     // the system may contain paths that no longer exist.
     // To maintain index validity, invalid indexes are filtered and removed here.
     QStringList results = index_manager_.search(keywords, true);
+    if (!results.empty()) {
+        // clean up index entries for non-existent files.
+        std::vector<std::string> remove_list;
+        for (int i = 0; i < results.size();) {
+            std::string path = results[i].toStdString();
+            if (!std::filesystem::exists(path)) {
+                remove_list.push_back(std::move(path));
+                results.removeAt(i);
+            } else {
+                ++i;
+            }
+        }
+
+        for (auto&& path : remove_list) {
+            remove_index_delay(std::move(path));
+        }
+    }
+
+    return results;
+}
+
+QStringList base_event_handler::search(const QString& keywords, const QString& type) {
+    // Since there is no automatic cleanup for invalid indexes,
+    // the system may contain paths that no longer exist.
+    // To maintain index validity, invalid indexes are filtered and removed here.
+    QStringList results = index_manager_.search(keywords, type, true);
+    if (!results.empty()) {
+        // clean up index entries for non-existent files.
+        std::vector<std::string> remove_list;
+        for (int i = 0; i < results.size();) {
+            std::string path = results[i].toStdString();
+            if (!std::filesystem::exists(path)) {
+                remove_list.push_back(std::move(path));
+                results.removeAt(i);
+            } else {
+                ++i;
+            }
+        }
+
+        for (auto&& path : remove_list) {
+            remove_index_delay(std::move(path));
+        }
+    }
+
+    return results;
+}
+
+QStringList base_event_handler::search_by_time(const QString& keywords, const QString& time) {
+    // Since there is no automatic cleanup for invalid indexes,
+    // the system may contain paths that no longer exist.
+    // To maintain index validity, invalid indexes are filtered and removed here.
+    QStringList results = index_manager_.search_by_time(keywords, time, true);
     if (!results.empty()) {
         // clean up index entries for non-existent files.
         std::vector<std::string> remove_list;

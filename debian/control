@@ -12,7 +12,8 @@ Build-Depends:
   liblucene++-dev,
   libmount-dev,
   libboost-filesystem-dev,
-  libspdlog-dev
+  libspdlog-dev,
+  libmagic-dev
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
 

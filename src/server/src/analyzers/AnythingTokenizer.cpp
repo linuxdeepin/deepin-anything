@@ -40,9 +40,9 @@ bool AnythingTokenizer::incrementToken() {
 
     length_ = 0;
     start_ = offset_;
-    [[maybe_unused]] bool last_is_en = false;
-    [[maybe_unused]] bool last_is_num = false;
-    [[maybe_unused]] bool last_is_sym = false;
+    bool last_is_en = false;
+    bool last_is_num = false;
+    bool last_is_sym = false;
 
     while (true) {
         wchar_t c;
@@ -153,7 +153,7 @@ bool AnythingTokenizer::flush() {
 }
 
 bool AnythingTokenizer::isSymbol(wchar_t c) {
-    return c == L'+';
+    return c == L'+' || c == L'#';
 }
 
 bool AnythingTokenizer::isDot(wchar_t c) {

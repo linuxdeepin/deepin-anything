@@ -13,7 +13,7 @@
 #include <lucene++/LuceneHeaders.h>
 
 #include "common/anything_fwd.hpp"
-#include "common/file_record.hpp"
+#include "common/file_record.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -74,6 +74,10 @@ public:
     ///         If no files are found, an empty list is returned.
     QStringList search(const QString& keyword, bool nrt);
 
+    QStringList search(const QString& keyword, const QString& type, bool nrt);
+
+    QStringList search_by_time(const QString& keywords, const QString& time, bool nrt);
+
     /**
      * Check if the given file path is already indexed using an exact match search.
      * @param path The file path to check.
@@ -107,12 +111,15 @@ private:
     Lucene::SearcherPtr searcher_;
     Lucene::SearcherPtr nrt_searcher_;
     Lucene::QueryParserPtr parser_;
+    Lucene::QueryParserPtr type_parser_;
     Lucene::IndexReaderPtr reader_;
     Lucene::IndexReaderPtr nrt_reader_;
     Lucene::String fuzzy_field_{ L"file_name" };
     Lucene::String exact_field_{ L"full_path" };
+    Lucene::String type_field_{ L"file_type" };
     std::mutex mtx_;
     std::mutex reader_mtx_;
+    file_helper file_helper_;
 };
 
 ANYTHING_NAMESPACE_END

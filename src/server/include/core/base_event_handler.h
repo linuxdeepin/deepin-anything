@@ -108,6 +108,10 @@ public slots:
      *         If no files are found, an empty list is returned.
      */
     QStringList search(const QString& keywords);
+
+    QStringList search(const QString& keywords, const QString& type);
+
+    QStringList search_by_time(const QString& keywords, const QString& time);
     
     bool removePath(const QString& fullPath);
 

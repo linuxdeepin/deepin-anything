@@ -21,7 +21,7 @@ default_event_handler::default_event_handler(std::string index_dir)
     auto home_dir = get_home_directory();
     if (!home_dir.empty()) {
         add_index_delay(home_dir);
-        insert_index_directory(home_dir);
+        insert_index_directory(/*home_dir*/"/home/dxnu/Downloads");
     }
 
     // Initialize mount cache
