@@ -15,7 +15,8 @@
 // #include <QDebug>
 // #include <QDateTime>
 
-#include "spdlog/spdlog.h"
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 
 // #include "common/anything_fwd.hpp"
 // #include "utils/enum_helper.h"

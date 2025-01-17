@@ -33,7 +33,7 @@ bool AnythingFilter::incrementToken() {
         if (!stopTable_.contains(text)) {
             if (UnicodeUtil::isLower(text[0]) || UnicodeUtil::isUpper(text[0])) {
                 // English word/token should larger than 1 character.
-                if (text.length() > 1) {
+                if (text.length() >= 1) {
                     return true;
                 }
             } else if (UnicodeUtil::isOther(text[0]) || UnicodeUtil::isDigit(text[0])) {

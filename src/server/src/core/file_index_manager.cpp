@@ -11,6 +11,9 @@
 
 #include "lucene++/FileUtils.h"
 #include "lucene++/ChineseAnalyzer.h"
+#include "lucene++/QueryScorer.h"
+#include "lucene++/SimpleHTMLFormatter.h"
+#include "lucene++/Highlighter.h"
 
 #include "utils/log.h"
 #include "utils/string_helper.h"
@@ -62,7 +65,9 @@ void file_index_manager::add_index(const std::string& path) {
         spdlog::debug("Indexed {}", path);
     } catch (const LuceneException& e) {
         spdlog::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
-        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        // throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+    } catch (const std::exception& e) {
+        spdlog::error(e.what());
     }
 }
 
@@ -87,17 +92,22 @@ void file_index_manager::update_index(
     const std::string& old_path,
     const std::string& new_path,
     bool exact_match) {
-    if (exact_match) {
-        // Exact updation: The old path must be a full path; otherwise, updateDocument will fail to locate and update the existing document.
-        auto doc = create_document(file_helper_.make_file_record(new_path));
-        writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(old_path)), doc);
-    } else {
-        // Fuzzy updation: The old path can be a file name, and all matching paths will be removed before inserting the new path.
-        remove_index(old_path);
-        add_index(new_path);
-    }
+    
+    try {
+        if (exact_match) {
+            // Exact updation: The old path must be a full path; otherwise, updateDocument will fail to locate and update the existing document.
+            auto doc = create_document(file_helper_.make_file_record(new_path));
+            writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(old_path)), doc);
+        } else {
+            // Fuzzy updation: The old path can be a file name, and all matching paths will be removed before inserting the new path.
+            remove_index(old_path);
+            add_index(new_path);
+        }
 
-    spdlog::debug("Renamed: {} --> {}", old_path, new_path);
+        spdlog::debug("Renamed: {} --> {}", old_path, new_path);
+    } catch (const std::exception& e) {
+        spdlog::error(e.what());
+    }
 }
 
 // std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
@@ -162,10 +172,11 @@ std::string file_index_manager::index_directory() const {
 }
 
 QStringList file_index_manager::search(
-    const QString& path, const QString& keyword,
-    int32_t offset, int32_t max_count, bool nrt) {
-    spdlog::debug("Search index(path:\"{}\", keywork: \"{}\").", path.toStdString(), keyword.toStdString());
-    if (keyword.isEmpty()) {
+    const QString& path, QString& keywords,
+    int32_t offset, int32_t max_count, bool nrt, bool highlight) {
+    spdlog::debug("Search index(path:\"{}\", keywords: \"{}\", offset: {}, max_count: {}).",
+        path.toStdString(), keywords.toStdString(), offset, max_count);
+    if (keywords.isEmpty()) {
         return {};
     }
 
@@ -179,41 +190,77 @@ QStringList file_index_manager::search(
             searcher = searcher_;
         }
 
-        QueryPtr query = parser_->parse(StringUtils::toUnicode(keyword.toStdString()));
-        // QueryPtr query = newLucene<RegexQuery>(newLucene<Term>(fuzzy_field_, keyword.toStdString()));
+        QueryPtr query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
         TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(offset + max_count, true);
         searcher->search(query, collector);
 
+        HighlighterPtr highlighter = nullptr;
+        if (highlight) {
+            auto scorer = newLucene<QueryScorer>(query);
+            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
+            highlighter = newLucene<Highlighter>(formatter, scorer);
+        }
+
         Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
         if (offset >= hits.size()) {
-            spdlog::debug("No more results(path:\"{}\", keywork: \"{}\").",
-                path.toStdString(), keyword.toStdString());
+            spdlog::debug("No more results(path:\"{}\", keyworks: \"{}\").",
+                path.toStdString(), keywords.toStdString());
             return {};
         }
 
         QStringList results;
-        max_count = std::min(offset + max_count, hits.size());
-        results.reserve(max_count);
-        for (int32_t i = offset; i < max_count; ++i) {
+        auto count = std::min(offset + max_count, hits.size());
+        results.reserve(count);
+        std::vector<std::string> remove_list;
+        for (int32_t i = offset; i < count; ++i) {
             DocumentPtr doc = searcher->doc(hits[i]->doc);
-            QString full_path = QString::fromStdWString(doc->get(L"full_path"));
-            if (full_path.startsWith(path)) {
-                results.append(full_path);
+            // QString full_path = QString::fromStdWString(doc->get(L"full_path"));
+            // if (full_path.startsWith(path)) {
+            //     results.append(full_path);
+            // }
+            auto full_path = doc->get(L"full_path");
+            // clean up index entries for non-existent files.
+            auto pending_path = StringUtils::toUTF8(full_path);
+            if (!std::filesystem::exists(pending_path)) {
+                remove_list.push_back(std::move(pending_path));
+                continue;
             }
+
+            if (highlighter) {
+                auto token_stream = parser_->getAnalyzer()->tokenStream(
+                    L"full_path", newLucene<StringReader>(full_path));
+                full_path = highlighter->getBestFragment(token_stream, full_path);
+            }
+
+            QString result = QString::fromStdWString(full_path);
+            if (result.startsWith(path)) {
+                results.append(result);
+            }
+        }
+
+        // More results may exist; continue searching
+        if (count == max_count && !remove_list.empty()) {
+            results.append(search(path, keywords, offset + max_count, remove_list.size(), true));
+        }
+
+        for (const auto& rmpath : remove_list) {
+            remove_index(rmpath);
         }
 
         return results;
     } catch (const LuceneException& e) {
-        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        return {};
     }
 }
 
-QStringList file_index_manager::search(const QString& keyword, bool nrt) {
-    if (keyword.isEmpty()) {
+QStringList file_index_manager::search(QString& keywords, bool nrt, bool highlight) {
+    if (keywords.isEmpty()) {
         return {};
     }
 
-    spdlog::debug("Search index(keywork: \"{}\").", keyword.toStdString());
+    spdlog::debug("Search index(keyworks: \"{}\").", keywords.toStdString());
+
     try {
         SearcherPtr searcher;
         int32_t max_results;
@@ -227,31 +274,54 @@ QStringList file_index_manager::search(const QString& keyword, bool nrt) {
             max_results = reader_->numDocs();
         }
 
-        QueryPtr query = parser_->parse(StringUtils::toUnicode(keyword.toStdString()));
+        QueryPtr query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
         TopDocsPtr search_results = searcher->search(query, max_results);
+
+        HighlighterPtr highlighter = nullptr;
+        if (highlight) {
+            auto scorer = newLucene<QueryScorer>(query);
+            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
+            highlighter = newLucene<Highlighter>(formatter, scorer);
+        }
 
         QStringList results;
         results.reserve(search_results->scoreDocs.size());
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher->doc(score_doc->doc);
-            QString full_path = QString::fromStdWString(doc->get(L"full_path"));
-            results.append(full_path);
+            auto full_path = doc->get(L"full_path");
+
+            // Since there is no automatic cleanup for invalid indexes,
+            // the system may contain paths that no longer exist.
+            // To maintain index validity, invalid indexes are filtered and removed here.
+            if (!std::filesystem::exists(full_path)) {
+                remove_index(StringUtils::toUTF8(full_path));
+                continue;
+            }
+
+            if (highlighter) {
+                auto token_stream = parser_->getAnalyzer()->tokenStream(
+                    L"full_path", newLucene<StringReader>(full_path));
+                full_path = highlighter->getBestFragment(token_stream, full_path);
+            }
+
+            results.append(QString::fromStdWString(full_path));
         }
 
         return results;
     } catch (const LuceneException& e) {
-        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        return {};
     }
 }
 
-QStringList file_index_manager::search(const QString& keyword, const QString& type, bool nrt) {
-    if (keyword.isEmpty() && type.isEmpty()) {
+QStringList file_index_manager::search(QString& keywords, const QString& type, bool nrt, bool highlight) {
+    if (keywords.isEmpty() && type.isEmpty()) {
         return {};
     } else if (type.isEmpty()) {
-        return search(keyword, nrt);
+        return search(keywords, nrt);
     }
 
-    spdlog::debug("Search index(keywork: \"{}\", type: \"{}\").", keyword.toStdString(), type.toStdString());
+    spdlog::debug("Search index(keyworks: \"{}\", type: \"{}\").", keywords.toStdString(), type.toStdString());
 
     try {
         SearcherPtr searcher;
@@ -269,37 +339,62 @@ QStringList file_index_manager::search(const QString& keyword, const QString& ty
         QueryPtr type_query = type_parser_->parse(StringUtils::toUnicode(type.toStdString()));
         auto boolean_query = newLucene<BooleanQuery>();
         boolean_query->add(type_query, BooleanClause::MUST);
-        if (!keyword.isEmpty()) {
-            QueryPtr keyword_query = parser_->parse(StringUtils::toUnicode(keyword.toStdString()));
+        if (!keywords.isEmpty()) {
+            QueryPtr keyword_query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
             boolean_query->add(keyword_query, BooleanClause::MUST);
         }
 
         TopDocsPtr search_results = searcher->search(boolean_query, max_results);
 
+        HighlighterPtr highlighter = nullptr;
+        if (highlight) {
+            auto scorer = newLucene<QueryScorer>(boolean_query);
+            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
+            highlighter = newLucene<Highlighter>(formatter, scorer);
+        }
+        
         QStringList results;
         results.reserve(search_results->scoreDocs.size());
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher->doc(score_doc->doc);
-            QString full_path = QString::fromStdWString(doc->get(L"full_path"));
-            results.append(full_path);
+            auto full_path = doc->get(L"full_path");
+
+            // Since there is no automatic cleanup for invalid indexes,
+            // the system may contain paths that no longer exist.
+            // To maintain index validity, invalid indexes are filtered and removed here.
+            if (!std::filesystem::exists(full_path)) {
+                remove_index(StringUtils::toUTF8(full_path));
+                continue;
+            }
+
+            if (highlighter) {
+                auto token_stream = type_parser_->getAnalyzer()->tokenStream(
+                    L"full_path", newLucene<StringReader>(full_path));
+                full_path = highlighter->getBestFragment(token_stream, full_path);
+            }
+
+            results.append(QString::fromStdWString(full_path));
         }
 
         return results;
     } catch (const LuceneException& e) {
-        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        return {};
     }
 }
 
-QStringList file_index_manager::search_by_time(const QString& keywords, const QString& start_time, bool nrt) {
+QStringList file_index_manager::search(QString& keywords,
+    const QString& after, const QString& before, bool nrt, bool highlight) {
     if (keywords.isEmpty()) {
         return {};
     }
 
-    if (start_time.isEmpty()) {
+    if (after.isEmpty() && before.isEmpty()) {
         return search(keywords, nrt);
     }
 
-    spdlog::debug("Search index(keywork: \"{}\", after: \"{}\").", keywords.toStdString(), start_time.toStdString());
+    spdlog::debug("Search index(keywords: \"{}\", after: \"{}\"), before: \"{}\").",
+        keywords.toStdString(), after.toStdString(), before.toStdString());
 
     try {
         SearcherPtr searcher;
@@ -314,11 +409,16 @@ QStringList file_index_manager::search_by_time(const QString& keywords, const QS
             max_results = reader_->numDocs();
         }
 
-        auto tp = file_helper_.parse_datetime(start_time.toStdString());
-        auto after_timestamp = file_helper_.to_milliseconds_since_epoch(tp);
-        spdlog::info("timestamp: {}", after_timestamp);
+        int64_t after_timestamp = 0;
+        int64_t before_timestamp = std::numeric_limits<int64_t>::max();
+        if (!after.isEmpty()) {
+            after_timestamp = file_helper_.to_milliseconds_since_epoch(after.toStdString());
+        }
+        if (!before.isEmpty()) {
+            before_timestamp = file_helper_.to_milliseconds_since_epoch(before.toStdString());
+        }
 
-        auto time_query = NumericRangeQuery::newLongRange(L"creation_time", after_timestamp, std::numeric_limits<int64_t>::max(), true, true);
+        auto time_query = NumericRangeQuery::newLongRange(L"creation_time", after_timestamp, before_timestamp, true, true);
         auto keywords_query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
         auto boolean_query = newLucene<BooleanQuery>();
         boolean_query->add(keywords_query, BooleanClause::MUST);
@@ -326,25 +426,47 @@ QStringList file_index_manager::search_by_time(const QString& keywords, const QS
 
         TopDocsPtr search_results = searcher->search(boolean_query, max_results);
 
+        HighlighterPtr highlighter = nullptr;
+        if (highlight) {
+            auto scorer = newLucene<QueryScorer>(boolean_query);
+            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
+            highlighter = newLucene<Highlighter>(formatter, scorer);
+        }
+
         QStringList results;
         results.reserve(search_results->scoreDocs.size());
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher->doc(score_doc->doc);
-            QString full_path = QString::fromStdWString(doc->get(L"full_path"));
-            results.append(full_path);
+            auto full_path = doc->get(L"full_path");
+
+            // Since there is no automatic cleanup for invalid indexes,
+            // the system may contain paths that no longer exist.
+            // To maintain index validity, invalid indexes are filtered and removed here.
+            if (!std::filesystem::exists(full_path)) {
+                remove_index(StringUtils::toUTF8(full_path));
+                continue;
+            }
+
+            if (highlighter) {
+                auto token_stream = parser_->getAnalyzer()->tokenStream(
+                    L"full_path", newLucene<StringReader>(full_path));
+                full_path = highlighter->getBestFragment(token_stream, full_path);
+            }
+
+            results.append(QString::fromStdWString(full_path));
         }
 
         return results;
     } catch (const LuceneException& e) {
-        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     } catch (const std::exception& e) {
         spdlog::error(e.what());
-        return {};
     }
+
+    return {};
 }
 
-bool file_index_manager::document_exists(const std::string &path, bool only_check_initial_index)
-{
+bool file_index_manager::document_exists(const std::string &path, bool only_check_initial_index) {
     TermPtr term = newLucene<Term>(L"full_path", StringUtils::toUnicode(path));
     TermDocsPtr termDocs;
     if (only_check_initial_index) {
@@ -379,30 +501,6 @@ void file_index_manager::try_refresh_reader(bool nrt) {
     }
 }
 
-// TopScoreDocCollectorPtr file_index_manager::search(const std::string& path, bool exact_match, bool nrt) {
-//     SearcherPtr searcher;
-//     QueryPtr query;
-//     TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(10, true);
-//     if (nrt) {
-//         try_refresh_reader(true);
-//         searcher = nrt_searcher_;
-//     } else {
-//         try_refresh_reader();
-//         searcher = searcher_;
-//     }
-
-//     // Search full path for exact match, and file name for fuzzy match.
-//     // Exact search only works when the field is set to Field::INDEX_NOT_ANALYZED, which avoids parsing overhead.
-//     query = exact_match ? newLucene<TermQuery>(newLucene<Term>(exact_field_, StringUtils::toUnicode(path)))
-//                                 : parser_->parse(StringUtils::toUnicode(path));
-//     searcher->search(query, collector);
-//     return collector;
-// }
-
-// Lucene::TopScoreDocCollectorPtr file_index_manager::nrt_search(const std::string& path, bool exact_match) {
-//     return search(path, exact_match, true);
-// }
-
 DocumentPtr file_index_manager::create_document(const file_record& record) {
     DocumentPtr doc = newLucene<Document>();
     // File name with fuzzy match; parser is required for searching and deleting.
@@ -417,10 +515,6 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
         StringUtils::toUnicode(record.file_type),
         Field::STORE_YES, Field::INDEX_ANALYZED));
     doc->add(newLucene<NumericField>(L"creation_time")->setLongValue(record.creation_time));
-    // doc->add(newLucene<Field>(L"creation_time",
-    //     DateTools::timeToString(record.creation_time, DateTools::RESOLUTION_MILLISECOND),
-    //     Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-    // spdlog::info("creation_time: {}", record.creation_time);
     return doc;
 }
 

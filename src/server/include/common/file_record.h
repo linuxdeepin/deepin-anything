@@ -7,11 +7,8 @@
 #define ANYTHING_FILE_RECORD_H_
 
 #include <filesystem>
-#include <mutex>
-#include <optional>
 #include <string>
-
-#include <magic.h>
+#include <unordered_map>
 
 #include "common/anything_fwd.hpp"
 
@@ -27,20 +24,17 @@ struct file_record {
 class file_helper {
 public:
     file_helper();
-    ~file_helper();
 
     file_record make_file_record(const std::filesystem::path& p);
 
-    std::chrono::system_clock::time_point parse_datetime(const std::string& datetime);
-
-    int64_t to_milliseconds_since_epoch(const std::chrono::system_clock::time_point& tp);
-
-private:
-    std::string get_file_creation_time(const std::filesystem::path& file_path);
+    int64_t get_file_creation_time(const std::filesystem::path& file_path);
+    int64_t to_milliseconds_since_epoch(std::string date_time);
 
 private:
-    magic_t handle_;
-    std::mutex mtx_;
+    bool is_valid_date_format(std::string& date_str);
+
+private:
+    std::unordered_map<std::string, std::string> extension_mapper_;
 };
 
 // namespace file_helper {

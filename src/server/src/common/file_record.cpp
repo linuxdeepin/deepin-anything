@@ -5,93 +5,191 @@
 
 #include "common/file_record.h"
 
-#include <regex>
-
 #include <sys/stat.h>  // For statx and struct statx
 #include <fcntl.h>     // For AT_FDCWD
 
 #include "utils/log.h"
+#include "utils/config.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
-file_helper::file_helper()
-    : handle_(::magic_open(MAGIC_MIME_TYPE)) {
-    ::magic_load(handle_, NULL);
-}
+file_helper::file_helper() {
+    spdlog::info("current dir: {}", std::filesystem::current_path().string());
 
-file_helper::~file_helper() {
-    ::magic_close(handle_);
+    load_config_file("config/filetypes.cfg",
+        [this](std::string&& suffix, std::string&& filetype) {
+        extension_mapper_.emplace(suffix, filetype);
+    });
+    // extension_mapper_ = {
+    //     // Programming Language Files
+    //     { ".cpp", "text/c++" },
+    //     { ".cxx", "text/c++" },
+    //     { ".cc", "text/c++" },
+    //     { ".c", "text/c" }, // 需要优化单个字母的情况
+    //     { ".h", "text/c" },
+    //     { ".hpp", "text/c++" },
+    //     { ".cs", "text/csharp" },
+    //     { ".java", "text/java" },
+    //     { ".py", "text/python" },
+    //     { ".js", "application/javascript" },
+    //     { ".ts", "application/typescript" },
+    //     { ".html", "text/html" },
+    //     { ".css", "text/css" },
+    //     { ".php", "application/php" },
+    //     { ".rb", "text/ruby" },
+    //     { ".go", "text/go" },
+    //     { ".swift", "text/swift" },
+    //     { ".kt", "text/kotlin" },
+    //     { ".rs", "text/rust" },
+    //     { ".lua", "text/lua" },
+    //     { ".sh", "application/shellscript" },
+    //     { ".bash", "application/shellscript/shell/bash" },
+    //     { ".pl", "text/perl" },
+    //     { ".sql", "application/sql" },
+    //     { ".json", "application/json" },
+    //     { ".xml", "application/xml" },
+    //     { ".yaml", "text/yaml" },
+    //     { ".toml", "text/toml" },
+    //     { ".md", "text/markdown" },
+    //     { ".r", "text/r" },
+    //     { ".jl", "text/julia/jl" },
+    //     { ".dart", "text/dart" },
+    //     { ".scala", "text/scala" },
+    //     { ".vb", "text/vb" },
+    //     { ".asm", "text/assembly/asm" },
+    //     { ".bat", "application/batch" },
+    //     { ".make", "text/makefile" },
+    //     { ".cmake", "text/cmake" },
+    //     { ".gradle", "text/gradle" },
+    //     { ".dockerfile", "text/dockerfile" },
+    //     // Document Files
+    //     { ".txt", "text/plain/txt" },
+    //     { ".pdf", "application/pdf" },
+    //     { ".doc", "application/doc" },
+    //     { ".docx", "application/docx" },
+    //     { ".xls", "application/xls" },
+    //     { ".xlsx", "application/xlsx" },
+    //     { ".ppt", "application/ppt" },
+    //     { ".pptx", "application/pptx" },
+    //     // Image Files
+    //     { ".jpg", "image/jpeg/jpg" },
+    //     { ".jpeg", "image/jpeg" },
+    //     { ".png", "image/png" },
+    //     { ".gif", "image/gif" },
+    //     { ".bmp", "image/bmp" },
+    //     { ".svg", "image/svg+xml" },
+    //     { ".ico", "image/vnd.microsoft.icon" },
+    //     // Audio Files
+    //     { ".mp3", "audio/mpeg" },
+    //     { ".wav", "audio/wav" },
+    //     { ".ogg", "audio/ogg" },
+    //     { ".flac", "audio/flac" },
+    //     // Video Files
+    //     { ".mp4", "video/mp4" },
+    //     { ".avi", "video/avi" },
+    //     { ".mov", "video/mov" },
+    //     { ".mkv", "video/mkv" },
+    //     // Compressed Files
+    //     { ".zip", "application/zip" },
+    //     { ".tar", "application/tar" },
+    //     { ".gz", "application/gzip/gz" },
+    //     { ".rar", "application/rar" },
+    //     { ".7z", "application/7z" },
+    //     // Other Files
+    //     { ".iso", "application/iso" },
+    //     { ".csv", "text/csv" },
+    //     { ".epub", "application/epub" },
+    //     { ".apk", "application/apk" },
+    //     { ".exe", "application/exe" },
+    //     { ".deb", "package/deb" },
+    //     { ".a", "library/a"},
+    //     { ".so", "library/so" },
+    //     { ".dll", "library/dll" }
+    // };
 }
 
 file_record file_helper::make_file_record(
     const std::filesystem::path& p) {
-    std::lock_guard<std::mutex> lg(mtx_);
-    auto file_type = ::magic_file(handle_, p.native().c_str());
-    std::string type(file_type ? file_type : "unknown");
-    auto creation_time = get_file_creation_time(p);
-    auto milliseconds = to_milliseconds_since_epoch(parse_datetime(creation_time));
-
-    spdlog::info("creation_time: {}, milliseconds: {}", creation_time, milliseconds);
-    // spdlog::debug("---type: {}", type);
-
-    return file_record {
-        .file_name     = p.filename().string(),
-        .full_path     = p.string(),
-        .file_type     = std::move(type),
-        .creation_time = milliseconds
-    };
-}
-
-std::chrono::system_clock::time_point file_helper::parse_datetime(const std::string& datetime) {
-    std::tm tm = {};
-    
-    // Regular expression patterns for different formats
-    std::regex full_format(R"(^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$)");   // Full datetime format
-    std::regex date_only_format(R"(^\d{4}-\d{2}-\d{2}$)");                   // Date only format
-    std::regex year_only_format(R"(^\d{4}$)");                                // Year only format
-
-    // Match the input string with different formats
-    if (std::regex_match(datetime, full_format)) {
-        std::istringstream ss(datetime);
-        ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
-    } else if (std::regex_match(datetime, date_only_format)) {
-        std::istringstream ss(datetime);
-        ss >> std::get_time(&tm, "%Y-%m-%d");
-        tm.tm_hour = 0;
-        tm.tm_min  = 0;
-        tm.tm_sec  = 0;
-    } else if (std::regex_match(datetime, year_only_format)) {
-        std::istringstream ss(datetime);
-        ss >> std::get_time(&tm, "%Y");
-        tm.tm_mon  = 0; // January
-        tm.tm_mday = 1; // First day of the month
-        tm.tm_hour = 0;
-        tm.tm_min  = 0;
-        tm.tm_sec  = 0;
+    namespace fs = std::filesystem;
+    std::string type;
+    if (fs::is_regular_file(p)) {
+        auto it = extension_mapper_.find(p.extension().string());
+        type = it != extension_mapper_.end() ? it->second : "regular/file";
+    } else if (fs::is_directory(p)) {
+        type = "directory";
+    } else if (fs::is_symlink(p)) {
+        type = "symlink";
     } else {
-        throw std::runtime_error("Failed to match any date format");
+        type = "unknown";
     }
 
-    std::time_t time_t_epoch = std::mktime(&tm);
-    return std::chrono::system_clock::from_time_t(time_t_epoch);
+    try {
+        return file_record {
+            .file_name     = p.filename().string(),
+            .full_path     = p.string(),
+            .file_type     = type,
+            .creation_time = get_file_creation_time(p)
+        };
+    } catch(const std::exception& e) {
+        throw;
+    }
 }
 
-int64_t file_helper::to_milliseconds_since_epoch(const std::chrono::system_clock::time_point &tp) {
-    auto duration = tp.time_since_epoch();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+bool file_helper::is_valid_date_format(std::string& date_time) {
+    switch (date_time.length()) {
+    case 19:
+        if (date_time[4] != '-'  || date_time[7] != '-' || date_time[10] != ' ' ||
+            date_time[13] != ':' || date_time[16] != ':') {
+            return false;
+        }
+        for (size_t i = 0; i < date_time.size(); ++i) {
+            if ((i == 4 || i == 7 || i == 10 || i == 13 || i == 16)) continue;
+            if (!std::isdigit(date_time[i])) return false;
+        }
+
+        return true;
+    case 10:
+        if (date_time[4] != '-' || date_time[7] != '-') return false;
+        for (size_t i = 0; i < date_time.size(); ++i) {
+            if (i == 4 || i == 7) continue;
+            if (!std::isdigit(date_time[i])) return false;
+        }
+
+        date_time += " 00:00:00";
+        return true;
+    case 4:
+        if (std::find_if(date_time.begin(), date_time.end(),
+            [](unsigned char c) { return !std::isdigit(c); }) == date_time.end()) {
+            date_time += "-01-01 00:00:00";
+            return true;
+        }
+        [[fallthrough]];
+    default:
+        return false;
+    }
 }
 
-std::string file_helper::get_file_creation_time(const std::filesystem::path& file_path) {
+int64_t file_helper::to_milliseconds_since_epoch(std::string date_time) {
+    std::tm tm = {};
+    if (is_valid_date_format(date_time)) {
+        strptime(date_time.c_str(), "%Y-%m-%d %H:%M:%S", &tm);
+        std::time_t time_t_epoch = std::mktime(&tm);
+        return time_t_epoch;
+    }
+
+    // spdlog::error("Failed to match any date format: " + date_time);
+    throw std::runtime_error("Failed to match any date format: " + date_time);
+}
+
+int64_t file_helper::get_file_creation_time(const std::filesystem::path& file_path) {
     struct statx statxbuf;
-    // 使用 statx 获取文件状态，STATX_BTIME 用于获取创建时间
+    // Use statx to retrieve file state; STATX_BTIME is used to obtain the creation time.
     if (statx(AT_FDCWD, file_path.c_str(), AT_STATX_SYNC_AS_STAT, STATX_BTIME, &statxbuf) != 0) {
-        throw std::runtime_error("Failed to get file creation time");
+        throw std::runtime_error("Failed to get file creation time: " + file_path.string());
     }
 
     time_t file_time = statxbuf.stx_btime.tv_sec;
-    std::ostringstream oss;
-    oss << std::put_time(std::localtime(&file_time), "%Y-%m-%d %H:%M:%S");
-    return oss.str();
+    return file_time;
 }
 
 ANYTHING_NAMESPACE_END

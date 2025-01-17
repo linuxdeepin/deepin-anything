@@ -10,6 +10,7 @@
 #include <lucene++/TermAttribute.h>
 #include <lucene++/UnicodeUtils.h>
 
+#include "utils/config.h"
 #include "utils/log.h"
 
 #include <iostream>
@@ -20,7 +21,12 @@ constexpr int32_t max_word_len = 512;
 constexpr int32_t io_buffer_size = 1024;
 
 AnythingTokenizer::AnythingTokenizer(const ReaderPtr& input)
-    : Tokenizer(input) {}
+    : Tokenizer(input) {
+    // load_dictionary("config/dict.utf8",
+    //     [this](std::wstring&& word) {
+    //     words_.insert(word);
+    // });
+}
 
 void AnythingTokenizer::initialize() {
     offset_ = 0;
@@ -40,9 +46,10 @@ bool AnythingTokenizer::incrementToken() {
 
     length_ = 0;
     start_ = offset_;
-    bool last_is_en = false;
-    bool last_is_num = false;
+    bool last_is_en  = false;
     bool last_is_sym = false;
+    bool last_is_num = false;
+    // [[maybe_unused]] bool last_is_dot = false;
 
     while (true) {
         wchar_t c;
@@ -61,6 +68,13 @@ bool AnythingTokenizer::incrementToken() {
 
         if (dataLen_ == -1) {
             --offset_;
+            /*if (last_is_dot) {
+                // flush(); // suffix token
+                spdlog::info("Last");
+                // start_ += 1;
+                // length_ -= 1;
+                return flush();
+            }*/
             return flush();
         } else {
             c = ioBuffer_[bufferIndex_++];
@@ -71,6 +85,15 @@ bool AnythingTokenizer::incrementToken() {
             if (length_ == max_word_len) {
                 return flush();
             }
+            // Read to the end
+            if (bufferIndex_ >= dataLen_ - 1 && length_ == 1) {
+                if (c == L'c' || c == L'r' || c == L'a') {
+                    return flush();
+                }
+            }
+            // if (is_word(buffer_.get(), length_)) {
+            //     return flush();
+            // }
             last_is_en = true;
         } else if (UnicodeUtil::isDigit(c)) { // 数字
             push(c);
@@ -86,7 +109,16 @@ bool AnythingTokenizer::incrementToken() {
             } else {
                 return flush();
             }
-        } else if (isLastDot(c, offset_ - 1, ioBuffer_.get())) {
+        } else if (isDot(c)) {
+            // Detect the version number, for example: v1.0.0
+            if (last_is_num && bufferIndex_ < dataLen_ &&
+                UnicodeUtil::isDigit(ioBuffer_[bufferIndex_])) {
+                push(c);
+            } else {
+                return flush();
+            }
+        }
+         /*else if (isLastDot(c, offset_ - 1, ioBuffer_.get())) {
             if (last_is_en || last_is_num || last_is_sym) {
                 --bufferIndex_;
                 --offset_;
@@ -101,7 +133,8 @@ bool AnythingTokenizer::incrementToken() {
             // }
 
             push(c);
-        } else if (UnicodeUtil::isOther(c)) {
+            last_is_dot = true;
+        }*/ else if (UnicodeUtil::isOther(c)) {
             if (length_ > 0) {
                 --bufferIndex_;
                 --offset_;
@@ -166,6 +199,14 @@ bool AnythingTokenizer::isLastDot(wchar_t c, int32_t offset, std::wstring buf) {
         if (lastDotPosition != buf.size() - 1) {
             return static_cast<size_t>(offset) == lastDotPosition;
         }
+    }
+
+    return false;
+}
+
+bool AnythingTokenizer::is_word(wchar_t* buf, int32_t len) {
+    if (auto it = words_.find(std::wstring(buf, len)); it != words_.end()) {
+        return true;
     }
 
     return false;

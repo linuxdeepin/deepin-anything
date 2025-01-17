@@ -19,7 +19,6 @@ pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 pkg_check_modules(LUCENE REQUIRED liblucene++)
 pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
-pkg_check_modules(LIBMAGIC REQUIRED libmagic)
 
 # Generate QDbus file
 # message(STATUS "CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
@@ -59,7 +58,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${LUCENE_INCLUDE_DIRS}
     ${GNL_INCLUDE_DIRS}
     ${MOUNT_INCLUDE_DIRS}
-    ${LIBMAGIC_INCLUDE_DIRS}
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
@@ -67,7 +65,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${LUCENE_CONTRIB_LIBRARIES}
     ${GNL_LIBRARIES}
     ${MOUNT_LIBRARIES}
-    ${LIBMAGIC_LIBRARIES}
     ${Boost_LIBRARIES}
     Qt5::DBus
     pthread

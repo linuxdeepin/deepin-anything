@@ -98,8 +98,8 @@ public slots:
      * @param max_count The maximum number of results to return.
      * @return A QStringList containing the paths of the found files.
      */
-    QStringList search(const QString& path, const QString& keywords, int offset, int max_count);
-    
+    QStringList search(const QString& path, QString keywords, int offset, int max_count, bool highlight = false);
+
     /**
      * Searches all files for a specified keyword and returns a list of matching file names.
      * 
@@ -107,12 +107,12 @@ public slots:
      * @return A QStringList containing the paths of all files where the keyword is found.
      *         If no files are found, an empty list is returned.
      */
-    QStringList search(const QString& keywords);
+    QStringList search(QString keywords, bool highlight = false);
 
-    QStringList search(const QString& keywords, const QString& type);
+    QStringList search(QString keywords, const QString& type, bool highlight = false);
 
-    QStringList search_by_time(const QString& keywords, const QString& time);
-    
+    QStringList search(QString keywords, const QString& after, const QString& before, bool highlight = false);
+
     bool removePath(const QString& fullPath);
 
     bool hasLFT(const QString& path);

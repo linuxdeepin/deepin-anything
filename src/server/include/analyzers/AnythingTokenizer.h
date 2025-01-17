@@ -6,6 +6,8 @@
 #ifndef ANYTHING_ANYTHING_TOKENIZER_H_
 #define ANYTHING_ANYTHING_TOKENIZER_H_
 
+#include <unordered_set>
+
 #include <lucene++/LuceneHeaders.h>
 
 #include "common/anything_fwd.hpp"
@@ -32,6 +34,7 @@ public:
     static bool isSymbol(wchar_t c);
     static bool isDot(wchar_t c);
     static bool isLastDot(wchar_t c, int32_t offset, std::wstring buf);
+    bool is_word(wchar_t* buf, int32_t len);
 
 private:
     /// word offset, used to imply which character(in) is parsed
@@ -54,6 +57,8 @@ private:
 
     int32_t length_;
     int32_t start_;
+
+    std::unordered_set<std::wstring> words_;
 };
 
 ANYTHING_NAMESPACE_END
