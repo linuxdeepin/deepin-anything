@@ -20,26 +20,23 @@ default_event_handler::default_event_handler(std::string index_dir)
     // Index the default mount point
     auto home_dir = get_home_directory();
     if (!home_dir.empty()) {
+        add_index_delay(home_dir);
         insert_index_directory(home_dir);
     }
 
     // Initialize mount cache
     refresh_mount_status();
 
-    // index_directory 设置时必须要是完整路径
+    // index_directory 必须设置为完整路径
     set_index_change_filter([this](const std::string& path) {
         auto index_directory = get_index_directory();
         auto names = string_helper::split(path, "/");
         using string_helper::starts_with;
         return starts_with(path, index_directory) ||
-               (starts_with(index_directory, "/") && starts_with(path, "/data" + index_directory)) ||
-               std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); });
+               (starts_with(index_directory, "/") && starts_with(path, "/data" + index_directory)) /*||
+               std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); })*/;
     });
 
-    // log::debug("Document size: {}", index_manager_.document_size());
-    // auto results = index_manager_.search("李", true);
-    // log::debug() << "Found " << results.size() << " result(s).";
-    // qDebug() << results;
     spdlog::debug("cache directory: {}", get_index_directory());
 }
 
@@ -110,7 +107,7 @@ void default_event_handler::handle(fs_event event) {
         rename_from_.erase(event.cookie);
     }
 
-    // log::debug("Received a(an) {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
+    // spdlog::debug("Received a(an) {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
     
     // Preparations are done, starting to process the event.
     bool ignored = false;

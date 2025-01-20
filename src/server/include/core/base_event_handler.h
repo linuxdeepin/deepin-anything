@@ -34,7 +34,10 @@ ANYTHING_NAMESPACE_END
 class base_event_handler : public QObject
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "my.test.IAnything")
+    Q_CLASSINFO("D-Bus Interface", "com.deepin.anything")
+
+    Q_PROPERTY(bool autoIndexInternal READ autoIndexInternal WRITE setAutoIndexInternal NOTIFY autoIndexInternalChanged)
+    Q_PROPERTY(bool autoIndexExternal READ autoIndexExternal WRITE setAutoIndexExternal NOTIFY autoIndexExternalChanged)
 
 public:
     base_event_handler(std::string index_dir, QObject *parent = nullptr);
@@ -43,6 +46,12 @@ public:
     virtual void handle(anything::fs_event event) = 0;
 
     void terminate_processing();
+
+    // Do nothing
+    bool autoIndexInternal() const { return true; }
+    void setAutoIndexInternal(bool) {}
+    bool autoIndexExternal() const { return true; }
+    void setAutoIndexExternal(bool) {}
 
 protected:
     void set_batch_size(std::size_t size);
@@ -89,8 +98,8 @@ public slots:
      * @param max_count The maximum number of results to return.
      * @return A QStringList containing the paths of the found files.
      */
-    QStringList search(const QString& path, const QString& keywords, int offset, int max_count);
-    
+    QStringList search(const QString& path, QString keywords, int offset, int max_count, bool highlight = false);
+
     /**
      * Searches all files for a specified keyword and returns a list of matching file names.
      * 
@@ -98,11 +107,16 @@ public slots:
      * @return A QStringList containing the paths of all files where the keyword is found.
      *         If no files are found, an empty list is returned.
      */
-    QStringList search(const QString& keywords);
-    
+    QStringList search(QString keywords, bool highlight = false);
+
+    QStringList search(QString keywords, const QString& type, bool highlight = false);
+
+    QStringList search(QString keywords, const QString& after, const QString& before, bool highlight = false);
+
     bool removePath(const QString& fullPath);
 
     bool hasLFT(const QString& path);
+    QStringList hasLFTSubdirectories(QString path) const;
 
     void addPath(const QString& fullPath);
 
@@ -111,6 +125,21 @@ public slots:
     void delay_indexing(bool delay);
 
     QString cache_directory();
+
+    /////////////////////////
+    // Adapter
+
+    QStringList search(int maxCount, qint64 icase, quint32 startOffset, quint32 endOffset,
+                       const QString &path, QString keyword, bool useRegExp,
+                       quint32 &startOffsetReturn, quint32 &endOffsetReturn);
+
+    QStringList parallelsearch(const QString &path, quint32 startOffset, quint32 endOffset,
+                               const QString &keyword, const QStringList &rules,
+                               quint32 &startOffsetReturn, quint32 &endOffsetReturn);
+    
+Q_SIGNALS:
+    void autoIndexInternalChanged(bool autoIndexInternal);
+    void autoIndexExternalChanged(bool autoIndexExternal);
 
 private:
     anything::mount_manager mnt_manager_;

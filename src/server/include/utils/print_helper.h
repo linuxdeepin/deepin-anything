@@ -9,12 +9,14 @@
 #include <iostream>
 
 #include "common/anything_fwd.hpp"
-#include "common/file_record.hpp"
+#include "common/file_record.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
 inline void print(const file_record& record) {
-    std::cout << "file_name: " << record.file_name << " full_path: " << record.full_path << "\n";
+    std::cout << "file_name: " << record.file_name <<
+        " full_path: " << record.full_path <<
+        /*" file_type: " << record.file_type <<*/ "\n";
 }
 
 ANYTHING_NAMESPACE_END

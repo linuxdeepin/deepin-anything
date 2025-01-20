@@ -12,6 +12,7 @@ using namespace anything;
 int main(int argc, char* argv[]) {
     QCoreApplication app(argc, argv);
 
+    // spdlog::set_default_logger(spdlog::basic_logger_mt("file_logger", "/var/cache/deepin/deepin-anything/app.log"));
     spdlog::set_level(spdlog::level::debug);
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [thread %t] %v");
     spdlog::info("Qt version: {}", qVersion());

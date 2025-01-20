@@ -23,14 +23,14 @@ pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
 # Generate QDbus file
 # message(STATUS "CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
 # message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
-set(DBUS_ADAPTOR_SOURCES my.test.Anything.xml)
+set(DBUS_ADAPTOR_SOURCES com.deepin.Anything.xml)
 set(ANYTHING_DBUS_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/core/base_event_handler.h")
 qt5_generate_dbus_interface(${ANYTHING_DBUS_HEADER}
-    my.test.Anything.xml
+    com.deepin.Anything.xml
     OPTIONS -A
 )
 qt5_add_dbus_adaptor(DBUS_ADAPTOR_SOURCES
-    ${CMAKE_CURRENT_BINARY_DIR}/my.test.Anything.xml
+    ${CMAKE_CURRENT_BINARY_DIR}/com.deepin.Anything.xml
     ${ANYTHING_DBUS_HEADER}
     base_event_handler
 )

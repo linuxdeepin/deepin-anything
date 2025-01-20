@@ -6,25 +6,25 @@
 #include "core/base_event_handler.h"
 #include "core/disk_scanner.h"
 
-#include "common/file_record.hpp"
+#include "common/file_record.h"
 #include "utils/log.h"
 #include "utils/string_helper.h"
 #include <anythingadaptor.h>
 
 base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
-    : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(100),
+    : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(200),
       pool_((std::max)(std::thread::hardware_concurrency() - 3, 1U)),
       stop_timer_(false),
       timer_(std::thread(&base_event_handler::timer_worker, this, 1000)),
       delay_mode_(true/*index_manager_.indexed()*/) {
-    new IAnythingAdaptor(this);
+    new AnythingAdaptor(this);
     QDBusConnection dbus = QDBusConnection::systemBus();
     if (!dbus.isConnected()) {
         qWarning() << "Failed to connect to system bus:" << dbus.lastError().message();
         exit(1);
     }
-    QString service_name = "my.test.SAnything";
-    QString object_name = "/my/test/OAnything";
+    QString service_name = "com.deepin.anything";
+    QString object_name = "/com/deepin/anything";
     if (!dbus.interface()->isServiceRegistered(service_name)) {
         dbus.registerService(service_name);
         dbus.registerObject(object_name, this);
@@ -180,6 +180,7 @@ void base_event_handler::eat_job(const anything::index_job& job) {
 
 void base_event_handler::jobs_push(std::string src,
     anything::index_job_type type, std::optional<std::string> dst) {
+    // spdlog::debug("jobs_push: src({}), dst({})", src, dst ? *dst : "");
     if (should_be_filtered(src) || (dst && should_be_filtered(*dst))) {
         return;
     }
@@ -256,69 +257,26 @@ void base_event_handler::timer_worker(int64_t interval) {
     }
 }
 
-QStringList base_event_handler::search(const QString& path, const QString& keywords, int offset, int max_count) {
+QStringList base_event_handler::search(const QString& path,
+    QString keywords, int offset, int max_count, bool highlight) {
     if (offset < 0) {
         return {};
     }
 
-    // Since there is no automatic cleanup for invalid indexes,
-    // the system may contain paths that no longer exist.
-    // To maintain index validity, invalid indexes are filtered and removed here.
-    QStringList results = index_manager_.search(path, keywords, offset, max_count, true);
-    int old_results_count = results.size();
-    if (!results.empty()) {
-        // anything::log::debug("result size: {}", results.size());
-        // clean up index entries for non-existent files.
-        std::vector<std::string> remove_list;
-        for (int i = 0; i < results.size();) {
-            std::string path = results[i].toStdString();
-            if (!std::filesystem::exists(path)) {
-                remove_list.push_back(std::move(path));
-                results.removeAt(i);
-            } else {
-                ++i;
-            }
-        }
-
-        // More results may exist; continue searching
-        if (old_results_count == max_count) {
-            if (!remove_list.empty()) {
-                // anything::log::debug("remove size: {}", remove_list.size());
-                results.append(search(path, keywords, offset + max_count, remove_list.size()));
-            }
-        }
-        for (auto&& path : remove_list) {
-            remove_index_delay(std::move(path));
-        }
-    }
-
-    return results;
+    return index_manager_.search(path, keywords, offset, max_count, true, highlight);
 }
 
-QStringList base_event_handler::search(const QString& keywords) {
-    // Since there is no automatic cleanup for invalid indexes,
-    // the system may contain paths that no longer exist.
-    // To maintain index validity, invalid indexes are filtered and removed here.
-    QStringList results = index_manager_.search(keywords, true);
-    if (!results.empty()) {
-        // clean up index entries for non-existent files.
-        std::vector<std::string> remove_list;
-        for (int i = 0; i < results.size();) {
-            std::string path = results[i].toStdString();
-            if (!std::filesystem::exists(path)) {
-                remove_list.push_back(std::move(path));
-                results.removeAt(i);
-            } else {
-                ++i;
-            }
-        }
+QStringList base_event_handler::search(QString keywords, bool highlight) {
+    return index_manager_.search(keywords, true, highlight);
+}
 
-        for (auto&& path : remove_list) {
-            remove_index_delay(std::move(path));
-        }
-    }
+QStringList base_event_handler::search(QString keywords, const QString& type, bool highlight) {
+    return index_manager_.search(keywords, type, true, highlight);
+}
 
-    return results;
+QStringList base_event_handler::search(QString keywords,
+    const QString& after, const QString& before, bool highlight) {
+    return index_manager_.search(keywords, after, before, true, highlight);
 }
 
 // No special handling for non-existent files; success is determined if the path does not exist.
@@ -332,7 +290,12 @@ bool base_event_handler::hasLFT(const QString& path) {
     return index_manager_.document_exists(path.toStdString());
 }
 
-void base_event_handler::addPath(const QString& fullPath) {
+QStringList base_event_handler::hasLFTSubdirectories(QString path) const {
+    (void)path;
+    return {};
+}
+
+void base_event_handler::addPath(const QString &fullPath) {
     auto path = fullPath.toStdString();
     if (std::filesystem::exists(path)) {
         add_index_delay(path);
@@ -350,3 +313,57 @@ void base_event_handler::delay_indexing(bool delay) {
 QString base_event_handler::cache_directory() {
     return QString::fromStdString(index_manager_.index_directory());
 }
+
+QStringList base_event_handler::search(
+    int maxCount, qint64 icase, quint32 startOffset,
+    quint32 endOffset, const QString& path,
+    QString keyword, bool useRegExp,
+    quint32& startOffsetReturn, quint32& endOffsetReturn) {
+    QString prefix = "\\A(?:[^/]*";
+    QString suffix = "[^/]*)\\z";
+    // spdlog::info("Original path: {}, keyword:{}, maxCount: {}", path.toStdString(), keyword.toStdString(), maxCount);
+    if (keyword.startsWith(prefix) && keyword.endsWith(suffix)) {
+        keyword.remove(0, prefix.length());
+        keyword.remove(keyword.length() - suffix.length(), suffix.length());
+    }
+    auto result = search(path, keyword, startOffset, maxCount);
+    (void)icase;
+    (void)endOffset;
+    (void)useRegExp;
+    startOffsetReturn = startOffset + 1;
+    endOffsetReturn = result.size() == maxCount
+                    ? startOffsetReturn + 1
+                    : startOffsetReturn;
+    return result;
+}
+
+QStringList base_event_handler::parallelsearch(
+    const QString& path, quint32 startOffset,
+    quint32 endOffset, const QString& keyword,
+    const QStringList& rules, quint32& startOffsetReturn,
+    quint32& endOffsetReturn) {
+    // if (!rules.isEmpty()) {
+    //     QString firstElement = rules.at(0);
+    //     qDebug() << "First element:" << firstElement;
+    // } else {
+    //     qDebug() << "List is empty!";
+    // }
+    (void)rules;
+    return search(100, 0, startOffset, endOffset, path, keyword, true, startOffsetReturn, endOffsetReturn);
+}
+// bool base_event_handler::autoIndexExternal() const {
+//     return true;
+// }
+
+// bool base_event_handler::autoIndexInternal() const
+// {
+//     return true;
+// }
+
+// void base_event_handler::setAutoIndexExternal(bool autoIndexExternal) {
+//     (void)autoIndexExternal;
+// }
+
+// void base_event_handler::setAutoIndexInternal(bool autoIndexInternal) {
+//     (void)autoIndexInternal;
+// }
