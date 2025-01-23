@@ -29,6 +29,11 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
         dbus.registerService(service_name);
         dbus.registerObject(object_name, this);
     }
+
+    // index_manager_.test(L"cong Lucene dao Elasticsearch—— quan wen jian suo shi zhan  ( yao pan ) cong c dao d quanwenjiansuoshizhan qwjssz yaopan yp");
+    // index_manager_.pinyin_test("从Lucene到Elasticsearch——全文检索实战 (姚攀)");
+    // index_manager_.pinyin_test("论十大关系.pdf");
+    // index_manager_.test(L"lun shi da guan xi haha .pdf lunshidaguanxi lsdgx");
 }
 
 base_event_handler::~base_event_handler() {
@@ -279,6 +284,10 @@ QStringList base_event_handler::search(QString keywords,
     return index_manager_.search(keywords, after, before, true, highlight);
 }
 
+QStringList base_event_handler::pinyin_search(QString keywords) {
+    return index_manager_.pinyin_search(keywords, true);
+}
+
 // No special handling for non-existent files; success is determined if the path does not exist.
 bool base_event_handler::removePath(const QString& fullPath) {
     auto path = fullPath.toStdString();
@@ -351,19 +360,3 @@ QStringList base_event_handler::parallelsearch(
     (void)rules;
     return search(100, 0, startOffset, endOffset, path, keyword, true, startOffsetReturn, endOffsetReturn);
 }
-// bool base_event_handler::autoIndexExternal() const {
-//     return true;
-// }
-
-// bool base_event_handler::autoIndexInternal() const
-// {
-//     return true;
-// }
-
-// void base_event_handler::setAutoIndexExternal(bool autoIndexExternal) {
-//     (void)autoIndexExternal;
-// }
-
-// void base_event_handler::setAutoIndexInternal(bool autoIndexInternal) {
-//     (void)autoIndexInternal;
-// }

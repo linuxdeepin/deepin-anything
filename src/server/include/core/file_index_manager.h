@@ -14,6 +14,7 @@
 
 #include "common/anything_fwd.hpp"
 #include "common/file_record.h"
+#include "core/pinyin_processor.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -46,6 +47,7 @@ public:
     bool indexed() const;
 
     void test(const Lucene::String& path);
+    void pinyin_test(const std::string& path);
 
     /// @brief Return the size of the indexed documents.
     /// @param nrt If true, returns the near real-time size, reflecting the most recent changes; 
@@ -107,6 +109,9 @@ public:
         QString& keywords, const QString& after,
         const QString& before, bool nrt, bool highlight = false);
 
+    
+    QStringList pinyin_search(QString& keywords, bool nrt);
+
     /**
      * Check if the given file path is already indexed using an exact match search.
      * @param path The file path to check.
@@ -141,14 +146,17 @@ private:
     Lucene::SearcherPtr nrt_searcher_;
     Lucene::QueryParserPtr parser_;
     Lucene::QueryParserPtr type_parser_;
+    Lucene::QueryParserPtr pinyin_parser_;
     Lucene::IndexReaderPtr reader_;
     Lucene::IndexReaderPtr nrt_reader_;
     Lucene::String fuzzy_field_{ L"file_name" };
     Lucene::String exact_field_{ L"full_path" };
     Lucene::String type_field_{ L"file_type" };
+    Lucene::String pinyin_field_{ L"pinyin" };
     std::mutex mtx_;
     std::mutex reader_mtx_;
     file_helper file_helper_;
+    pinyin_processor pinyin_processor_;
 };
 
 ANYTHING_NAMESPACE_END

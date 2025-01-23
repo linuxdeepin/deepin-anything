@@ -12,9 +12,6 @@
 // #include <streambuf>
 // #include <thread>
 
-// #include <QDebug>
-// #include <QDateTime>
-
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 

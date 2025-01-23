@@ -16,7 +16,8 @@ ANYTHING_NAMESPACE_BEGIN
 inline void print(const file_record& record) {
     std::cout << "file_name: " << record.file_name <<
         " full_path: " << record.full_path <<
-        /*" file_type: " << record.file_type <<*/ "\n";
+        " file_type: " << record.file_type <<
+        " creation_time: " << record.creation_time << "\n";
 }
 
 ANYTHING_NAMESPACE_END

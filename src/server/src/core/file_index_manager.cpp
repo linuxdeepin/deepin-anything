@@ -16,14 +16,14 @@
 #include "lucene++/Highlighter.h"
 
 #include "utils/log.h"
-#include "utils/string_helper.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
 using namespace Lucene;
 
 file_index_manager::file_index_manager(std::string index_dir)
-    : index_directory_(std::move(index_dir)) {
+    : index_directory_(std::move(index_dir)),
+      pinyin_processor_("config/pinyin.txt") {
     try {
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory_));
         auto create = !IndexReader::indexExists(dir);
@@ -39,6 +39,9 @@ file_index_manager::file_index_manager(std::string index_dir)
             newLucene<AnythingAnalyzer>());
         type_parser_ = newLucene<QueryParser>(
             LuceneVersion::LUCENE_CURRENT, type_field_,
+            newLucene<AnythingAnalyzer>());
+        pinyin_parser_ = newLucene<QueryParser>(
+            LuceneVersion::LUCENE_CURRENT, pinyin_field_,
             newLucene<AnythingAnalyzer>());
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()) +
@@ -65,7 +68,6 @@ void file_index_manager::add_index(const std::string& path) {
         spdlog::debug("Indexed {}", path);
     } catch (const LuceneException& e) {
         spdlog::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
-        // throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     } catch (const std::exception& e) {
         spdlog::error(e.what());
     }
@@ -88,11 +90,7 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
     }
 }
 
-void file_index_manager::update_index(
-    const std::string& old_path,
-    const std::string& new_path,
-    bool exact_match) {
-    
+void file_index_manager::update_index(const std::string& old_path, const std::string& new_path, bool exact_match) {
     try {
         if (exact_match) {
             // Exact updation: The old path must be a full path; otherwise, updateDocument will fail to locate and update the existing document.
@@ -109,35 +107,6 @@ void file_index_manager::update_index(
         spdlog::error(e.what());
     }
 }
-
-// std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
-//     std::vector<file_record> results;
-//     TopScoreDocCollectorPtr collector = search(term, exact_match, nrt);
-
-//     if (collector->getTotalHits() == 0) {
-//         log::info() << "Found no files\n";
-//         return results;
-//     }
-
-//     SearcherPtr searcher = nrt ? nrt_searcher_ : searcher_;
-//     Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
-//     for (int32_t i = 0; i < hits.size(); ++i) {
-//         DocumentPtr doc = searcher->doc(hits[i]->doc);
-//         file_record record;
-//         String file_name = doc->get(L"file_name");
-//         String full_path = doc->get(L"full_path");
-//         String last_write_time = doc->get(L"last_write_time");
-//         if (!file_name.empty()) record.file_name = StringUtils::toUTF8(file_name);
-//         if (!full_path.empty()) record.full_path = StringUtils::toUTF8(full_path);
-//         // std::cout << "------------------\n";
-//         // std::cout << "full_path: " << record.full_path << "\n";
-//         // std::cout << "creation_time: " << record.creation_time << "\n";
-//         // std::cout << "------------------\n";
-//         results.push_back(std::move(record));
-//     }
-
-//     return results;
-// }
 
 void file_index_manager::commit() {
     writer_->commit();
@@ -161,6 +130,12 @@ void file_index_manager::test(const String& path) {
     while (tokenStream->incrementToken()) {
         spdlog::info("Token: {}", StringUtils::toUTF8(tokenStream->toString()));
     }
+}
+
+void file_index_manager::pinyin_test(const std::string& path) {
+    spdlog::info("pinyin test path: {}", path);
+    auto pinyin_path = pinyin_processor_.convert_to_pinyin(path);
+    test(StringUtils::toUnicode(pinyin_path));
 }
 
 int file_index_manager::document_size(bool nrt) const {
@@ -192,7 +167,16 @@ QStringList file_index_manager::search(
 
         QueryPtr query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
         TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(offset + max_count, true);
-        searcher->search(query, collector);
+        if (highlight) {
+            searcher->search(query, collector);
+        } else {
+            auto pinyin_query = pinyin_parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
+            auto boolean_query = newLucene<BooleanQuery>();
+            boolean_query->add(query, BooleanClause::SHOULD);
+            boolean_query->add(pinyin_query, BooleanClause::SHOULD);
+            searcher->search(boolean_query, collector);
+        }
+        
 
         HighlighterPtr highlighter = nullptr;
         if (highlight) {
@@ -275,7 +259,16 @@ QStringList file_index_manager::search(QString& keywords, bool nrt, bool highlig
         }
 
         QueryPtr query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
-        TopDocsPtr search_results = searcher->search(query, max_results);
+        TopDocsPtr search_results;
+        if (highlight) {
+            search_results = searcher->search(query, max_results);
+        } else {
+            auto pinyin_query = pinyin_parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
+            auto boolean_query = newLucene<BooleanQuery>();
+            boolean_query->add(query, BooleanClause::SHOULD);
+            boolean_query->add(pinyin_query, BooleanClause::SHOULD);
+            search_results = searcher->search(boolean_query, max_results);
+        }
 
         HighlighterPtr highlighter = nullptr;
         if (highlight) {
@@ -466,6 +459,53 @@ QStringList file_index_manager::search(QString& keywords,
     return {};
 }
 
+QStringList file_index_manager::pinyin_search(QString& keywords, bool nrt) {
+    if (keywords.isEmpty()) {
+        return {};
+    }
+
+    spdlog::debug("Pinyin search index(keyworks: \"{}\").", keywords.toStdString());
+
+    try {
+        SearcherPtr searcher;
+        int32_t max_results;
+        if (nrt) {
+            try_refresh_reader(true);
+            searcher = nrt_searcher_;
+            max_results = nrt_reader_->numDocs();
+        } else {
+            try_refresh_reader();
+            searcher = searcher_;
+            max_results = reader_->numDocs();
+        }
+
+        QueryPtr query = pinyin_parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
+        TopDocsPtr search_results = searcher->search(query, max_results);
+
+        QStringList results;
+        results.reserve(search_results->scoreDocs.size());
+        for (const auto& score_doc : search_results->scoreDocs) {
+            DocumentPtr doc = searcher->doc(score_doc->doc);
+            auto full_path = doc->get(L"full_path");
+
+            // Since there is no automatic cleanup for invalid indexes,
+            // the system may contain paths that no longer exist.
+            // To maintain index validity, invalid indexes are filtered and removed here.
+            if (!std::filesystem::exists(full_path)) {
+                remove_index(StringUtils::toUTF8(full_path));
+                continue;
+            }
+
+            results.append(QString::fromStdWString(full_path));
+        }
+
+        return results;
+    } catch (const LuceneException& e) {
+        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        return {};
+    }
+}
+
 bool file_index_manager::document_exists(const std::string &path, bool only_check_initial_index) {
     TermPtr term = newLucene<Term>(L"full_path", StringUtils::toUnicode(path));
     TermDocsPtr termDocs;
@@ -515,6 +555,10 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
         StringUtils::toUnicode(record.file_type),
         Field::STORE_YES, Field::INDEX_ANALYZED));
     doc->add(newLucene<NumericField>(L"creation_time")->setLongValue(record.creation_time));
+    // spdlog::info("pinyin: {}", pinyin_processor_.convert_to_pinyin(record.file_name));
+    doc->add(newLucene<Field>(L"pinyin",
+        StringUtils::toUnicode(pinyin_processor_.convert_to_pinyin(record.file_name)),
+        Field::STORE_YES, Field::INDEX_ANALYZED));
     return doc;
 }
 

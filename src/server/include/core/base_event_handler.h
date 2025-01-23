@@ -113,6 +113,8 @@ public slots:
 
     QStringList search(QString keywords, const QString& after, const QString& before, bool highlight = false);
 
+    QStringList pinyin_search(QString keywords);
+
     bool removePath(const QString& fullPath);
 
     bool hasLFT(const QString& path);

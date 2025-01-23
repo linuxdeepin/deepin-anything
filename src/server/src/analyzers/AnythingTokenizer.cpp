@@ -115,7 +115,9 @@ bool AnythingTokenizer::incrementToken() {
                 UnicodeUtil::isDigit(ioBuffer_[bufferIndex_])) {
                 push(c);
             } else {
-                return flush();
+                if (length_ > 0) {
+                    return flush();
+                }
             }
         }
          /*else if (isLastDot(c, offset_ - 1, ioBuffer_.get())) {
@@ -179,6 +181,7 @@ bool AnythingTokenizer::flush() {
     if (length_ > 0) {
         termAtt_->setTermBuffer(buffer_.get(), 0, length_);
         offsetAtt_->setOffset(correctOffset(start_), correctOffset(start_ + length_));
+        std::memset(buffer_.get(), 0, buffer_.size() * sizeof(wchar_t));
         return true;
     }
 
