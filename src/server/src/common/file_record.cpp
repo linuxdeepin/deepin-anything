@@ -5,6 +5,8 @@
 
 #include "common/file_record.h"
 
+#include <charconv>
+
 #include <sys/stat.h>  // For statx and struct statx
 #include <fcntl.h>     // For AT_FDCWD
 
@@ -25,24 +27,27 @@ file_helper::file_helper() {
 file_record file_helper::make_file_record(
     const std::filesystem::path& p) {
     namespace fs = std::filesystem;
-    std::string type;
+    std::string type("-");
     if (fs::is_regular_file(p)) {
-        auto it = extension_mapper_.find(p.extension().string());
-        type = it != extension_mapper_.end() ? it->second : "regular/file";
+        auto ext = p.extension().string();
+        if (!ext.empty() && ext.size() > 1) {
+            auto it = extension_mapper_.find(ext);
+            type = it != extension_mapper_.end() ? it->second : ext.substr(1);
+        }
     } else if (fs::is_directory(p)) {
-        type = "directory";
+        type = "Directory";
     } else if (fs::is_symlink(p)) {
-        type = "symlink";
+        type = "Symlink";
     } else {
-        type = "unknown";
+        type = "Unknown";
     }
 
     try {
         return file_record {
-            .file_name     = p.filename().string(),
-            .full_path     = p.string(),
-            .file_type     = type,
-            .creation_time = get_file_creation_time(p)
+            .file_name       = p.filename().string(),
+            .full_path       = p.string(),
+            .file_type       = type,
+            .creation_time   = get_file_creation_time(p)
         };
     } catch (const std::exception& e) {
         throw;

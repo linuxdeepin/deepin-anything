@@ -50,6 +50,8 @@ std::string pinyin_processor::convert_to_pinyin(const std::string& sentence) {
     auto results = split_utf8_characters(sentence);
     std::string new_sentence;
     std::string pinyin_temp;
+    std::string pinyin_acronym_english;
+    std::string pinyin_english;
     std::vector<std::string> pinyin_phrase_groups;
     bool last_is_utf8_character = false;
     bool last_is_single_character = false;
@@ -64,6 +66,12 @@ std::string pinyin_processor::convert_to_pinyin(const std::string& sentence) {
             auto pinyin = remove_tone(it->second[0]);
             new_sentence += pinyin;
             pinyin_temp += pinyin;
+
+            size_t char_len = get_utf8_char_length(pinyin[0]);
+            pinyin_acronym_english += pinyin.substr(0, char_len);
+
+            pinyin_english += pinyin;
+
             last_is_utf8_character = true;
             last_is_single_character = false;
         } else {
@@ -75,6 +83,8 @@ std::string pinyin_processor::convert_to_pinyin(const std::string& sentence) {
             }
 
             new_sentence += character;
+            pinyin_acronym_english += character;
+            pinyin_english += character;
             last_is_utf8_character = false;
             last_is_single_character = true;
         }
@@ -96,7 +106,8 @@ std::string pinyin_processor::convert_to_pinyin(const std::string& sentence) {
         new_sentence += " " + acronym;
     }
 
-    // new_sentence += "\n";
+    new_sentence += " " + pinyin_acronym_english;
+    new_sentence += " " + pinyin_english;
     return new_sentence;
 }
 

@@ -4,8 +4,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "core/base_event_handler.h"
-#include "core/disk_scanner.h"
 
+#include <QtConcurrent/QtConcurrent>
+
+#include "core/disk_scanner.h"
 #include "common/file_record.h"
 #include "utils/log.h"
 #include "utils/string_helper.h"
@@ -30,10 +32,7 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
         dbus.registerObject(object_name, this);
     }
 
-    // index_manager_.test(L"cong Lucene dao Elasticsearch—— quan wen jian suo shi zhan  ( yao pan ) cong c dao d quanwenjiansuoshizhan qwjssz yaopan yp");
-    // index_manager_.pinyin_test("从Lucene到Elasticsearch——全文检索实战 (姚攀)");
-    // index_manager_.pinyin_test("论十大关系.pdf");
-    // index_manager_.test(L"lun shi da guan xi haha .pdf lunshidaguanxi lsdgx");
+    index_manager_.refresh_indexes();
 }
 
 base_event_handler::~base_event_handler() {
@@ -263,29 +262,29 @@ void base_event_handler::timer_worker(int64_t interval) {
 }
 
 QStringList base_event_handler::search(const QString& path,
-    QString keywords, int offset, int max_count, bool highlight) {
+    QString keywords, int offset, int max_count) {
     if (offset < 0) {
         return {};
     }
 
-    return index_manager_.search(path, keywords, offset, max_count, true, highlight);
+    return index_manager_.search(path, keywords, offset, max_count, true);
 }
 
-QStringList base_event_handler::search(QString keywords, bool highlight) {
-    return index_manager_.search(keywords, true, highlight);
+QStringList base_event_handler::search(const QString& path, QString keywords) {
+    return index_manager_.search(path, keywords, true);
 }
 
-QStringList base_event_handler::search(QString keywords, const QString& type, bool highlight) {
-    return index_manager_.search(keywords, type, true, highlight);
+QStringList base_event_handler::search(const QString& path, QString keywords, const QString& type) {
+    return index_manager_.search(path, keywords, type, true);
 }
 
-QStringList base_event_handler::search(QString keywords,
-    const QString& after, const QString& before, bool highlight) {
-    return index_manager_.search(keywords, after, before, true, highlight);
+QStringList base_event_handler::search(const QString& path,
+    QString keywords, const QString& after, const QString& before) {
+    return index_manager_.search(path, keywords, after, before, true);
 }
 
-QStringList base_event_handler::pinyin_search(QString keywords) {
-    return index_manager_.pinyin_search(keywords, true);
+QStringList base_event_handler::traverse_directory(const QString& path) {
+    return index_manager_.traverse_directory(path, true);
 }
 
 // No special handling for non-existent files; success is determined if the path does not exist.
@@ -359,4 +358,13 @@ QStringList base_event_handler::parallelsearch(
     // }
     (void)rules;
     return search(100, 0, startOffset, endOffset, path, keyword, true, startOffsetReturn, endOffsetReturn);
+}
+
+void base_event_handler::async_search(QString keywords)
+{
+    index_manager_.async_search(keywords, true, [this](const QStringList& results) {
+        if (!results.isEmpty()) {
+            Q_EMIT asyncSearchCompleted(results);
+        }
+    });
 }
