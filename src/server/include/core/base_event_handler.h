@@ -7,6 +7,7 @@
 #define ANYTHING_BASE_EVENT_HANDLER_H_
 
 #include <QObject>
+#include <QDBusAbstractAdaptor>
 
 #include "common/anything_fwd.hpp"
 #include "common/fs_event.h"
@@ -98,7 +99,7 @@ public slots:
      * @param max_count The maximum number of results to return.
      * @return A QStringList containing the paths of the found files.
      */
-    QStringList search(const QString& path, QString keywords, int offset, int max_count, bool highlight = false);
+    QStringList search(const QString& path, QString keywords, int offset, int max_count);
 
     /**
      * Searches all files for a specified keyword and returns a list of matching file names.
@@ -107,11 +108,13 @@ public slots:
      * @return A QStringList containing the paths of all files where the keyword is found.
      *         If no files are found, an empty list is returned.
      */
-    QStringList search(QString keywords, bool highlight = false);
+    QStringList search(const QString& path, QString keywords);
 
-    QStringList search(QString keywords, const QString& type, bool highlight = false);
+    QStringList search(const QString& path, QString keywords, const QString& type);
 
-    QStringList search(QString keywords, const QString& after, const QString& before, bool highlight = false);
+    QStringList search(const QString& path, QString keywords, const QString& after, const QString& before);
+
+    QStringList traverse_directory(const QString& path);
 
     bool removePath(const QString& fullPath);
 
@@ -136,10 +139,14 @@ public slots:
     QStringList parallelsearch(const QString &path, quint32 startOffset, quint32 endOffset,
                                const QString &keyword, const QStringList &rules,
                                quint32 &startOffsetReturn, quint32 &endOffsetReturn);
-    
+
+    // Asynchronously search
+    Q_NOREPLY void async_search(QString keywords);
+
 Q_SIGNALS:
     void autoIndexInternalChanged(bool autoIndexInternal);
     void autoIndexExternalChanged(bool autoIndexExternal);
+    void asyncSearchCompleted(const QStringList& results);
 
 private:
     anything::mount_manager mnt_manager_;

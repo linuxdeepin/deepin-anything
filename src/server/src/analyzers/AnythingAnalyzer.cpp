@@ -17,7 +17,7 @@ TokenStreamPtr AnythingAnalyzer::tokenStream(
     return result;
 }
 
-TokenStreamPtr AnythingAnalyzer::reusableTokenStream(const String &, const ReaderPtr &reader) {
+TokenStreamPtr AnythingAnalyzer::reusableTokenStream(const String&, const ReaderPtr& reader) {
     auto streams(boost::dynamic_pointer_cast<AnythingAnalyzerSavedStreams>(getPreviousTokenStream()));
     if (!streams) {
         streams = newLucene<AnythingAnalyzerSavedStreams>();
@@ -31,7 +31,6 @@ TokenStreamPtr AnythingAnalyzer::reusableTokenStream(const String &, const Reade
     return streams->result;
 }
 
-AnythingAnalyzerSavedStreams::~AnythingAnalyzerSavedStreams() {
-}
+AnythingAnalyzerSavedStreams::~AnythingAnalyzerSavedStreams() {}
 
 ANYTHING_NAMESPACE_END

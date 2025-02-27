@@ -47,9 +47,8 @@ bool AnythingTokenizer::incrementToken() {
     length_ = 0;
     start_ = offset_;
     bool last_is_en  = false;
-    bool last_is_sym = false;
     bool last_is_num = false;
-    // [[maybe_unused]] bool last_is_dot = false;
+    bool last_is_sym = false;
 
     while (true) {
         wchar_t c;
@@ -68,19 +67,18 @@ bool AnythingTokenizer::incrementToken() {
 
         if (dataLen_ == -1) {
             --offset_;
-            /*if (last_is_dot) {
-                // flush(); // suffix token
-                spdlog::info("Last");
-                // start_ += 1;
-                // length_ -= 1;
-                return flush();
-            }*/
             return flush();
         } else {
             c = ioBuffer_[bufferIndex_++];
         }
 
         if (UnicodeUtil::isLower(c) || UnicodeUtil::isUpper(c)) { // 字母
+            if (last_is_num || last_is_sym) {
+                --bufferIndex_;
+                --offset_;
+                return flush();
+            }
+
             push(c);
             if (length_ == max_word_len) {
                 return flush();
@@ -91,50 +89,48 @@ bool AnythingTokenizer::incrementToken() {
                     return flush();
                 }
             }
-            // if (is_word(buffer_.get(), length_)) {
-            //     return flush();
-            // }
             last_is_en = true;
         } else if (UnicodeUtil::isDigit(c)) { // 数字
+            if (last_is_en || last_is_sym) {
+                --bufferIndex_;
+                --offset_;
+                return flush();
+            }
+
             push(c);
             if (length_ == max_word_len) {
                 return flush();
             }
             last_is_num = true;
-        } else if (isSymbol(c)) {
-            if (last_is_en || last_is_sym) {
-                push(c);
-                last_is_en = false;
-                last_is_sym = true;
-            } else {
-                return flush();
-            }
         } else if (isDot(c)) {
             // Detect the version number, for example: v1.0.0
             if (last_is_num && bufferIndex_ < dataLen_ &&
                 UnicodeUtil::isDigit(ioBuffer_[bufferIndex_])) {
                 push(c);
             } else {
-                return flush();
+                if (length_ > 0) {
+                    return flush();
+                }
             }
-        }
-         /*else if (isLastDot(c, offset_ - 1, ioBuffer_.get())) {
-            if (last_is_en || last_is_num || last_is_sym) {
+        } else if (isSymbol(c)) {
+            // Detect C++ or C#, etc...
+            if (last_is_en || last_is_sym) {
+                push(c);
+                last_is_sym = true;
+            } else {
+                if (length_ > 0) {
+                    return flush();
+                }
+            }
+        } else if (isPreservedSymbol(c)) {
+            if (length_ > 0) {
                 --bufferIndex_;
                 --offset_;
                 return flush();
             }
-
-            // 防止 "20241014162010..p.ng..." 读取最后时保留一个 .
-            // if (bufferIndex_ >= dataLen_ - 1) {
-            //     // spdlog::debug("bufferIndex_:{} --> dataLen_:{}", bufferIndex_, dataLen_);
-            //     --length_;
-            //     return flush();
-            // }
-
             push(c);
-            last_is_dot = true;
-        }*/ else if (UnicodeUtil::isOther(c)) {
+            // return flush();
+        } else if (UnicodeUtil::isOther(c)) {
             if (length_ > 0) {
                 --bufferIndex_;
                 --offset_;
@@ -155,7 +151,9 @@ void AnythingTokenizer::end() {
 }
 
 void AnythingTokenizer::reset() {
+    // std::cout << __PRETTY_FUNCTION__ << "\n";
     Tokenizer::reset();
+    // input->reset();
     offset_ = 0;
     bufferIndex_ = 0;
     dataLen_ = 0;
@@ -179,6 +177,7 @@ bool AnythingTokenizer::flush() {
     if (length_ > 0) {
         termAtt_->setTermBuffer(buffer_.get(), 0, length_);
         offsetAtt_->setOffset(correctOffset(start_), correctOffset(start_ + length_));
+        std::memset(buffer_.get(), 0, buffer_.size() * sizeof(wchar_t));
         return true;
     }
 
@@ -187,6 +186,10 @@ bool AnythingTokenizer::flush() {
 
 bool AnythingTokenizer::isSymbol(wchar_t c) {
     return c == L'+' || c == L'#';
+}
+
+bool AnythingTokenizer::isPreservedSymbol(wchar_t c) {
+    return c == L'@';
 }
 
 bool AnythingTokenizer::isDot(wchar_t c) {

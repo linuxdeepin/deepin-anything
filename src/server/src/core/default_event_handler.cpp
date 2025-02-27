@@ -115,14 +115,26 @@ void default_event_handler::handle(fs_event event) {
     if (!ignored) {
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
-            if (std::filesystem::exists(event.src)) {
-                add_index_delay(std::move(event.src));
-            }
-        } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
+            // Do not check for the existence of files; we trust the kernel module.
+            add_index_delay(std::move(event.src));
+        } else if (event.act == ACT_DEL_FILE) {
             remove_index_delay(std::move(event.src));
-        } else if (event.act == ACT_RENAME_FILE || event.act == ACT_RENAME_FOLDER) {
-            if (std::filesystem::exists(event.dst)) {
-                update_index_delay(std::move(event.src), std::move(event.dst));
+        } else if (event.act == ACT_DEL_FOLDER) {
+            // Remove all files/folders in this folder(including this folder)
+            QString path = QString::fromStdString(event.src);
+            for (auto const& result : traverse_directory(path)) {
+                remove_index_delay(result.toStdString());
+            }
+        } else if (event.act == ACT_RENAME_FILE) {
+            update_index_delay(std::move(event.src), std::move(event.dst));
+        } else if (event.act == ACT_RENAME_FOLDER) {
+            // Rename all files/folders in this folder(including this folder)
+            QString oldPath = QString::fromStdString(event.src);
+            for (auto const& result : traverse_directory(oldPath)) {
+                std::string src = result.toStdString();
+                std::string dst = src;
+                dst.replace(0, event.src.length(), event.dst);
+                update_index_delay(std::move(src), std::move(dst));
             }
         }
     }

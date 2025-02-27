@@ -7,7 +7,6 @@
 #define ANYTHING_CONFIG_H_
 
 #include <fstream> // ifstream
-#include <codecvt>
 
 #include "common/anything_fwd.hpp"
 #include "utils/string_helper.h"

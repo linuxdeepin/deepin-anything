@@ -6,24 +6,26 @@
 #include "core/file_index_manager.h"
 #include "analyzers/AnythingAnalyzer.h"
 
+#include <chrono>
 #include <filesystem>
-#include <iostream>
 
-#include "lucene++/FileUtils.h"
 #include "lucene++/ChineseAnalyzer.h"
+#include "lucene++/Highlighter.h"
+#include "lucene++/FileUtils.h"
+#include "lucene++/FuzzyQuery.h"
 #include "lucene++/QueryScorer.h"
 #include "lucene++/SimpleHTMLFormatter.h"
-#include "lucene++/Highlighter.h"
 
+#include "analyzers/AnythingAnalyzer.h"
 #include "utils/log.h"
-#include "utils/string_helper.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
 using namespace Lucene;
 
 file_index_manager::file_index_manager(std::string index_dir)
-    : index_directory_(std::move(index_dir)) {
+    : index_directory_(std::move(index_dir)),
+      pinyin_processor_("config/pinyin.txt") {
     try {
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory_));
         auto create = !IndexReader::indexExists(dir);
@@ -39,6 +41,9 @@ file_index_manager::file_index_manager(std::string index_dir)
             newLucene<AnythingAnalyzer>());
         type_parser_ = newLucene<QueryParser>(
             LuceneVersion::LUCENE_CURRENT, type_field_,
+            newLucene<AnythingAnalyzer>());
+        pinyin_parser_ = newLucene<QueryParser>(
+            LuceneVersion::LUCENE_CURRENT, pinyin_field_,
             newLucene<AnythingAnalyzer>());
     } catch (const LuceneException& e) {
         throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()) +
@@ -65,7 +70,6 @@ void file_index_manager::add_index(const std::string& path) {
         spdlog::debug("Indexed {}", path);
     } catch (const LuceneException& e) {
         spdlog::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
-        // throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     } catch (const std::exception& e) {
         spdlog::error(e.what());
     }
@@ -88,11 +92,7 @@ void file_index_manager::remove_index(const std::string& term, bool exact_match)
     }
 }
 
-void file_index_manager::update_index(
-    const std::string& old_path,
-    const std::string& new_path,
-    bool exact_match) {
-    
+void file_index_manager::update_index(const std::string& old_path, const std::string& new_path, bool exact_match) {
     try {
         if (exact_match) {
             // Exact updation: The old path must be a full path; otherwise, updateDocument will fail to locate and update the existing document.
@@ -110,35 +110,6 @@ void file_index_manager::update_index(
     }
 }
 
-// std::vector<file_record> file_index_manager::search_index(const std::string& term, bool exact_match, bool nrt) {
-//     std::vector<file_record> results;
-//     TopScoreDocCollectorPtr collector = search(term, exact_match, nrt);
-
-//     if (collector->getTotalHits() == 0) {
-//         log::info() << "Found no files\n";
-//         return results;
-//     }
-
-//     SearcherPtr searcher = nrt ? nrt_searcher_ : searcher_;
-//     Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
-//     for (int32_t i = 0; i < hits.size(); ++i) {
-//         DocumentPtr doc = searcher->doc(hits[i]->doc);
-//         file_record record;
-//         String file_name = doc->get(L"file_name");
-//         String full_path = doc->get(L"full_path");
-//         String last_write_time = doc->get(L"last_write_time");
-//         if (!file_name.empty()) record.file_name = StringUtils::toUTF8(file_name);
-//         if (!full_path.empty()) record.full_path = StringUtils::toUTF8(full_path);
-//         // std::cout << "------------------\n";
-//         // std::cout << "full_path: " << record.full_path << "\n";
-//         // std::cout << "creation_time: " << record.creation_time << "\n";
-//         // std::cout << "------------------\n";
-//         results.push_back(std::move(record));
-//     }
-
-//     return results;
-// }
-
 void file_index_manager::commit() {
     writer_->commit();
     spdlog::info("All changes are commited");
@@ -150,8 +121,8 @@ bool file_index_manager::indexed() const {
 
 void file_index_manager::test(const String& path) {
     spdlog::info("test path: {}", StringUtils::toUTF8(path));
-    // AnalyzerPtr analyzer = newLucene<StandardAnalyzer>(LuceneVersion::LUCENE_CURRENT); // newLucene<jieba_analyzer>();
-    AnalyzerPtr analyzer = newLucene<AnythingAnalyzer>(); // newLucene<jieba_analyzer>();
+    // AnalyzerPtr analyzer = newLucene<StandardAnalyzer>(LuceneVersion::LUCENE_CURRENT);
+    AnalyzerPtr analyzer = newLucene<AnythingAnalyzer>();
     
     // Use a StringReader to simulate input
     TokenStreamPtr tokenStream = analyzer->tokenStream(L"", newLucene<StringReader>(path));
@@ -163,7 +134,13 @@ void file_index_manager::test(const String& path) {
     }
 }
 
-int file_index_manager::document_size(bool nrt) const {
+void file_index_manager::pinyin_test(const std::string& path) {
+    spdlog::info("pinyin test path: {}", path);
+    auto pinyin_path = pinyin_processor_.convert_to_pinyin(path);
+    test(StringUtils::toUnicode(pinyin_path));
+}
+
+int32_t file_index_manager::document_size(bool nrt) const {
     return nrt ? nrt_reader_->numDocs() : reader_->numDocs();
 }
 
@@ -173,11 +150,17 @@ std::string file_index_manager::index_directory() const {
 
 QStringList file_index_manager::search(
     const QString& path, QString& keywords,
-    int32_t offset, int32_t max_count, bool nrt, bool highlight) {
+    int32_t offset, int32_t max_count, bool nrt) {
     spdlog::debug("Search index(path:\"{}\", keywords: \"{}\", offset: {}, max_count: {}).",
         path.toStdString(), keywords.toStdString(), offset, max_count);
     if (keywords.isEmpty()) {
         return {};
+    }
+
+    String query_terms = StringUtils::toUnicode(keywords.toStdString());
+
+    if (keywords.at(0) == QChar('*') || keywords.at(0) == QChar('?')) {
+        keywords = keywords.mid(1);
     }
 
     try {
@@ -190,9 +173,20 @@ QStringList file_index_manager::search(
             searcher = searcher_;
         }
 
-        QueryPtr query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
-        TopScoreDocCollectorPtr collector = TopScoreDocCollector::create(offset + max_count, true);
-        searcher->search(query, collector);
+        auto boolean_query = newLucene<BooleanQuery>();
+        auto query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
+        boolean_query->add(query, BooleanClause::SHOULD);
+        // Note that this can produce very slow queries on big indexes.
+        pinyin_parser_->setAllowLeadingWildcard(true);
+        auto pinyin_query = pinyin_parser_->parse(query_terms);
+        auto prefix_query = newLucene<PrefixQuery>(newLucene<Term>(fuzzy_field_, query_terms));
+        auto fuzzy_query = newLucene<FuzzyQuery>(newLucene<Term>(fuzzy_field_, query_terms), 0.65);
+        boolean_query->add(pinyin_query, BooleanClause::SHOULD);
+        boolean_query->add(prefix_query, BooleanClause::SHOULD);
+        boolean_query->add(fuzzy_query, BooleanClause::SHOULD);
+
+        auto collector = TopScoreDocCollector::create(offset + max_count, true);
+        searcher->search(boolean_query, collector);
 
         HighlighterPtr highlighter = nullptr;
         if (highlight) {
@@ -211,28 +205,10 @@ QStringList file_index_manager::search(
         QStringList results;
         auto count = std::min(offset + max_count, hits.size());
         results.reserve(count);
-        std::vector<std::string> remove_list;
         for (int32_t i = offset; i < count; ++i) {
             DocumentPtr doc = searcher->doc(hits[i]->doc);
-            // QString full_path = QString::fromStdWString(doc->get(L"full_path"));
-            // if (full_path.startsWith(path)) {
-            //     results.append(full_path);
-            // }
-            auto full_path = doc->get(L"full_path");
-            // clean up index entries for non-existent files.
-            auto pending_path = StringUtils::toUTF8(full_path);
-            if (!std::filesystem::exists(pending_path)) {
-                remove_list.push_back(std::move(pending_path));
-                continue;
-            }
-
-            if (highlighter) {
-                auto token_stream = parser_->getAnalyzer()->tokenStream(
-                    L"full_path", newLucene<StringReader>(full_path));
-                full_path = highlighter->getBestFragment(token_stream, full_path);
-            }
-
-            QString result = QString::fromStdWString(full_path);
+            std::filesystem::path full_path(doc->get(L"full_path"));
+            QString result = QString::fromStdString(full_path.string());
             if (result.startsWith(path)) {
                 results.append(result);
             }
@@ -254,12 +230,20 @@ QStringList file_index_manager::search(
     }
 }
 
-QStringList file_index_manager::search(QString& keywords, bool nrt, bool highlight) {
+QStringList file_index_manager::search(const QString& path, QString& keywords, bool nrt) {
+    spdlog::debug("Search index(keyworks: \"{}\").", keywords.toStdString());
+
     if (keywords.isEmpty()) {
         return {};
     }
 
-    spdlog::debug("Search index(keyworks: \"{}\").", keywords.toStdString());
+    // 原始词条
+    String query_terms = StringUtils::toUnicode(keywords.toStdString());
+
+    // 给普通 parser 用
+    if (keywords.at(0) == QChar('*') || keywords.at(0) == QChar('?')) {
+        keywords = keywords.mid(1);
+    }
 
     try {
         SearcherPtr searcher;
@@ -274,8 +258,19 @@ QStringList file_index_manager::search(QString& keywords, bool nrt, bool highlig
             max_results = reader_->numDocs();
         }
 
-        QueryPtr query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
-        TopDocsPtr search_results = searcher->search(query, max_results);
+        auto boolean_query = newLucene<BooleanQuery>();
+        auto query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
+        boolean_query->add(query, BooleanClause::SHOULD);
+        // Note that this can produce very slow queries on big indexes.
+        pinyin_parser_->setAllowLeadingWildcard(true);
+        auto pinyin_query = pinyin_parser_->parse(query_terms);
+        boolean_query->add(pinyin_query, BooleanClause::SHOULD);
+        AnythingAnalyzer::forEachTerm(query_terms, [this, &boolean_query](const auto& term) {
+            boolean_query->add(newLucene<PrefixQuery>(newLucene<Term>(pinyin_field_, term)), BooleanClause::SHOULD);
+            boolean_query->add(newLucene<FuzzyQuery>(newLucene<Term>(pinyin_field_, term), 0.55), BooleanClause::SHOULD);
+        });
+
+        auto search_results = searcher->search(boolean_query, max_results);
 
         HighlighterPtr highlighter = nullptr;
         if (highlight) {
@@ -288,23 +283,12 @@ QStringList file_index_manager::search(QString& keywords, bool nrt, bool highlig
         results.reserve(search_results->scoreDocs.size());
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher->doc(score_doc->doc);
-            auto full_path = doc->get(L"full_path");
-
-            // Since there is no automatic cleanup for invalid indexes,
-            // the system may contain paths that no longer exist.
-            // To maintain index validity, invalid indexes are filtered and removed here.
-            if (!std::filesystem::exists(full_path)) {
-                remove_index(StringUtils::toUTF8(full_path));
-                continue;
+            auto result = QString::fromStdWString(doc->get(L"full_path")
+                + L"<\\>" + doc->get(L"file_type")
+                + L"<\\>" + doc->get(L"file_size"));
+            if (result.startsWith(path)) {
+                results.append(std::move(result));
             }
-
-            if (highlighter) {
-                auto token_stream = parser_->getAnalyzer()->tokenStream(
-                    L"full_path", newLucene<StringReader>(full_path));
-                full_path = highlighter->getBestFragment(token_stream, full_path);
-            }
-
-            results.append(QString::fromStdWString(full_path));
         }
 
         return results;
@@ -314,14 +298,19 @@ QStringList file_index_manager::search(QString& keywords, bool nrt, bool highlig
     }
 }
 
-QStringList file_index_manager::search(QString& keywords, const QString& type, bool nrt, bool highlight) {
+QStringList file_index_manager::search(const QString& path, QString& keywords, const QString& type, bool nrt) {
+    spdlog::debug("Search index(keyworks: \"{}\", type: \"{}\").", keywords.toStdString(), type.toStdString());
     if (keywords.isEmpty() && type.isEmpty()) {
         return {};
     } else if (type.isEmpty()) {
-        return search(keywords, nrt);
+        return search(path, keywords, nrt);
     }
 
-    spdlog::debug("Search index(keyworks: \"{}\", type: \"{}\").", keywords.toStdString(), type.toStdString());
+    String query_terms = StringUtils::toUnicode(keywords.toStdString());
+
+    if (keywords.at(0) == QChar('*') || keywords.at(0) == QChar('?')) {
+        keywords = keywords.mid(1);
+    }
 
     try {
         SearcherPtr searcher;
@@ -340,40 +329,31 @@ QStringList file_index_manager::search(QString& keywords, const QString& type, b
         auto boolean_query = newLucene<BooleanQuery>();
         boolean_query->add(type_query, BooleanClause::MUST);
         if (!keywords.isEmpty()) {
-            QueryPtr keyword_query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
-            boolean_query->add(keyword_query, BooleanClause::MUST);
+            auto sub_boolean_query = newLucene<BooleanQuery>();
+            auto query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
+            sub_boolean_query->add(query, BooleanClause::SHOULD);
+            // Note that this can produce very slow queries on big indexes.
+            pinyin_parser_->setAllowLeadingWildcard(true);
+            auto pinyin_query = pinyin_parser_->parse(query_terms);
+            sub_boolean_query->add(pinyin_query, BooleanClause::SHOULD);
+            AnythingAnalyzer::forEachTerm(query_terms, [this, &sub_boolean_query](const auto& term) {
+                sub_boolean_query->add(newLucene<PrefixQuery>(newLucene<Term>(pinyin_field_, term)), BooleanClause::SHOULD);
+                sub_boolean_query->add(newLucene<FuzzyQuery>(newLucene<Term>(pinyin_field_, term), 0.65), BooleanClause::SHOULD);
+            });
+            sub_boolean_query->setMinimumNumberShouldMatch(1);
+            boolean_query->add(sub_boolean_query, BooleanClause::MUST);
         }
 
-        TopDocsPtr search_results = searcher->search(boolean_query, max_results);
-
-        HighlighterPtr highlighter = nullptr;
-        if (highlight) {
-            auto scorer = newLucene<QueryScorer>(boolean_query);
-            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
-            highlighter = newLucene<Highlighter>(formatter, scorer);
-        }
+        auto search_results = searcher->search(boolean_query, max_results);
         
         QStringList results;
         results.reserve(search_results->scoreDocs.size());
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher->doc(score_doc->doc);
-            auto full_path = doc->get(L"full_path");
-
-            // Since there is no automatic cleanup for invalid indexes,
-            // the system may contain paths that no longer exist.
-            // To maintain index validity, invalid indexes are filtered and removed here.
-            if (!std::filesystem::exists(full_path)) {
-                remove_index(StringUtils::toUTF8(full_path));
-                continue;
+            QString result = QString::fromStdWString(doc->get(L"full_path"));
+            if (result.startsWith(path)) {
+                results.append(std::move(result));
             }
-
-            if (highlighter) {
-                auto token_stream = type_parser_->getAnalyzer()->tokenStream(
-                    L"full_path", newLucene<StringReader>(full_path));
-                full_path = highlighter->getBestFragment(token_stream, full_path);
-            }
-
-            results.append(QString::fromStdWString(full_path));
         }
 
         return results;
@@ -381,20 +361,23 @@ QStringList file_index_manager::search(QString& keywords, const QString& type, b
         spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
         return {};
     }
+
+    return {};
 }
 
-QStringList file_index_manager::search(QString& keywords,
-    const QString& after, const QString& before, bool nrt, bool highlight) {
+QStringList file_index_manager::search(const QString& path, QString& keywords,
+    const QString& after, const QString& before, bool nrt) {
+    spdlog::debug("Search index(keywords: \"{}\", after: \"{}\", before: \"{}\").",
+        keywords.toStdString(), after.toStdString(), before.toStdString());
     if (keywords.isEmpty()) {
         return {};
     }
 
     if (after.isEmpty() && before.isEmpty()) {
-        return search(keywords, nrt);
+        return search(path, keywords, nrt);
     }
 
-    spdlog::debug("Search index(keywords: \"{}\", after: \"{}\"), before: \"{}\").",
-        keywords.toStdString(), after.toStdString(), before.toStdString());
+    String query_terms = StringUtils::toUnicode(keywords.toStdString());
 
     try {
         SearcherPtr searcher;
@@ -418,42 +401,33 @@ QStringList file_index_manager::search(QString& keywords,
             before_timestamp = file_helper_.to_milliseconds_since_epoch(before.toStdString());
         }
 
-        auto time_query = NumericRangeQuery::newLongRange(L"creation_time", after_timestamp, before_timestamp, true, true);
-        auto keywords_query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
         auto boolean_query = newLucene<BooleanQuery>();
-        boolean_query->add(keywords_query, BooleanClause::MUST);
+        auto query = parser_->parse(query_terms);
+        auto time_query = NumericRangeQuery::newLongRange(L"creation_time", after_timestamp, before_timestamp, true, true);
         boolean_query->add(time_query, BooleanClause::MUST);
 
-        TopDocsPtr search_results = searcher->search(boolean_query, max_results);
+        auto sub_boolean_query = newLucene<BooleanQuery>();
+        sub_boolean_query->add(query, BooleanClause::SHOULD);
+        auto pinyin_query = pinyin_parser_->parse(query_terms);
+        sub_boolean_query->add(pinyin_query, BooleanClause::SHOULD);
+        AnythingAnalyzer::forEachTerm(query_terms, [this, &sub_boolean_query](const auto& term) {
+            sub_boolean_query->add(newLucene<PrefixQuery>(newLucene<Term>(pinyin_field_, term)), BooleanClause::SHOULD);
+            sub_boolean_query->add(newLucene<FuzzyQuery>(newLucene<Term>(pinyin_field_, term), 0.65), BooleanClause::SHOULD);
+        });
 
-        HighlighterPtr highlighter = nullptr;
-        if (highlight) {
-            auto scorer = newLucene<QueryScorer>(boolean_query);
-            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
-            highlighter = newLucene<Highlighter>(formatter, scorer);
-        }
+        sub_boolean_query->setMinimumNumberShouldMatch(1);
+        boolean_query->add(sub_boolean_query, BooleanClause::MUST);
+
+        auto search_results = searcher->search(boolean_query, max_results);
 
         QStringList results;
         results.reserve(search_results->scoreDocs.size());
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher->doc(score_doc->doc);
-            auto full_path = doc->get(L"full_path");
-
-            // Since there is no automatic cleanup for invalid indexes,
-            // the system may contain paths that no longer exist.
-            // To maintain index validity, invalid indexes are filtered and removed here.
-            if (!std::filesystem::exists(full_path)) {
-                remove_index(StringUtils::toUTF8(full_path));
-                continue;
+            QString result = QString::fromStdWString(doc->get(L"full_path"));
+            if (result.startsWith(path)) {
+                results.append(std::move(result));
             }
-
-            if (highlighter) {
-                auto token_stream = parser_->getAnalyzer()->tokenStream(
-                    L"full_path", newLucene<StringReader>(full_path));
-                full_path = highlighter->getBestFragment(token_stream, full_path);
-            }
-
-            results.append(QString::fromStdWString(full_path));
         }
 
         return results;
@@ -466,6 +440,117 @@ QStringList file_index_manager::search(QString& keywords,
     return {};
 }
 
+void file_index_manager::async_search(QString& keywords, bool nrt,
+    std::function<void(const QStringList&)> callback) {
+    spdlog::debug("Async search index(keyworks: \"{}\").", keywords.toStdString());
+    if (keywords.isEmpty()) {
+        return;
+    }
+
+    String query_terms = StringUtils::toUnicode(keywords.toStdString());
+    if (keywords.at(0) == QChar('*')) {
+        keywords = keywords.mid(1);
+    }
+
+    search_cancelled_ = true;
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(50ms);
+    search_cancelled_ = false;
+
+    std::thread([this, nrt, keywords = std::move(keywords), query_terms = std::move(query_terms), callback = std::move(callback)]() {
+        try {
+            SearcherPtr searcher;
+            int32_t max_results;
+            if (nrt) {
+                try_refresh_reader(true);
+                searcher = nrt_searcher_;
+                max_results = nrt_reader_->numDocs();
+            } else {
+                try_refresh_reader();
+                searcher = searcher_;
+                max_results = reader_->numDocs();
+            }
+
+            auto boolean_query = newLucene<BooleanQuery>();
+            auto query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
+            boolean_query->add(query, BooleanClause::SHOULD);
+            // Note that this can produce very slow queries on big indexes.
+            pinyin_parser_->setAllowLeadingWildcard(true);
+            auto pinyin_query = pinyin_parser_->parse(query_terms);
+            boolean_query->add(pinyin_query, BooleanClause::SHOULD);
+
+            AnythingAnalyzer::forEachTerm(query_terms, [this, &boolean_query](const auto& term) {
+                boolean_query->add(newLucene<PrefixQuery>(newLucene<Term>(pinyin_field_, term)), BooleanClause::SHOULD);
+                boolean_query->add(newLucene<FuzzyQuery>(newLucene<Term>(pinyin_field_, term), 0.55), BooleanClause::SHOULD);
+            });
+
+            auto search_results = searcher->search(boolean_query, max_results);
+            QStringList results;
+            results.reserve(search_results->scoreDocs.size());
+            for (const auto& score_doc : search_results->scoreDocs) {
+                if (search_cancelled_) {
+                    spdlog::debug("Search cancelled: {}", keywords.toStdString());
+                    return;
+                }
+
+                DocumentPtr doc = searcher->doc(score_doc->doc);
+                auto full_path = doc->get(L"full_path");
+
+                // Since there is no automatic cleanup for invalid indexes,
+                // the system may contain paths that no longer exist.
+                // To maintain index validity, invalid indexes are filtered and removed here.
+                if (!std::filesystem::exists(full_path)) {
+                    remove_index(StringUtils::toUTF8(full_path));
+                    continue;
+                }
+
+                results.append(QString::fromStdWString(full_path));
+            }
+
+            callback(results);
+        } catch (const LuceneException& e) {
+            spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        }
+    }).detach();
+}
+
+QStringList file_index_manager::traverse_directory(const QString& path, bool nrt) {
+    if (path.isEmpty()) {
+        return {};
+    }
+
+    String query_terms = StringUtils::toUnicode(path.toStdString());
+
+    try {
+        SearcherPtr searcher;
+        int32_t max_results;
+        if (nrt) {
+            try_refresh_reader(true);
+            searcher = nrt_searcher_;
+            max_results = nrt_reader_->numDocs();
+        } else {
+            try_refresh_reader();
+            searcher = searcher_;
+            max_results = reader_->numDocs();
+        }
+
+        auto query = newLucene<PrefixQuery>(newLucene<Term>(exact_field_, query_terms));
+        auto search_results = searcher->search(query, max_results);
+
+        QStringList results;
+        results.reserve(search_results->scoreDocs.size());
+        for (const auto& score_doc : search_results->scoreDocs) {
+            DocumentPtr doc = searcher->doc(score_doc->doc);
+            results.append(QString::fromStdWString(doc->get(L"full_path")));
+        }
+
+        return results;
+    } catch (const LuceneException& e) {
+        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        return {};
+    }
+}
+
 bool file_index_manager::document_exists(const std::string &path, bool only_check_initial_index) {
     TermPtr term = newLucene<Term>(L"full_path", StringUtils::toUnicode(path));
     TermDocsPtr termDocs;
@@ -476,6 +561,40 @@ bool file_index_manager::document_exists(const std::string &path, bool only_chec
         termDocs = nrt_reader_->termDocs(term);
     }
     return termDocs->next();
+}
+
+void file_index_manager::refresh_indexes() {
+    spdlog::info("Refreshing file indexes...");
+    try_refresh_reader();
+    auto query = newLucene<Lucene::MatchAllDocsQuery>();
+    auto num_docs = reader_->numDocs();
+    if (num_docs > 0) {
+        auto search_results = searcher_->search(query, num_docs);
+        std::vector<std::string> remove_list;
+        std::vector<std::string> update_list;
+        for (const auto& score_doc : search_results->scoreDocs) {
+            DocumentPtr doc = searcher_->doc(score_doc->doc);
+            std::filesystem::path full_path(doc->get(L"full_path"));
+            if (!std::filesystem::exists(full_path)) {
+                remove_list.push_back(full_path.string());
+            } /*else {
+                auto last_write_time = file_helper_.get_file_last_write_time(full_path);
+                std::filesystem::path current_write_time(doc->get(L"last_write_time"));
+                if (last_write_time != current_write_time.string()) {
+                    update_list.push_back(full_path.string());
+                }
+            }*/
+        }
+
+        for (const auto& path : remove_list) {
+            // Remove non-existent path from the indexes
+            remove_index(path);
+        }
+        for (const auto& path : update_list) {
+            // Update the basic information for the indexed file
+            add_index(path);
+        }
+    }
 }
 
 void file_index_manager::try_refresh_reader(bool nrt) {
@@ -515,6 +634,10 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
         StringUtils::toUnicode(record.file_type),
         Field::STORE_YES, Field::INDEX_ANALYZED));
     doc->add(newLucene<NumericField>(L"creation_time")->setLongValue(record.creation_time));
+    // spdlog::info("pinyin: {}", pinyin_processor_.convert_to_pinyin(record.file_name));
+    doc->add(newLucene<Field>(L"pinyin",
+        StringUtils::toUnicode(pinyin_processor_.convert_to_pinyin(record.file_name)),
+        Field::STORE_YES, Field::INDEX_ANALYZED));
     return doc;
 }
 

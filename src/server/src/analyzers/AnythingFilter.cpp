@@ -32,7 +32,7 @@ bool AnythingFilter::incrementToken() {
 
         if (!stopTable_.contains(text)) {
             if (UnicodeUtil::isLower(text[0]) || UnicodeUtil::isUpper(text[0])) {
-                // English word/token should larger than 1 character.
+                // English word/token should be at least 1 character.
                 if (text.length() >= 1) {
                     return true;
                 }
@@ -41,6 +41,8 @@ bool AnythingFilter::incrementToken() {
                 // Chinese word extraction to be added later here.
                 return true;
             } else if (AnythingTokenizer::isDot(text[0])) {
+                return true;
+            } else if (AnythingTokenizer::isPreservedSymbol(text[0]) && text.length() > 1) {
                 return true;
             }
         }

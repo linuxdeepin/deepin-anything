@@ -32,6 +32,7 @@ private:
 
 public:
     static bool isSymbol(wchar_t c);
+    static bool isPreservedSymbol(wchar_t c);
     static bool isDot(wchar_t c);
     static bool isLastDot(wchar_t c, int32_t offset, std::wstring buf);
     bool is_word(wchar_t* buf, int32_t len);

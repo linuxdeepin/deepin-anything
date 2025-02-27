@@ -37,27 +37,6 @@ private:
     std::unordered_map<std::string, std::string> extension_mapper_;
 };
 
-// namespace file_helper {
-
-// namespace fs = std::filesystem;
-
-// inline file_record make_file_record(const fs::path& p) {
-//     auto handle = ::magic_open(MAGIC_MIME_TYPE);
-//     ::magic_load(handle, NULL);
-//     auto file_type = ::magic_file(handle, p.native().c_str());
-//     std::string type(file_type ? file_type : "unknown");
-
-//     ::magic_close(handle);
-
-//     return file_record {
-//         .file_name    = p.filename().string(),
-//         .full_path    = p.string(),
-//         .file_type    = std::move(type)
-//     };
-// }
-
-// } // namespace file_helper
-
 ANYTHING_NAMESPACE_END
 
 #endif // ANYTHING_FILE_RECORD_H_

@@ -5,6 +5,8 @@
 
 #include "common/file_record.h"
 
+#include <charconv>
+
 #include <sys/stat.h>  // For statx and struct statx
 #include <fcntl.h>     // For AT_FDCWD
 
@@ -20,117 +22,34 @@ file_helper::file_helper() {
         [this](std::string&& suffix, std::string&& filetype) {
         extension_mapper_.emplace(suffix, filetype);
     });
-    // extension_mapper_ = {
-    //     // Programming Language Files
-    //     { ".cpp", "text/c++" },
-    //     { ".cxx", "text/c++" },
-    //     { ".cc", "text/c++" },
-    //     { ".c", "text/c" }, // 需要优化单个字母的情况
-    //     { ".h", "text/c" },
-    //     { ".hpp", "text/c++" },
-    //     { ".cs", "text/csharp" },
-    //     { ".java", "text/java" },
-    //     { ".py", "text/python" },
-    //     { ".js", "application/javascript" },
-    //     { ".ts", "application/typescript" },
-    //     { ".html", "text/html" },
-    //     { ".css", "text/css" },
-    //     { ".php", "application/php" },
-    //     { ".rb", "text/ruby" },
-    //     { ".go", "text/go" },
-    //     { ".swift", "text/swift" },
-    //     { ".kt", "text/kotlin" },
-    //     { ".rs", "text/rust" },
-    //     { ".lua", "text/lua" },
-    //     { ".sh", "application/shellscript" },
-    //     { ".bash", "application/shellscript/shell/bash" },
-    //     { ".pl", "text/perl" },
-    //     { ".sql", "application/sql" },
-    //     { ".json", "application/json" },
-    //     { ".xml", "application/xml" },
-    //     { ".yaml", "text/yaml" },
-    //     { ".toml", "text/toml" },
-    //     { ".md", "text/markdown" },
-    //     { ".r", "text/r" },
-    //     { ".jl", "text/julia/jl" },
-    //     { ".dart", "text/dart" },
-    //     { ".scala", "text/scala" },
-    //     { ".vb", "text/vb" },
-    //     { ".asm", "text/assembly/asm" },
-    //     { ".bat", "application/batch" },
-    //     { ".make", "text/makefile" },
-    //     { ".cmake", "text/cmake" },
-    //     { ".gradle", "text/gradle" },
-    //     { ".dockerfile", "text/dockerfile" },
-    //     // Document Files
-    //     { ".txt", "text/plain/txt" },
-    //     { ".pdf", "application/pdf" },
-    //     { ".doc", "application/doc" },
-    //     { ".docx", "application/docx" },
-    //     { ".xls", "application/xls" },
-    //     { ".xlsx", "application/xlsx" },
-    //     { ".ppt", "application/ppt" },
-    //     { ".pptx", "application/pptx" },
-    //     // Image Files
-    //     { ".jpg", "image/jpeg/jpg" },
-    //     { ".jpeg", "image/jpeg" },
-    //     { ".png", "image/png" },
-    //     { ".gif", "image/gif" },
-    //     { ".bmp", "image/bmp" },
-    //     { ".svg", "image/svg+xml" },
-    //     { ".ico", "image/vnd.microsoft.icon" },
-    //     // Audio Files
-    //     { ".mp3", "audio/mpeg" },
-    //     { ".wav", "audio/wav" },
-    //     { ".ogg", "audio/ogg" },
-    //     { ".flac", "audio/flac" },
-    //     // Video Files
-    //     { ".mp4", "video/mp4" },
-    //     { ".avi", "video/avi" },
-    //     { ".mov", "video/mov" },
-    //     { ".mkv", "video/mkv" },
-    //     // Compressed Files
-    //     { ".zip", "application/zip" },
-    //     { ".tar", "application/tar" },
-    //     { ".gz", "application/gzip/gz" },
-    //     { ".rar", "application/rar" },
-    //     { ".7z", "application/7z" },
-    //     // Other Files
-    //     { ".iso", "application/iso" },
-    //     { ".csv", "text/csv" },
-    //     { ".epub", "application/epub" },
-    //     { ".apk", "application/apk" },
-    //     { ".exe", "application/exe" },
-    //     { ".deb", "package/deb" },
-    //     { ".a", "library/a"},
-    //     { ".so", "library/so" },
-    //     { ".dll", "library/dll" }
-    // };
 }
 
 file_record file_helper::make_file_record(
     const std::filesystem::path& p) {
     namespace fs = std::filesystem;
-    std::string type;
+    std::string type("-");
     if (fs::is_regular_file(p)) {
-        auto it = extension_mapper_.find(p.extension().string());
-        type = it != extension_mapper_.end() ? it->second : "regular/file";
+        auto ext = p.extension().string();
+        if (!ext.empty() && ext.size() > 1) {
+            auto it = extension_mapper_.find(ext);
+            type = it != extension_mapper_.end() ? it->second : ext.substr(1);
+        }
     } else if (fs::is_directory(p)) {
-        type = "directory";
+        type = "Directory";
     } else if (fs::is_symlink(p)) {
-        type = "symlink";
+        type = "Symlink";
     } else {
-        type = "unknown";
+        type = "Unknown";
     }
 
     try {
         return file_record {
-            .file_name     = p.filename().string(),
-            .full_path     = p.string(),
-            .file_type     = type,
-            .creation_time = get_file_creation_time(p)
+            .file_name       = p.filename().string(),
+            .full_path       = p.string(),
+            .file_type       = type,
+            .creation_time   = get_file_creation_time(p)
         };
-    } catch(const std::exception& e) {
+    } catch (const std::exception& e) {
         throw;
     }
 }

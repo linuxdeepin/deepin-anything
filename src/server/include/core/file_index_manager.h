@@ -6,6 +6,7 @@
 #ifndef ANYTHING_FILE_INDEX_MANAGER_H_
 #define ANYTHING_FILE_INDEX_MANAGER_H_
 
+#include <atomic>
 #include <mutex>
 
 #include <QString>
@@ -14,6 +15,7 @@
 
 #include "common/anything_fwd.hpp"
 #include "common/file_record.h"
+#include "core/pinyin_processor.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -46,12 +48,13 @@ public:
     bool indexed() const;
 
     void test(const Lucene::String& path);
+    void pinyin_test(const std::string& path);
 
     /// @brief Return the size of the indexed documents.
     /// @param nrt If true, returns the near real-time size, reflecting the most recent changes; 
     ///            otherwise, returns the persisted size from the last commit.
     /// @return The total number of indexed documents.
-    int document_size(bool nrt = false) const;
+    int32_t document_size(bool nrt = false) const;
 
     /// Return the cache directory of the index.
     std::string index_directory() const;
@@ -66,27 +69,24 @@ public:
     /// @param highlight Specifies if the search results should contain keywords highlighted for emphasis.
     /// @return A list of file paths that match the search criteria.
     QStringList search(const QString& path, QString& keywords,
-        int32_t offset, int32_t max_count, bool nrt, bool highlight = false);
+        int32_t offset, int32_t max_count, bool nrt);
     
     /// @brief Searches all files for the specified keywords and returns a list of matching file names.
     /// @param keywords The keywords to search for.
     /// @param nrt If true, performs a near real-time search, including recent changes; 
     ///            otherwise, searches the last committed index.
-    /// @param highlight Specifies if the search results should contain keywords highlighted for emphasis.
     /// @return A QStringList containing the paths of all files where the keywords are found.
     ///         If no files are found, an empty list is returned.
-    QStringList search(QString& keywords, bool nrt, bool highlight = false);
+    QStringList search(const QString& path, QString& keywords, bool nrt);
 
     /// @brief Searches all files for the specified keywords and file types, returning a list of matching file names.
     /// @param keywords The keywords to search for.
     /// @param type The type of files to search in (e.g., "txt", "cpp"). If empty, all file types are included in the search.
     /// @param nrt If true, performs a near real-time search that includes recent changes not yet committed; 
     ///            otherwise, searches the last committed index for more stable results.
-    /// @param highlight Specifies if the search results should contain keywords highlighted for emphasis in the output.
-    ///                  If true, matching keywords in the results will be highlighted.
     /// @return A QStringList containing the paths of all files where the keywords are found. 
     ///         If no files are found, an empty list is returned.
-    QStringList search(QString& keywords, const QString& type, bool nrt, bool highlight = false);
+    QStringList search(const QString& path, QString& keywords, const QString& type, bool nrt);
 
     /// @brief Searches all files created between a specified time range, returning a list of matching file names.
     /// @param keywords The keywords to search for.
@@ -99,13 +99,13 @@ public:
     ///               If both `after` and `before` are empty, the search will include all files matching the keywords regardless of time.
     /// @param nrt If true, performs a near real-time search that includes recent changes not yet committed; 
     ///            otherwise, searches the last committed index for more stable results.
-    /// @param highlight Specifies if the search results should contain keywords highlighted for emphasis.
-    ///                  If true, matching keywords in the results will be highlighted.
     /// @return A QStringList containing the paths of all files where the keywords are found within the specified time range. 
     ///         If no files are found, an empty list is returned.
-    QStringList search(
-        QString& keywords, const QString& after,
-        const QString& before, bool nrt, bool highlight = false);
+    QStringList search(const QString& path, QString& keywords, const QString& after, const QString& before, bool nrt);
+
+    void async_search(QString& keywords, bool nrt, std::function<void(const QStringList&)> callback);
+
+    QStringList traverse_directory(const QString& path, bool nrt);
 
     /**
      * Check if the given file path is already indexed using an exact match search.
@@ -113,6 +113,8 @@ public:
      * @return true if the file path is already indexed, otherwise false.
      */
     bool document_exists(const std::string& path, bool only_check_initial_index = false);
+
+    void refresh_indexes();
 
 private:
     /// Refresh the index reader if there are changes
@@ -141,14 +143,18 @@ private:
     Lucene::SearcherPtr nrt_searcher_;
     Lucene::QueryParserPtr parser_;
     Lucene::QueryParserPtr type_parser_;
+    Lucene::QueryParserPtr pinyin_parser_;
     Lucene::IndexReaderPtr reader_;
     Lucene::IndexReaderPtr nrt_reader_;
     Lucene::String fuzzy_field_{ L"file_name" };
     Lucene::String exact_field_{ L"full_path" };
     Lucene::String type_field_{ L"file_type" };
+    Lucene::String pinyin_field_{ L"pinyin" };
     std::mutex mtx_;
     std::mutex reader_mtx_;
     file_helper file_helper_;
+    pinyin_processor pinyin_processor_;
+    std::atomic<bool> search_cancelled_{false};
 };
 
 ANYTHING_NAMESPACE_END

@@ -11,7 +11,8 @@ project(
 )
 
 # Find the dependencies
-find_package(Qt5 CONFIG REQUIRED Core DBus)
+find_package(QT NAMES Qt6 Qt5 CONFIG REQUIRED COMPONENTS Core DBus)
+find_package(Qt${QT_VERSION_MAJOR} CONFIG REQUIRED Core DBus)
 find_package(PkgConfig REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
 find_package(spdlog REQUIRED)
@@ -25,16 +26,18 @@ pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
 # message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
 set(DBUS_ADAPTOR_SOURCES com.deepin.Anything.xml)
 set(ANYTHING_DBUS_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/core/base_event_handler.h")
-qt5_generate_dbus_interface(${ANYTHING_DBUS_HEADER}
-    com.deepin.Anything.xml
-    OPTIONS -A
-)
-qt5_add_dbus_adaptor(DBUS_ADAPTOR_SOURCES
+set(QT_GENERATE_DBUS_INTERFACE "qt${QT_VERSION_MAJOR}_generate_dbus_interface")
+set(QT_ADD_DBUS_ADAPTOR "qt${QT_VERSION_MAJOR}_add_dbus_adaptor")
+set(QT_WRAP_CPP "qt${QT_VERSION_MAJOR}_wrap_cpp")
+
+cmake_language(CALL ${QT_GENERATE_DBUS_INTERFACE} ${ANYTHING_DBUS_HEADER} com.deepin.Anything.xml OPTIONS -A)
+cmake_language(CALL ${QT_ADD_DBUS_ADAPTOR}
+    DBUS_ADAPTOR_SOURCES
     ${CMAKE_CURRENT_BINARY_DIR}/com.deepin.Anything.xml
     ${ANYTHING_DBUS_HEADER}
     base_event_handler
 )
-qt5_wrap_cpp(anything_dbus_server_moc ${ANYTHING_DBUS_HEADER})
+cmake_language(CALL ${QT_WRAP_CPP} anything_dbus_server_moc ${ANYTHING_DBUS_HEADER})
 
 # Found all source files
 file(GLOB_RECURSE SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp")
@@ -66,7 +69,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${GNL_LIBRARIES}
     ${MOUNT_LIBRARIES}
     ${Boost_LIBRARIES}
-    Qt5::DBus
+    Qt${QT_VERSION_MAJOR}::DBus
     pthread
     stdc++fs
     spdlog::spdlog
