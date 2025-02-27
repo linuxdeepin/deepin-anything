@@ -8,8 +8,6 @@
 #include "analyzers/AnythingFilter.h"
 #include "analyzers/AnythingTokenizer.h"
 
-#include <iostream>
-
 ANYTHING_NAMESPACE_BEGIN
 
 TokenStreamPtr AnythingAnalyzer::tokenStream(

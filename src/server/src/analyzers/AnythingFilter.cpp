@@ -10,8 +10,6 @@
 
 #include "analyzers/AnythingTokenizer.h"
 
-#include <iostream>
-
 ANYTHING_NAMESPACE_BEGIN
 
 const wchar_t* AnythingFilter::STOP_WORDS[] = {

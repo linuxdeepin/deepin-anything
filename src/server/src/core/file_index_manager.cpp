@@ -7,7 +7,6 @@
 
 #include <chrono>
 #include <filesystem>
-#include <iostream>
 
 #include "lucene++/ChineseAnalyzer.h"
 #include "lucene++/Highlighter.h"

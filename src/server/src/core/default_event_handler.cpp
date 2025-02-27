@@ -122,7 +122,7 @@ void default_event_handler::handle(fs_event event) {
         } else if (event.act == ACT_DEL_FOLDER) {
             // Remove all files/folders in this folder(including this folder)
             QString path = QString::fromStdString(event.src);
-            for (auto result : traverse_directory(path)) {
+            for (auto const& result : traverse_directory(path)) {
                 remove_index_delay(result.toStdString());
             }
         } else if (event.act == ACT_RENAME_FILE) {
@@ -130,7 +130,7 @@ void default_event_handler::handle(fs_event event) {
         } else if (event.act == ACT_RENAME_FOLDER) {
             // Rename all files/folders in this folder(including this folder)
             QString oldPath = QString::fromStdString(event.src);
-            for (auto result : traverse_directory(oldPath)) {
+            for (auto const& result : traverse_directory(oldPath)) {
                 std::string src = result.toStdString();
                 std::string dst = src;
                 dst.replace(0, event.src.length(), event.dst);

@@ -5,8 +5,6 @@
 
 #include "core/base_event_handler.h"
 
-#include <QtConcurrent/QtConcurrent>
-
 #include "core/disk_scanner.h"
 #include "common/file_record.h"
 #include "utils/log.h"
