@@ -66,6 +66,7 @@ public:
     /// @param max_count The maximum number of results to return.
     /// @param nrt If true, performs a near real-time search, including recent changes; 
     ///            otherwise, searches the last committed index.
+    /// @param highlight Specifies if the search results should contain keywords highlighted for emphasis.
     /// @return A list of file paths that match the search criteria.
     QStringList search(const QString& path, QString& keywords,
         int32_t offset, int32_t max_count, bool nrt);

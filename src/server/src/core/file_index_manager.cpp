@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "core/file_index_manager.h"
+#include "analyzers/AnythingAnalyzer.h"
 
 #include <chrono>
 #include <filesystem>
@@ -187,6 +188,13 @@ QStringList file_index_manager::search(
         auto collector = TopScoreDocCollector::create(offset + max_count, true);
         searcher->search(boolean_query, collector);
 
+        HighlighterPtr highlighter = nullptr;
+        if (highlight) {
+            auto scorer = newLucene<QueryScorer>(query);
+            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
+            highlighter = newLucene<Highlighter>(formatter, scorer);
+        }
+
         Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
         if (offset >= hits.size()) {
             spdlog::debug("No more results(path:\"{}\", keyworks: \"{}\").",
@@ -204,6 +212,15 @@ QStringList file_index_manager::search(
             if (result.startsWith(path)) {
                 results.append(result);
             }
+        }
+
+        // More results may exist; continue searching
+        if (count == max_count && !remove_list.empty()) {
+            results.append(search(path, keywords, offset + max_count, remove_list.size(), true));
+        }
+
+        for (const auto& rmpath : remove_list) {
+            remove_index(rmpath);
         }
 
         return results;
@@ -254,6 +271,13 @@ QStringList file_index_manager::search(const QString& path, QString& keywords, b
         });
 
         auto search_results = searcher->search(boolean_query, max_results);
+
+        HighlighterPtr highlighter = nullptr;
+        if (highlight) {
+            auto scorer = newLucene<QueryScorer>(query);
+            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
+            highlighter = newLucene<Highlighter>(formatter, scorer);
+        }
 
         QStringList results;
         results.reserve(search_results->scoreDocs.size());
@@ -337,6 +361,8 @@ QStringList file_index_manager::search(const QString& path, QString& keywords, c
         spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
         return {};
     }
+
+    return {};
 }
 
 QStringList file_index_manager::search(const QString& path, QString& keywords,
