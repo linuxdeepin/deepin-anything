@@ -7,6 +7,9 @@
 
 #include <stdint.h>
 #include <wchar.h>
+#include <glib.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #ifdef IDX_DEBUG
 
@@ -27,3 +30,5 @@ int wchar_t_to_utf8(const wchar_t* input, char* output, size_t output_bytes);
 
 int read_file(int fd, char* head, uint32_t size);
 int write_file(int fd, char* head, uint32_t size);
+
+char* find_matching_dir_by_cache(const char *mount_dir, const char *search_dir);

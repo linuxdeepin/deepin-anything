@@ -1,3 +1,9 @@
+deepin-anything (6.2.3) unstable; urgency=medium
+
+  * Fix search fail for invalid path.
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 06 Mar 2025 21:06:39 +0800
+
 deepin-anything (6.2.2) unstable; urgency=medium
 
   * New version 6.2.2.

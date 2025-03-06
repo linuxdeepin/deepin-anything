@@ -13,6 +13,7 @@ extern "C" {
 #include "fs_buf.h"
 #include "walkdir.h"
 #include "resourceutil .h"
+#include "utils.h"
 }
 
 #include <ddiskmanager.h>
@@ -57,6 +58,35 @@ static QString _getCacheDir()
     }
 
     return cachePath;
+}
+
+// 尝试将用户输入的绑定挂载下的路径, 转化为原始挂载下的路径
+// 如 /home -> /data/home
+// https://pms.uniontech.com/bug-view-303925.html
+QString convertPathIntoMountPoint(const QStringList &mountPoints, const QString &path)
+{
+    if (path == "/")
+        return path;
+
+    for (const QString &mountPoint : mountPoints) {
+        if (mountPoint == "/")
+            continue;
+        if (path.startsWith(mountPoint)) {
+            return path;
+        }
+    }
+
+    for (const QString &mountPoint : mountPoints) {
+        char* pathInMountPoint = find_matching_dir_by_cache (
+            mountPoint.toLocal8Bit().constData(), path.toLocal8Bit().constData());
+        if (pathInMountPoint) {
+            QString newPath = QString::fromLocal8Bit(pathInMountPoint);
+            g_free(pathInMountPoint);
+            return newPath;
+        }
+    }
+
+    return path;
 }
 
 class _LFTManager : public LFTManager {};
@@ -493,7 +523,10 @@ static QPair<QString, fs_buf*> getFsBufByPath(const QString &path)
 
 bool LFTManager::hasLFT(const QString &path) const
 {
-    auto buff_pair = getFsBufByPath(path);
+    QStringList mountPoints = allPath();
+    QString pathIntoMountPoint = convertPathIntoMountPoint(mountPoints, path);
+
+    auto buff_pair = getFsBufByPath(pathIntoMountPoint);
     return !buff_pair.first.isEmpty();
 }
 
@@ -1361,7 +1394,7 @@ int LFTManager::_prepareBuf(quint32 *startOffset, quint32 *endOffset, const QStr
     if (!fs_buf)
         return BUILDING_INDEX;
 
-    // new_path 为path在fs_buf中对应的路径
+    // new_path 为搜索路径在fs_buf中对应的路径
     *newpath = QString(buff_pair.first);
 
     if (*startOffset == 0 || *endOffset == 0) {
@@ -1514,6 +1547,8 @@ QStringList LFTManager::_enterSearch(const QString &opath, const QString &keywor
         // make sure this search path not end with '/' if it's not the root /
         path.chop(1);
     }
+    QStringList mountPoints = allPath();
+    path = convertPathIntoMountPoint(mountPoints, path);
     nInfo() << maxCount << startOffset << endOffset << path << keyword << rules;
 
     void *buf = nullptr;
