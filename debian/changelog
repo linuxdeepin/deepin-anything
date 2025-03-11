@@ -1,3 +1,9 @@
+deepin-anything (6.2.4) unstable; urgency=medium
+
+  * Adapt kernel module for SW64 architecture.
+
+ -- Wen Lunpeng <wenlunpeng@uniontech.com>  Tue, 11 Mar 2025 11:29:47 +0800
+
 deepin-anything (6.2.3) unstable; urgency=medium
 
   * Fix search fail for invalid path.
