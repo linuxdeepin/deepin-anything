@@ -6,7 +6,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 
-#ifdef CONFIG_SW
+#if defined(CONFIG_SW) || defined(CONFIG_SW64)
 #include <uapi/linux/ptrace.h>
 #endif
 
@@ -28,6 +28,8 @@ unsigned long get_arg(struct pt_regs* regs, int n)
 	x86_64 args order: rdi, rsi, rdx, rcx, r8, r9, then comes the stack
 	loongson3 64bit args order: a0, a1, a2, a3, which is regs[4] ~ regs[7], then comes the stack
 	PT_R4(32) is the offset of regs[4] for loongson 64-bit, quoted from asm-offsets.h
+	sw64 args order: first 6 int args by r16~r21, namely a0 ~ a5, in pt_regs, regs[16] ~ reg[21]
+	in old struct pt_regs, called r16 ~ r21. so use offset like loongarch.
 */
 	switch (n) {
 #if	defined(CONFIG_X86_64)
@@ -53,6 +55,16 @@ unsigned long get_arg(struct pt_regs* regs, int n)
 		case 2: return regs->r17;
 		case 3: return regs->r18;
 		case 4: return regs->r19;
+
+#elif defined(CONFIG_SW64)
+		/* refer to arch/sw_64/kernel/traps.c
+		 * & arch/sw_64/include/uapi/asm/regdef.h
+		 */
+		case 1: // r16
+		case 2: // r17
+		case 3: // r18
+		case 4: // r19
+			return *(unsigned long*)((char *)regs + (15+n)*8);
 
 #elif defined(CONFIG_ARM64) || defined (CONFIG_AARCH64)
 
