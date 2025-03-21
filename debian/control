@@ -6,7 +6,7 @@ Build-Depends:
   cmake,
   debhelper (>= 10),
   dh-dkms | dkms,
-  qtbase6-dev | qtbase5-dev,
+  qt6-base-dev | qtbase5-dev,
   pkg-config,
   libnl-genl-3-dev,
   liblucene++-dev,
