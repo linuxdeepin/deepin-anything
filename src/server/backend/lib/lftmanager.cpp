@@ -31,6 +31,8 @@ extern "C" {
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
+#include <linux/magic.h>
 
 Q_LOGGING_CATEGORY(logN, "anything.normal.manager", DEFAULT_MSG_TYPE)
 Q_LOGGING_CATEGORY(logC, "anything.changes.manager", DEFAULT_MSG_TYPE)
@@ -498,6 +500,36 @@ static QPair<QString, fs_buf*> getFsBufByPath(const QString &path)
         nWarning() << "getFsBufByPath findMountPointByPath NULL for:" << path;
         return QPair<QString, fs_buf*>();
     }
+
+    // 适配磐石系统, 将 /sysroot/dirname 的挂载点, 从 / 调整为 /sysroot
+    if (("/" == mountPoint) && path.startsWith("/sysroot")) {
+        static bool inited = false;
+        static bool convert_mountpoint_from_root_to_sysroot = false;
+
+        if (!inited) {
+            struct statfs root_statfs;
+            struct stat root_stat;
+            struct stat sysroot_stat;
+
+            inited = true;
+            // / 所在文件系统为 ext4 且不是文件系统根目录
+            // 参考 https://docs.kernel.org/filesystems/ext4/overview.html#special-inodes
+            if (statfs("/", &root_statfs) == 0 &&
+                root_statfs.f_type == EXT4_SUPER_MAGIC &&
+                lstat("/", &root_stat) == 0 &&
+                root_stat.st_ino != 2 &&
+                // /sysroot 与 / 同分区且是根目录
+                lstat("/sysroot", &sysroot_stat) == 0 &&
+                sysroot_stat.st_dev == root_stat.st_dev &&
+                sysroot_stat.st_ino == 2) {
+                convert_mountpoint_from_root_to_sysroot = true;
+            }
+        }
+
+        if (convert_mountpoint_from_root_to_sysroot)
+            mountPoint = "/sysroot";
+    }
+
     QPair<QString, fs_buf*> buf_pair;
     fs_buf *buf = _global_fsBufMap->value(mountPoint);
     if (buf) {

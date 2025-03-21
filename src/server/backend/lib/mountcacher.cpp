@@ -112,6 +112,7 @@ QString MountCacher::findMountPointByPath(const QString &path, bool hardreal)
         if (nullptr != mount_point) {
             // nDebug() << path << " mountpoint: " << mount_point;
             result = QString(mount_point);
+            free(mount_point);
             if (hardreal) {
                 bool find_virtual = false;
                 for (MountPoint info: mountPointList) {
