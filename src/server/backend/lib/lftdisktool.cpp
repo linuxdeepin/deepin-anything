@@ -112,7 +112,8 @@ QByteArrayList fromSerialUri(const QByteArray &uri)
                 if (new_path.isEmpty()) {
                     pathList << mount_point;
                 } else {
-                    mount_point.append("/");
+                    if (!mount_point.endsWith('/'))
+                        mount_point.append("/");
                     pathList << mount_point.append(new_path);
                 }
             }
