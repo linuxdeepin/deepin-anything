@@ -25,8 +25,15 @@ extern "C" {
 #include <QStandardPaths>
 #include <QRegularExpression>
 #include <QTimer>
-#include <polkit-qt5-1/PolkitQt1/Authority>
 #include <QDBusMessage>
+
+#include <PolkitQt1/Authority>
+
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
+#include <QTextCodec>
+#else
+#include <QStringConverter>
+#endif
 
 #include <unistd.h>
 #include <sys/time.h>
@@ -108,7 +115,12 @@ static QSet<fs_buf*> fsBufList()
     if (!_global_fsBufMap.exists())
         return QSet<fs_buf*>();
 
-    return _global_fsBufMap->values().toSet();
+    auto values = _global_fsBufMap->values();
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
+    return values.toSet();
+#else
+    return QSet<fs_buf*>(values.begin(), values.end());
+#endif
 }
 
 static void clearFsBufMap()
@@ -191,6 +203,7 @@ QByteArray LFTManager::setCodecNameForLocale(const QByteArray &codecName)
     if (!checkAuthorization())
         return QByteArray();
 
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
     const QTextCodec *old_codec = QTextCodec::codecForLocale();
 
     if (codecName.isEmpty())
@@ -201,6 +214,17 @@ QByteArray LFTManager::setCodecNameForLocale(const QByteArray &codecName)
     nDebug() << codecName << "old:" << old_codec->name();
 
     return old_codec->name();
+#else
+    // 在Qt6中，使用QStringConverter来处理编码
+    // 获取当前的编码
+    QStringConverter::Encoding old_encoding = QStringConverter::encodingForName(QString::fromLatin1(codecName)).value_or(QStringConverter::System);
+
+    QString oldCodecName = QString::fromLatin1(QStringConverter::nameForEncoding(old_encoding));
+    // 由于QStringConverter没有setDefaultEncoding，这里只记录旧编码
+    nDebug() << codecName << "old:" << oldCodecName;
+
+    return oldCodecName.toLatin1();
+#endif
 }
 
 void LFTManager::onFileChanged(QList<QPair<QByteArray, QByteArray>> &actionList)
@@ -1099,11 +1123,16 @@ static QStringList removeLFTFiles(const QByteArray &serialUriFilter = QByteArray
 LFTManager::LFTManager(QObject *parent)
     : QObject(parent)
 {
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
     // ascii编码支持内容太少, 此处改为兼容它的utf8编码
     if (QTextCodec::codecForLocale() == QTextCodec::codecForName("ASCII")) {
         QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
         nDebug() << "reset the locale codec to UTF-8";
     }
+#else
+    // 6.0版本以上, 默认使用UTF-8编码，无需额外处理
+    nDebug() << "Qt6 uses UTF-8 encoding by default";
+#endif
 
     /*解决在最开始的10分钟内搜索不到问题 92168*/
     // 延迟 1s 尝试加载索引

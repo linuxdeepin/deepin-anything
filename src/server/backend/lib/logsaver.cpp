@@ -95,9 +95,11 @@ bool LogSaverPrivate::initLogFile()
 
         logFile = new QFile(logPath);
         logOut = (logFile->open(QIODevice::WriteOnly | QIODevice::Append)) ? new QTextStream(logFile) : nullptr;
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
         if (logOut != nullptr) {
             logOut->setCodec("UTF-8");
         }
+#endif
     }
     return logOut != nullptr;
 }
@@ -150,7 +152,12 @@ void LogSaverPrivate::messageHandler(QtMsgType type, const QMessageLogContext &c
     }
 
     QString formatMsg = qFormatLogMessage(type, context, msg);
-    *logOut << formatMsg << endl;
+    *logOut << formatMsg;
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
+    *logOut << endl;
+#else
+    *logOut << Qt::endl;
+#endif
 }
 
 LogSaver *LogSaver::instance()
