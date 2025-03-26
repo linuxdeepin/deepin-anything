@@ -16,7 +16,6 @@
 #include <QFileInfo>
 #include <QTimer>
 #include <QTextStream>
-#include <QTextCodec>
 #include <QObject>
 #include <QScopedPointer>
 

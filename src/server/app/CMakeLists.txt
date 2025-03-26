@@ -20,12 +20,12 @@ set(SRCS
 )
 
 find_package(PkgConfig REQUIRED)
-find_package(Qt5 COMPONENTS Core REQUIRED)
+find_package(Qt${QT_DESIRED_VERSION} COMPONENTS Core REQUIRED)
 
 add_executable(${PROJECT_NAME} ${SRCS})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
-    Qt5::Core
+    Qt${QT_DESIRED_VERSION}::Core
     deepin-anything-server-lib
 )
 

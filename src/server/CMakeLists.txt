@@ -1,6 +1,6 @@
 project(deepin-anything-server-lib)
 
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.11)
 
 # Setup the environment
 SET(CMAKE_CXX_STANDARD 17)
@@ -14,6 +14,11 @@ SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release")
 endif(NOT CMAKE_BUILD_TYPE)
+
+# Find Qt version
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
+message("   >>> Found Qt version: ${QT_VERSION_MAJOR}")
+set(QT_DESIRED_VERSION ${QT_VERSION_MAJOR})
 
 add_subdirectory("backend")
 add_subdirectory("app")

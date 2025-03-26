@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.11)
 
 # Version
 if (NOT PROJECT_VERSION)
@@ -23,27 +23,25 @@ endif()
 set(LFTManager_XML ${CMAKE_CURRENT_SOURCE_DIR}/dbusservice/com.deepin.anything.xml)
 
 # Setup the environment
-find_package(Qt5 COMPONENTS Core REQUIRED)
-find_package(Qt5 COMPONENTS Concurrent REQUIRED)
-find_package(Qt5 COMPONENTS DBus REQUIRED)
+set(qt_required_components Core DBus Concurrent)
+
+find_package(Qt${QT_DESIRED_VERSION} REQUIRED COMPONENTS ${qt_required_components})
+
 find_package(PkgConfig REQUIRED)
-find_package(PolkitQt5-1)
+find_package(PolkitQt${QT_DESIRED_VERSION}-1)
 
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
 
-pkg_check_modules(qt-udisks2 REQUIRED udisks2-qt5 IMPORTED_TARGET)
+pkg_check_modules(qt-udisks2 REQUIRED udisks2-qt${QT_DESIRED_VERSION} IMPORTED_TARGET)
 
-# generate dbus interface
-# DBus: LFTManager
-# qt5_generate_dbus_interface(
-#     lftmanager.h
-#     ${DeviceManager_XML}
-#     OPTIONS -M -S
-# )
-qt5_add_dbus_adaptor(SRCS ${LFTManager_XML}
-    lftmanager.h LFTManager anything_adaptor)
+# 生成 D-Bus 适配器
+if (QT_DESIRED_VERSION MATCHES 6)
+    qt_add_dbus_adaptor(${PROJECT_NAME}_ADAPTORS ${LFTManager_XML} lftmanager.h LFTManager anything_adaptor)
+else()
+    qt5_add_dbus_adaptor(${PROJECT_NAME}_ADAPTORS ${LFTManager_XML} lftmanager.h LFTManager anything_adaptor)
+endif()
 
 # include
 include_directories(
@@ -67,7 +65,7 @@ FILE (GLOB SERVER_SRCS
 add_library(${PROJECT_NAME} SHARED
     ${PRIVATE_INCLUDES}
     ${SERVER_SRCS}
-    ${SRCS}
+    ${${PROJECT_NAME}_ADAPTORS}
 )
 
 set_target_properties(
@@ -77,15 +75,15 @@ set_target_properties(
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
-    Qt5::Core
-    Qt5::Concurrent
-    Qt5::DBus
+    Qt${QT_DESIRED_VERSION}::Core
+    Qt${QT_DESIRED_VERSION}::Concurrent
+    Qt${QT_DESIRED_VERSION}::DBus
     PkgConfig::qt-udisks2
     anything
     ${MOUNT_LIBRARIES}
     ${GLIB_LIBRARIES}
     ${GNL_LIBRARIES}
-    PolkitQt5-1::Agent
+    PolkitQt${QT_DESIRED_VERSION}-1::Agent
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
