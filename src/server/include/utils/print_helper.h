@@ -17,7 +17,10 @@ inline void print(const file_record& record) {
     std::cout << "file_name: " << record.file_name <<
         " full_path: " << record.full_path <<
         " file_type: " << record.file_type <<
-        " creation_time: " << record.creation_time << "\n";
+        " file_ext: " << record.file_ext <<
+        " modify_time: " << record.modify_time <<
+        " file_size: " << record.file_size <<
+        "\n";
 }
 
 ANYTHING_NAMESPACE_END
