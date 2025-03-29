@@ -18,7 +18,9 @@ struct file_record {
     std::string file_name;
     std::string full_path;
     std::string file_type;
-    int64_t creation_time; // milliseconds time since epoch
+    std::string file_ext;
+    int64_t modify_time; // milliseconds time since epoch
+    int64_t file_size;
 };
 
 class file_helper {

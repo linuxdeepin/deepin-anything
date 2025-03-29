@@ -41,7 +41,7 @@ cmake_language(CALL ${QT_ADD_DBUS_ADAPTOR}
 cmake_language(CALL ${QT_WRAP_CPP} anything_dbus_server_moc ${ANYTHING_DBUS_HEADER})
 
 # Found all source files
-file(GLOB_RECURSE SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp" "${PROJECT_SOURCE_DIR}/src/*.c")
 list(LENGTH SOURCE_FILES SRC_FILES_SIZE)
 message(STATUS "Found ${SRC_FILES_SIZE} source files of deepin-server")
 foreach(source_file ${SOURCE_FILES})

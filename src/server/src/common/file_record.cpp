@@ -12,6 +12,7 @@
 
 #include "utils/log.h"
 #include "utils/config.h"
+#include "utils/tools.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -26,32 +27,26 @@ file_helper::file_helper() {
 
 file_record file_helper::make_file_record(
     const std::filesystem::path& p) {
-    namespace fs = std::filesystem;
-    std::string type("-");
-    if (fs::is_regular_file(p)) {
-        auto ext = p.extension().string();
-        if (!ext.empty() && ext.size() > 1) {
-            auto it = extension_mapper_.find(ext);
-            type = it != extension_mapper_.end() ? it->second : ext.substr(1);
-        }
-    } else if (fs::is_directory(p)) {
-        type = "Directory";
-    } else if (fs::is_symlink(p)) {
-        type = "Symlink";
-    } else {
-        type = "Unknown";
+
+    file_record ret = {
+        .file_name       = p.filename().string(),
+        .full_path       = p.string(),
+        .file_type       = "",
+        .file_ext        = p.extension().string(),
+        .modify_time     = 0,
+        .file_size       = 0,
+    };
+
+    if (ret.file_ext.size() > 1) {
+        ret.file_ext = ret.file_ext.substr(1);
     }
 
-    try {
-        return file_record {
-            .file_name       = p.filename().string(),
-            .full_path       = p.string(),
-            .file_type       = type,
-            .creation_time   = get_file_creation_time(p)
-        };
-    } catch (const std::exception& e) {
-        throw;
-    }
+    const char *file_type;
+    if (get_file_info (p.string().c_str(), &file_type, &ret.modify_time, &ret.file_size))
+        spdlog::warn("get_file_info fail: {}", p.string().c_str());
+    ret.file_type = file_type;
+
+    return ret;
 }
 
 bool file_helper::is_valid_date_format(std::string& date_time) {

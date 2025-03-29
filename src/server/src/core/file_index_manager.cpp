@@ -18,6 +18,9 @@
 
 #include "analyzers/AnythingAnalyzer.h"
 #include "utils/log.h"
+#include "utils/sys.h"
+#include "utils/tools.h"
+#include <glib.h>
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -295,7 +298,9 @@ QStringList file_index_manager::search(const QString& orginPath, QString& keywor
             DocumentPtr doc = searcher->doc(score_doc->doc);
             auto result = QString::fromStdWString(doc->get(L"full_path")
                 + L"<\\>" + doc->get(L"file_type")
-                + L"<\\>" + doc->get(L"file_size"));
+                + L"<\\>" + doc->get(L"file_ext")
+                + L"<\\>" + doc->get(L"modify_time_str")
+                + L"<\\>" + doc->get(L"file_size_str"));
             if (result.startsWith(path)) {
                 results.append(std::move(result));
             }
@@ -415,7 +420,7 @@ QStringList file_index_manager::search(const QString& path, QString& keywords,
 
         auto boolean_query = newLucene<BooleanQuery>();
         auto query = parser_->parse(query_terms);
-        auto time_query = NumericRangeQuery::newLongRange(L"creation_time", after_timestamp, before_timestamp, true, true);
+        auto time_query = NumericRangeQuery::newLongRange(L"modify_time", after_timestamp, before_timestamp, true, true);
         boolean_query->add(time_query, BooleanClause::MUST);
 
         auto sub_boolean_query = newLucene<BooleanQuery>();
@@ -636,7 +641,7 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
     DocumentPtr doc = newLucene<Document>();
     // File name with fuzzy match; parser is required for searching and deleting.
     doc->add(newLucene<Field>(L"file_name",
-        StringUtils::toUnicode(record.file_name),
+        StringUtils::toLower(StringUtils::toUnicode(record.file_name)),
         Field::STORE_YES, Field::INDEX_ANALYZED));
     // Full path with exact match; parser is not needed for deleting and exact searching, which improves perferemce.
     doc->add(newLucene<Field>(L"full_path",
@@ -645,7 +650,24 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
     doc->add(newLucene<Field>(L"file_type",
         StringUtils::toUnicode(record.file_type),
         Field::STORE_YES, Field::INDEX_ANALYZED));
-    doc->add(newLucene<NumericField>(L"creation_time")->setLongValue(record.creation_time));
+    doc->add(newLucene<Field>(L"file_ext",
+        StringUtils::toUnicode(record.file_ext),
+        Field::STORE_YES, Field::INDEX_ANALYZED));
+
+    char *formatted_time = format_time(record.modify_time);
+    doc->add(newLucene<Field>(L"modify_time_str",
+        StringUtils::toUnicode(formatted_time),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+    g_free(formatted_time);
+
+    char *formatted_size = format_size(record.file_size);
+    doc->add(newLucene<Field>(L"file_size_str",
+        StringUtils::toUnicode(formatted_size),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+    g_free(formatted_size);
+
+    doc->add(newLucene<NumericField>(L"modify_time")->setLongValue(record.modify_time));
+    doc->add(newLucene<NumericField>(L"file_size")->setLongValue(record.file_size));
     // spdlog::info("pinyin: {}", pinyin_processor_.convert_to_pinyin(record.file_name));
     doc->add(newLucene<Field>(L"pinyin",
         StringUtils::toUnicode(pinyin_processor_.convert_to_pinyin(record.file_name)),
