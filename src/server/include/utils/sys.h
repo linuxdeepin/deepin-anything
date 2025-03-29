@@ -13,8 +13,6 @@
 ANYTHING_NAMESPACE_BEGIN
 
 std::string get_home_directory();
-std::string get_user_cache_directory();
-std::string get_sys_cache_directory();
 
 ANYTHING_NAMESPACE_END
 

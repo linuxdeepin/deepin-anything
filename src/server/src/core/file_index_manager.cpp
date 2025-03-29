@@ -25,8 +25,9 @@ using namespace Lucene;
 
 file_index_manager::file_index_manager(std::string index_dir)
     : index_directory_(std::move(index_dir)),
-      pinyin_processor_("config/pinyin.txt") {
+      pinyin_processor_("/usr/share/deepin-anything-server/pinyin.txt") {
     try {
+        // DirectoryPtr dir = newLucene<RAMDirectory>();
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory_));
         auto create = !IndexReader::indexExists(dir);
         writer_ = newLucene<IndexWriter>(dir,
@@ -189,11 +190,11 @@ QStringList file_index_manager::search(
         searcher->search(boolean_query, collector);
 
         HighlighterPtr highlighter = nullptr;
-        if (highlight) {
-            auto scorer = newLucene<QueryScorer>(query);
-            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
-            highlighter = newLucene<Highlighter>(formatter, scorer);
-        }
+        // if (highlight) {
+        //     auto scorer = newLucene<QueryScorer>(query);
+        //     auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
+        //     highlighter = newLucene<Highlighter>(formatter, scorer);
+        // }
 
         Collection<ScoreDocPtr> hits = collector->topDocs()->scoreDocs;
         if (offset >= hits.size()) {
@@ -215,13 +216,13 @@ QStringList file_index_manager::search(
         }
 
         // More results may exist; continue searching
-        if (count == max_count && !remove_list.empty()) {
-            results.append(search(path, keywords, offset + max_count, remove_list.size(), true));
-        }
+        // if (count == max_count && !remove_list.empty()) {
+        //     results.append(search(path, keywords, offset + max_count, remove_list.size(), true));
+        // }
 
-        for (const auto& rmpath : remove_list) {
-            remove_index(rmpath);
-        }
+        // for (const auto& rmpath : remove_list) {
+        //     remove_index(rmpath);
+        // }
 
         return results;
     } catch (const LuceneException& e) {
@@ -273,11 +274,11 @@ QStringList file_index_manager::search(const QString& path, QString& keywords, b
         auto search_results = searcher->search(boolean_query, max_results);
 
         HighlighterPtr highlighter = nullptr;
-        if (highlight) {
-            auto scorer = newLucene<QueryScorer>(query);
-            auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
-            highlighter = newLucene<Highlighter>(formatter, scorer);
-        }
+        // if (highlight) {
+        //     auto scorer = newLucene<QueryScorer>(query);
+        //     auto formatter = newLucene<SimpleHTMLFormatter>(L"<span style='background-color:yellow'>", L"</span>");
+        //     highlighter = newLucene<Highlighter>(formatter, scorer);
+        // }
 
         QStringList results;
         results.reserve(search_results->scoreDocs.size());

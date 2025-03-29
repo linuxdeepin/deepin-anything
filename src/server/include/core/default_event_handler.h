@@ -6,6 +6,7 @@
 #ifndef ANYTHING_EVENT_HANDLER_H_
 #define ANYTHING_EVENT_HANDLER_H_
 
+#include <glib.h>
 #include "core/base_event_handler.h"
 #include "utils/sys.h"
 
@@ -14,7 +15,7 @@ ANYTHING_NAMESPACE_BEGIN
 class default_event_handler : public base_event_handler {
 public:
     explicit default_event_handler(std::string index_dir =
-        get_sys_cache_directory() + "/deepin-anything-server");
+        std::string(g_get_user_cache_dir()) + "/deepin-anything-server");
     
     void handle(fs_event event) override;
 

@@ -26,8 +26,17 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
     QString service_name = "com.deepin.anything";
     QString object_name = "/com/deepin/anything";
     if (!dbus.interface()->isServiceRegistered(service_name)) {
+        spdlog::info("Registering service: {}", service_name.toStdString());
         dbus.registerService(service_name);
         dbus.registerObject(object_name, this);
+    } else {
+        quint32 pid = 0;
+        QString pidStr;
+        QDBusReply<quint32> reply = dbus.interface()->servicePid(service_name);
+        if (reply.isValid())
+            pid = reply.value();
+        pidStr.setNum(pid);
+        spdlog::info("Registered service: {}, {}", service_name.toStdString(), pidStr.toStdString());
     }
 
     index_manager_.refresh_indexes();

@@ -1,0 +1,1 @@
+/usr/lib/systemd/user/deepin-anything-daemon.service /usr/lib/systemd/user/default.target.wants/deepin-anything-daemon.service

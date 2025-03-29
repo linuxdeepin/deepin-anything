@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.1)
 
 # ---------------------------------------------------------------------------------------
-# Start deepin-anything-server project
+# Start deepin-anything-daemon project
 # ---------------------------------------------------------------------------------------
 project(
-    deepin-anything-server
+    deepin-anything-daemon
     VERSION 1.0.0
     DESCRIPTION "A file search engine"
     LANGUAGES CXX
@@ -20,6 +20,7 @@ pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 pkg_check_modules(LUCENE REQUIRED liblucene++)
 pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
+pkg_check_modules(GLIB REQUIRED glib-2.0)
 
 # Generate QDbus file
 # message(STATUS "CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
@@ -61,6 +62,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${LUCENE_INCLUDE_DIRS}
     ${GNL_INCLUDE_DIRS}
     ${MOUNT_INCLUDE_DIRS}
+    ${GLIB_INCLUDE_DIRS}
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
@@ -73,6 +75,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     pthread
     stdc++fs
     spdlog::spdlog
+    ${GLIB_LIBRARIES}
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror -Wextra)
@@ -85,3 +88,7 @@ install(TARGETS ${PROJECT_NAME}
     LIBRARY DESTINATION lib
     DESTINATION lib
 )
+
+install(PROGRAMS deepin-anything-server DESTINATION bin)
+install(FILES deepin-anything-daemon.service DESTINATION lib/systemd/user)
+install(FILES deepin-anything-server.service DESTINATION lib/systemd/system)
