@@ -31,7 +31,7 @@ file_index_manager::file_index_manager(std::string index_dir)
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory_));
         auto create = !IndexReader::indexExists(dir);
         writer_ = newLucene<IndexWriter>(dir,
-            newLucene<AnythingAnalyzer>(),
+            newLucene<KeywordAnalyzer>(),
             create, IndexWriter::MaxFieldLengthLIMITED);
         reader_  = IndexReader::open(dir, true);
         nrt_reader_ = writer_->getReader();
@@ -231,10 +231,15 @@ QStringList file_index_manager::search(
     }
 }
 
-QStringList file_index_manager::search(const QString& path, QString& keywords, bool nrt) {
+QStringList file_index_manager::search(const QString& orginPath, QString& keywords, bool nrt) {
+    QString path = orginPath;
+    if (path.startsWith(g_get_home_dir()))
+        path.replace(0, strlen(g_get_home_dir()), get_home_directory().c_str());
+
     spdlog::debug("Search index(keyworks: \"{}\").", keywords.toStdString());
 
     if (keywords.isEmpty()) {
+        spdlog::debug("Search index(keyworks: \"{}\") finished.", keywords.toStdString());
         return {};
     }
 
@@ -259,19 +264,23 @@ QStringList file_index_manager::search(const QString& path, QString& keywords, b
             max_results = reader_->numDocs();
         }
 
-        auto boolean_query = newLucene<BooleanQuery>();
-        auto query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
-        boolean_query->add(query, BooleanClause::SHOULD);
-        // Note that this can produce very slow queries on big indexes.
-        pinyin_parser_->setAllowLeadingWildcard(true);
-        auto pinyin_query = pinyin_parser_->parse(query_terms);
-        boolean_query->add(pinyin_query, BooleanClause::SHOULD);
-        AnythingAnalyzer::forEachTerm(query_terms, [this, &boolean_query](const auto& term) {
-            boolean_query->add(newLucene<PrefixQuery>(newLucene<Term>(pinyin_field_, term)), BooleanClause::SHOULD);
-            boolean_query->add(newLucene<FuzzyQuery>(newLucene<Term>(pinyin_field_, term), 0.55), BooleanClause::SHOULD);
-        });
+        // auto boolean_query = newLucene<BooleanQuery>();
+        // auto query = parser_->parse(StringUtils::toUnicode(keywords.toStdString()));
+        // boolean_query->add(query, BooleanClause::SHOULD);
+        // // Note that this can produce very slow queries on big indexes.
+        // pinyin_parser_->setAllowLeadingWildcard(true);
+        // auto pinyin_query = pinyin_parser_->parse(query_terms);
+        // boolean_query->add(pinyin_query, BooleanClause::SHOULD);
+        // AnythingAnalyzer::forEachTerm(query_terms, [this, &boolean_query](const auto& term) {
+        //     boolean_query->add(newLucene<PrefixQuery>(newLucene<Term>(pinyin_field_, term)), BooleanClause::SHOULD);
+        //     boolean_query->add(newLucene<FuzzyQuery>(newLucene<Term>(pinyin_field_, term), 0.55), BooleanClause::SHOULD);
+        // });
 
-        auto search_results = searcher->search(boolean_query, max_results);
+        String queryString = L"*" + StringUtils::toLower(StringUtils::toUnicode(keywords.toStdString())) + L"*";
+        TermPtr term = newLucene<Term>(L"file_name", queryString);
+        QueryPtr query = newLucene<WildcardQuery>(term);
+
+        auto search_results = searcher->search(query, max_results);
 
         HighlighterPtr highlighter = nullptr;
         // if (highlight) {
@@ -292,9 +301,11 @@ QStringList file_index_manager::search(const QString& path, QString& keywords, b
             }
         }
 
+        spdlog::debug("Search index(keyworks: \"{}\") finished.", keywords.toStdString());
         return results;
     } catch (const LuceneException& e) {
         spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        spdlog::debug("Search index(keyworks: \"{}\") finished.", keywords.toStdString());
         return {};
     }
 }
