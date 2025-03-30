@@ -21,7 +21,7 @@ ANYTHING_NAMESPACE_BEGIN
 
 class file_index_manager {
 public:
-    explicit file_index_manager(std::string index_dir);
+    explicit file_index_manager(std::string persistent_index_dir, std::string volatile_index_dir);
     ~file_index_manager();
 
     /// @brief Add a path to the index.
@@ -44,6 +44,9 @@ public:
 
     /// Commit all changes to the index
     void commit();
+
+    /// @brief Persist the index to the persistent index directory
+    void persist_index();
 
     bool indexed() const;
 
@@ -114,7 +117,7 @@ public:
      */
     bool document_exists(const std::string& path, bool only_check_initial_index = false);
 
-    void refresh_indexes();
+    bool refresh_indexes();
 
 private:
     /// Refresh the index reader if there are changes
@@ -136,8 +139,10 @@ private:
 
     Lucene::DocumentPtr create_document(const file_record& record);
 
+    void prepare_index();
 private:
-    std::string index_directory_;
+    std::string persistent_index_directory_;
+    std::string volatile_index_directory_;
     Lucene::IndexWriterPtr writer_;
     Lucene::SearcherPtr searcher_;
     Lucene::SearcherPtr nrt_searcher_;

@@ -15,8 +15,8 @@
 ANYTHING_NAMESPACE_BEGIN
 
 // /data 和非 data 需要保持一致，最好有一种方式能够获取当前的状态
-default_event_handler::default_event_handler(std::string index_dir)
-    : base_event_handler(std::move(index_dir)) {
+default_event_handler::default_event_handler(std::string persistent_index_dir, std::string volatile_index_dir)
+    : base_event_handler(std::move(persistent_index_dir), std::move(volatile_index_dir)) {
     // Index the default mount point
     auto home_dir = get_home_directory();
     if (!home_dir.empty()) {

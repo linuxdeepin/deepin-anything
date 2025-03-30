@@ -14,8 +14,10 @@ ANYTHING_NAMESPACE_BEGIN
 
 class default_event_handler : public base_event_handler {
 public:
-    explicit default_event_handler(std::string index_dir =
-        std::string(g_get_user_cache_dir()) + "/deepin-anything-server");
+    explicit default_event_handler(std::string persistent_index_dir =
+        std::string(g_get_user_cache_dir()) + "/deepin-anything-server",
+        std::string volatile_index_dir =
+        std::string(g_get_user_runtime_dir()) + "/deepin-anything-server");
     
     void handle(fs_event event) override;
 

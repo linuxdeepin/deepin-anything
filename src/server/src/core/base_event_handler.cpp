@@ -11,16 +11,23 @@
 #include "utils/string_helper.h"
 #include <anythingadaptor.h>
 
-base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
-    : QObject(parent), index_manager_(std::move(index_dir)), batch_size_(200),
+#define COMMIT_VOLATILE_INDEX_TIMEOUT 10
+#define COMMIT_PERSISTENT_INDEX_TIMEOUT 600
+
+base_event_handler::base_event_handler(std::string persistent_index_dir, std::string volatile_index_dir, QObject *parent)
+    : QObject(parent), index_manager_(std::move(persistent_index_dir), std::move(volatile_index_dir)), batch_size_(200),
       pool_((std::max)(std::thread::hardware_concurrency() - 3, 1U)),
       stop_timer_(false),
       timer_(std::thread(&base_event_handler::timer_worker, this, 1000)),
-      delay_mode_(true/*index_manager_.indexed()*/) {
+      delay_mode_(true/*index_manager_.indexed()*/),
+      index_dirty_(false),
+      volatile_index_dirty_(false),
+      commit_volatile_index_timeout_(COMMIT_VOLATILE_INDEX_TIMEOUT),
+      commit_persistent_index_timeout_(COMMIT_PERSISTENT_INDEX_TIMEOUT) {
     new AnythingAdaptor(this);
     QDBusConnection dbus = QDBusConnection::systemBus();
     if (!dbus.isConnected()) {
-        qWarning() << "Failed to connect to system bus:" << dbus.lastError().message();
+        spdlog::info("Failed to connect to system bus: {}", dbus.lastError().message().toStdString());
         exit(1);
     }
     QString service_name = "com.deepin.anything";
@@ -39,7 +46,7 @@ base_event_handler::base_event_handler(std::string index_dir, QObject *parent)
         spdlog::info("Registered service: {}, {}", service_name.toStdString(), pidStr.toStdString());
     }
 
-    index_manager_.refresh_indexes();
+    index_dirty_ = index_manager_.refresh_indexes();
 }
 
 base_event_handler::~base_event_handler() {
@@ -197,6 +204,7 @@ void base_event_handler::jobs_push(std::string src,
     }
 
     std::lock_guard<std::mutex> lock(jobs_mtx_);
+    index_dirty_ = true;
     jobs_.emplace_back(std::move(src), type, std::move(dst));
     if (jobs_.size() >= batch_size_) {
         eat_jobs(jobs_, batch_size_);
@@ -223,6 +231,25 @@ void base_event_handler::timer_worker(int64_t interval) {
                 eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
             } else {
                 idle = true;
+            }
+
+            // Commit volatile index
+            if (index_dirty_ && commit_volatile_index_timeout_ > 0)
+                --commit_volatile_index_timeout_;
+            if (commit_volatile_index_timeout_ == 0 && jobs_.empty()) {
+                index_manager_.commit();
+                commit_volatile_index_timeout_ = 10;
+                index_dirty_ = false;
+                volatile_index_dirty_ = true;
+            }
+
+            // Commit persistent index
+            if (volatile_index_dirty_ && commit_persistent_index_timeout_ > 0)
+                --commit_persistent_index_timeout_;
+            if (commit_persistent_index_timeout_ == 0 && jobs_.empty()) {
+                index_manager_.persist_index();
+                commit_persistent_index_timeout_ = 600;
+                volatile_index_dirty_ = false;
             }
         }
 

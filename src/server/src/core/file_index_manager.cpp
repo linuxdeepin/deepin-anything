@@ -26,12 +26,13 @@ ANYTHING_NAMESPACE_BEGIN
 
 using namespace Lucene;
 
-file_index_manager::file_index_manager(std::string index_dir)
-    : index_directory_(std::move(index_dir)),
+file_index_manager::file_index_manager(std::string persistent_index_dir, std::string volatile_index_dir)
+    : persistent_index_directory_(std::move(persistent_index_dir)),
+      volatile_index_directory_(std::move(volatile_index_dir)),
       pinyin_processor_("/usr/share/deepin-anything-server/pinyin.txt") {
     try {
-        // DirectoryPtr dir = newLucene<RAMDirectory>();
-        FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory_));
+        prepare_index();
+        FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(volatile_index_directory_));
         auto create = !IndexReader::indexExists(dir);
         writer_ = newLucene<IndexWriter>(dir,
             newLucene<KeywordAnalyzer>(),
@@ -59,6 +60,7 @@ file_index_manager::~file_index_manager() {
     if (writer_) {
         commit();
         writer_->close();
+        persist_index();
     }
 
     if (searcher_) searcher_->close();
@@ -119,6 +121,27 @@ void file_index_manager::commit() {
     spdlog::info("All changes are commited");
 }
 
+void file_index_manager::persist_index() {
+    std::error_code ec;
+
+    std::filesystem::remove_all(persistent_index_directory_, ec);
+    if (ec) {
+        spdlog::error("Failed to remove persistent index directory: {}", ec.message());
+        return;
+    }
+
+    std::filesystem::copy(volatile_index_directory_,
+                          persistent_index_directory_,
+                          std::filesystem::copy_options::recursive,
+                          ec);
+    if (ec) {
+        spdlog::error("Failed to copy index to persistent index directory: {}", ec.message());
+        return;
+    }
+
+    spdlog::info("Persist index to {}", persistent_index_directory_);
+}
+
 bool file_index_manager::indexed() const {
     return document_size() > 0;
 }
@@ -149,7 +172,7 @@ int32_t file_index_manager::document_size(bool nrt) const {
 }
 
 std::string file_index_manager::index_directory() const {
-    return index_directory_;
+    return persistent_index_directory_;
 }
 
 QStringList file_index_manager::search(
@@ -580,7 +603,9 @@ bool file_index_manager::document_exists(const std::string &path, bool only_chec
     return termDocs->next();
 }
 
-void file_index_manager::refresh_indexes() {
+bool file_index_manager::refresh_indexes() {
+    bool index_changed = false;
+    std::error_code ec;
     spdlog::info("Refreshing file indexes...");
     try_refresh_reader();
     auto query = newLucene<Lucene::MatchAllDocsQuery>();
@@ -592,7 +617,7 @@ void file_index_manager::refresh_indexes() {
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher_->doc(score_doc->doc);
             std::filesystem::path full_path(doc->get(L"full_path"));
-            if (!std::filesystem::exists(full_path)) {
+            if (!std::filesystem::exists(full_path, ec)) {
                 remove_list.push_back(full_path.string());
             } /*else {
                 auto last_write_time = file_helper_.get_file_last_write_time(full_path);
@@ -606,12 +631,16 @@ void file_index_manager::refresh_indexes() {
         for (const auto& path : remove_list) {
             // Remove non-existent path from the indexes
             remove_index(path);
+            index_changed = true;
         }
         for (const auto& path : update_list) {
             // Update the basic information for the indexed file
             add_index(path);
+            index_changed = true;
         }
     }
+
+    return index_changed;
 }
 
 void file_index_manager::try_refresh_reader(bool nrt) {
@@ -673,6 +702,23 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
         StringUtils::toUnicode(pinyin_processor_.convert_to_pinyin(record.file_name)),
         Field::STORE_YES, Field::INDEX_ANALYZED));
     return doc;
+}
+
+void file_index_manager::prepare_index() {
+    if (!std::filesystem::exists(volatile_index_directory_)) {
+        std::error_code ec;
+        std::filesystem::copy(persistent_index_directory_,
+                              volatile_index_directory_,
+                              std::filesystem::copy_options::recursive,
+                              ec);
+        if (ec) {
+            spdlog::error("Failed to copy index to volatile index directory: {}", ec.message());
+        } else {
+            spdlog::info("Prepared index in {}", volatile_index_directory_);
+        }
+    } else {
+        spdlog::info("Index already prepared in {}", volatile_index_directory_);
+    }
 }
 
 ANYTHING_NAMESPACE_END
