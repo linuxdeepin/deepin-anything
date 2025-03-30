@@ -108,8 +108,28 @@ void default_event_handler::handle(fs_event event) {
     }
 
     // spdlog::debug("Received a(an) {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
-    
+
     // Preparations are done, starting to process the event.
+
+    // Skip if path contains hidden directory or is hidden file (starts with ".")
+    bool isHidden = event.src.find("/.") != std::string::npos;
+    if (!isHidden && !event.dst.empty()) {
+        isHidden = event.dst.find("/.") != std::string::npos;
+    }
+    if (isHidden) {
+        return;
+    }
+
+    // Skip if path is not under home directory
+    std::string home = get_home_directory();
+    bool isUnderHome = event.src.rfind(home) == 0;
+    if (!isUnderHome && !event.dst.empty()) {
+        isUnderHome = event.dst.rfind(home) == 0;
+    }
+    if (!isUnderHome) {
+        return;
+    }
+
     bool ignored = false;
     ignored = ignored_event(event.dst.empty() ? event.src : event.dst, ignored);
     if (!ignored) {
