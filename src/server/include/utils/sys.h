@@ -12,7 +12,7 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
-std::string get_home_directory();
+const std::string get_home_directory();
 
 ANYTHING_NAMESPACE_END
 
