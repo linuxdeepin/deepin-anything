@@ -33,11 +33,23 @@ file_index_manager::file_index_manager(std::string persistent_index_dir, std::st
     try {
         prepare_index();
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(volatile_index_directory_));
-        auto create = !IndexReader::indexExists(dir);
-        writer_ = newLucene<IndexWriter>(dir,
-            newLucene<KeywordAnalyzer>(),
-            create, IndexWriter::MaxFieldLengthLIMITED);
-        reader_  = IndexReader::open(dir, true);
+        try {
+            auto create = !IndexReader::indexExists(dir);
+            writer_ = newLucene<IndexWriter>(dir,
+                newLucene<KeywordAnalyzer>(),
+                create, IndexWriter::MaxFieldLengthLIMITED);
+            reader_  = IndexReader::open(dir, true);
+        } catch (const LuceneException& e) {
+            spdlog::warn("The index is corrupted: {}", volatile_index_directory_);
+            if (writer_) writer_->close();
+            if (reader_) reader_->close();
+            std::filesystem::remove_all(volatile_index_directory_);
+
+            writer_ = newLucene<IndexWriter>(dir,
+                newLucene<KeywordAnalyzer>(),
+                true, IndexWriter::MaxFieldLengthLIMITED);
+            reader_  = IndexReader::open(dir, true);
+        }
         nrt_reader_ = writer_->getReader();
         searcher_ = newLucene<IndexSearcher>(reader_);
         nrt_searcher_ = newLucene<IndexSearcher>(nrt_reader_);
