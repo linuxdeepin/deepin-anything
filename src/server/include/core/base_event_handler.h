@@ -41,7 +41,7 @@ class base_event_handler : public QObject
     Q_PROPERTY(bool autoIndexExternal READ autoIndexExternal WRITE setAutoIndexExternal NOTIFY autoIndexExternalChanged)
 
 public:
-    base_event_handler(std::string index_dir, QObject *parent = nullptr);
+    base_event_handler(std::string persistent_index_dir, std::string volatile_index_dir, QObject *parent = nullptr);
     virtual ~base_event_handler();
 
     virtual void handle(anything::fs_event event) = 0;
@@ -161,6 +161,11 @@ private:
     std::mutex pending_mtx_;
     std::thread timer_;
     bool delay_mode_;
+
+    bool index_dirty_;
+    bool volatile_index_dirty_;
+    int commit_volatile_index_timeout_;
+    int commit_persistent_index_timeout_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_
