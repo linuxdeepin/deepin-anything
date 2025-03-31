@@ -108,7 +108,9 @@ std::string pinyin_processor::convert_to_pinyin(const std::string& sentence) {
 
     new_sentence += " " + pinyin_acronym_english;
     new_sentence += " " + pinyin_english;
-    return new_sentence;
+    // return new_sentence;
+    // 只返回全拼拼音，比如 “文件.txt” 只返回 “wenjian.txt”
+    return pinyin_english;
 }
 
 unsigned int pinyin_processor::hex_to_dec(const std::string& hex_str) {
