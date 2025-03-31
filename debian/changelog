@@ -1,3 +1,17 @@
+deepin-anything (7.0.8) unstable; urgency=medium
+
+  * chore: Adjust build and packaging
+  * chore: Run the daemon as user service
+  * refactor: Adjust the matching mechanism for search keyword
+  * feat: Add fields for the index
+  * feat: Improve performance by saving indexes to tmpfs
+  * refactor: Enhance get_home_directory function and add event filters
+  * fix: Handle corrupted index during initialization
+  * feat: Add pinyin field to search results and modify pinyin conversion logic
+  * feat: Add post-install script for deepin-anything-server
+
+ -- wangrong <wangrong@uniontech.com>  Mon, 31 Mar 2025 13:16:50 +0800
+
 deepin-anything (7.0.7) unstable; urgency=medium
 
   * Major update with a complete refactor and version upgrade.
