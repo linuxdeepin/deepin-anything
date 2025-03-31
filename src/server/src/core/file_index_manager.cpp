@@ -335,7 +335,8 @@ QStringList file_index_manager::search(const QString& orginPath, QString& keywor
                 + L"<\\>" + doc->get(L"file_type")
                 + L"<\\>" + doc->get(L"file_ext")
                 + L"<\\>" + doc->get(L"modify_time_str")
-                + L"<\\>" + doc->get(L"file_size_str"));
+                + L"<\\>" + doc->get(L"file_size_str")
+                + L"<\\>" + doc->get(L"pinyin"));
             if (result.startsWith(path)) {
                 results.append(std::move(result));
             }
