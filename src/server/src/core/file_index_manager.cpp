@@ -269,8 +269,8 @@ QStringList file_index_manager::search(
     }
 }
 
-QStringList file_index_manager::search(const QString& orginPath, QString& keywords, bool nrt) {
-    QString path = orginPath;
+QStringList file_index_manager::search(const QString& originPath, QString& keywords, bool nrt) {
+    QString path = originPath;
     if (path.startsWith(g_get_home_dir()))
         path.replace(0, strlen(g_get_home_dir()), get_home_directory().c_str());
 
