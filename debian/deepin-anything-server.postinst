@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+if [ -d "/var/cache/deepin/deepin-anything" ]; then
+    echo "Deleting the index files of the lower versions..."
+    rm -rf /var/cache/deepin/deepin-anything || true
+    echo "Deleted."
+fi
+
+#DEBHELPER#
