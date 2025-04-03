@@ -38,9 +38,9 @@ pkg_check_modules(qt-udisks2 REQUIRED udisks2-qt${QT_DESIRED_VERSION} IMPORTED_T
 
 # 生成 D-Bus 适配器
 if (QT_DESIRED_VERSION MATCHES 6)
-    qt_add_dbus_adaptor(${PROJECT_NAME}_ADAPTORS ${LFTManager_XML} lftmanager.h LFTManager anything_adaptor)
+    qt_add_dbus_adaptor(ADAPTORS ${LFTManager_XML} lftmanager.h LFTManager anything_adaptor)
 else()
-    qt5_add_dbus_adaptor(${PROJECT_NAME}_ADAPTORS ${LFTManager_XML} lftmanager.h LFTManager anything_adaptor)
+    qt5_add_dbus_adaptor(ADAPTORS ${LFTManager_XML} lftmanager.h LFTManager anything_adaptor)
 endif()
 
 # include
@@ -65,7 +65,7 @@ FILE (GLOB SERVER_SRCS
 add_library(${PROJECT_NAME} SHARED
     ${PRIVATE_INCLUDES}
     ${SERVER_SRCS}
-    ${${PROJECT_NAME}_ADAPTORS}
+    ${ADAPTORS}
 )
 
 set_target_properties(

@@ -316,7 +316,7 @@ static QString getLFTFileByPath(const QString &path, bool autoIndex)
     if (cache_path.isEmpty())
         return QString();
 
-    return cache_path + "/" + QString::fromLocal8Bit(lft_file_name.toPercentEncoding(":", "/"));
+    return cache_path + "/" + QString::fromLocal8Bit(lft_file_name.toPercentEncoding(":", "/").constData());
 }
 
 static bool allowablePath(LFTManager *manager, const QString &path)
@@ -417,7 +417,7 @@ bool LFTManager::addPath(QString path, bool autoIndex)
 
     // 保存信息，用于判断索引是否正在构建
     for (const QByteArray &path_raw : path_list) {
-        const QString &path = QString::fromLocal8Bit(path_raw);
+        const QString &path = QString::fromLocal8Bit(path_raw.constData());
 
         (*_global_fsWatcherMap)[path] = watcher;
     }
@@ -434,7 +434,7 @@ bool LFTManager::addPath(QString path, bool autoIndex)
         }
 
         for (const QByteArray &path_raw : path_list) {
-            const QString &path = QString::fromLocal8Bit(path_raw);
+            const QString &path = QString::fromLocal8Bit(path_raw.constData());
 
             if (buf) {
                 // 清理旧数据
@@ -700,7 +700,7 @@ QStringList LFTManager::refresh(const QByteArray &serialUriFilter)
         }
 
         for (const QByteArray &path_raw : pathList) {
-            const QString path = QString::fromLocal8Bit(path_raw);
+            const QString path = QString::fromLocal8Bit(path_raw.constData());
 
             path_list << path;
 
@@ -823,14 +823,14 @@ QStringList LFTManager::insertFileToLFTBuf(const QByteArray &file)
 
     cDebug() << file;
 
-    auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(file));
+    auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(file.constData()));
     QStringList root_path_list;
 
     QString mount_path = buff_pair.first;
     if (mount_path.isEmpty())
         return root_path_list;
 
-    QFileInfo info(QString::fromLocal8Bit(file));
+    QFileInfo info(QString::fromLocal8Bit(file.constData()));
     bool is_dir = info.isDir();
 
     fs_buf *buf = buff_pair.second;
@@ -880,7 +880,7 @@ QStringList LFTManager::removeFileFromLFTBuf(const QByteArray &file)
 
     cDebug() << file;
 
-    auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(file));
+    auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(file.constData()));
     QStringList root_path_list;
 
     QString mount_path = buff_pair.first;
@@ -932,7 +932,7 @@ QStringList LFTManager::renameFileOfLFTBuf(const QByteArray &oldFile, const QByt
 
     cDebug() << oldFile << newFile;
 
-    auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(newFile));
+    auto buff_pair = getFsBufByPath(QString::fromLocal8Bit(newFile.constData()));
     QStringList root_path_list;
 
     QString mount_path = buff_pair.first;
@@ -1320,7 +1320,7 @@ QString getRootMountPoint(const DBlockDevice *block)
     QStringList mountPoints;
 
     foreach (const QByteArray &item, mountPointsByteArray) {
-        mountPoints.append(QString::fromLocal8Bit(item));
+        mountPoints.append(QString::fromLocal8Bit(item.constData()));
     }
     if(mountPoints.size() == 1) {
         return mountPoints.first();
@@ -1366,13 +1366,13 @@ void LFTManager::onMountAdded(const QString &blockDevicePath, const QByteArray &
 
     deepin_anything_server::MountCacher::instance()->updateMountPoints();
 
-    const QString &mount_root = QString::fromLocal8Bit(mountPoint);
+    const QString &mount_root = QString::fromLocal8Bit(mountPoint.constData());
     const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(mount_root);
 
     // 尝试加载此挂载点下的lft文件
     const QStringList &list = refresh(serial_uri.toPercentEncoding(":", "/"));
 
-    if (list.contains(QString::fromLocal8Bit(mountPoint))) {
+    if (list.contains(QString::fromLocal8Bit(mountPoint.constData()))) {
         return;
     }
 
@@ -1395,7 +1395,7 @@ void LFTManager::onMountRemoved(const QString &blockDevicePath, const QByteArray
 
     deepin_anything_server::MountCacher::instance()->updateMountPoints();
 
-    const QString &mount_root = QString::fromLocal8Bit(mountPoint);
+    const QString &mount_root = QString::fromLocal8Bit(mountPoint.constData());
 //    const QByteArray &serial_uri = LFTDiskTool::pathToSerialUri(mount_root);
 
     for (const QString &path : hasLFTSubdirectories(mount_root)) {
