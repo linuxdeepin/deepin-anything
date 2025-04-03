@@ -173,7 +173,7 @@ QMap<QByteArray, QString> MountCacher::getRootsByPoints(const QByteArrayList &po
     QMap<QByteArray, QString> map;
 
     for (const QByteArray &point : pointList) {
-        const QString target = QString(point);
+        const QString target = QString::fromLocal8Bit(point.constData());
         for (MountPoint info: mountPointList) {
             if (target == info.mountTarget) {
                 map[point] = QString(info.mountRoot);
