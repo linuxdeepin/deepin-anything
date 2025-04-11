@@ -13,3 +13,4 @@ override_dh_auto_configure:
 override_dh_installinit:
 	true
 
+override_dh_auto_clean:
