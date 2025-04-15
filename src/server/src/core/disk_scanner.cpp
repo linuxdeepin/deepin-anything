@@ -18,15 +18,6 @@ std::vector<std::string> disk_scanner::scan(const fs::path& root) {
     std::vector<std::string> records;
     fs::recursive_directory_iterator dirpos{ root, fs::directory_options::skip_permission_denied };
     for (auto it = begin(dirpos); it != end(dirpos); ++it) {
-        // Skip hidden files and folders
-        if (disk_scanner::is_hidden(it->path())) {
-            // Prevent recursion into hidden folders
-            if (fs::is_directory(it->path())) {
-                it.disable_recursion_pending();
-            }
-            continue;
-        }
-
         if (std::filesystem::exists(it->path())) {
             records.push_back(it->path().string());
         }
