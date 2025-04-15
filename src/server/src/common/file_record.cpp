@@ -35,6 +35,7 @@ file_record file_helper::make_file_record(
         .file_ext        = p.extension().string(),
         .modify_time     = 0,
         .file_size       = 0,
+        .is_hidden       = false,
     };
 
     if (ret.file_ext.size() > 1) {
@@ -45,6 +46,8 @@ file_record file_helper::make_file_record(
     if (get_file_info (p.string().c_str(), &file_type, &ret.modify_time, &ret.file_size))
         spdlog::warn("get_file_info fail: {}", p.string().c_str());
     ret.file_type = file_type;
+
+    ret.is_hidden = ret.full_path.find("/.") != std::string::npos;
 
     return ret;
 }

@@ -336,7 +336,8 @@ QStringList file_index_manager::search(const QString& originPath, QString& keywo
                 + L"<\\>" + doc->get(L"file_ext")
                 + L"<\\>" + doc->get(L"modify_time_str")
                 + L"<\\>" + doc->get(L"file_size_str")
-                + L"<\\>" + doc->get(L"pinyin"));
+                + L"<\\>" + doc->get(L"pinyin")
+                + L"<\\>" + doc->get(L"is_hidden"));
             if (result.startsWith(path)) {
                 results.append(std::move(result));
             }
@@ -714,6 +715,11 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
     doc->add(newLucene<Field>(L"pinyin",
         StringUtils::toUnicode(pinyin_processor_.convert_to_pinyin(record.file_name)),
         Field::STORE_YES, Field::INDEX_ANALYZED));
+
+    doc->add(newLucene<Field>(L"is_hidden",
+        (record.is_hidden ? L"Y" : L"N"),
+        Field::STORE_YES, Field::INDEX_ANALYZED));
+
     return doc;
 }
 
