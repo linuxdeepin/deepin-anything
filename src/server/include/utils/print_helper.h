@@ -20,6 +20,7 @@ inline void print(const file_record& record) {
         " file_ext: " << record.file_ext <<
         " modify_time: " << record.modify_time <<
         " file_size: " << record.file_size <<
+        " is_hidden: " << record.is_hidden <<
         "\n";
 }
 

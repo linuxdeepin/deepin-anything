@@ -21,6 +21,7 @@ struct file_record {
     std::string file_ext;
     int64_t modify_time; // milliseconds time since epoch
     int64_t file_size;
+    bool is_hidden;
 };
 
 class file_helper {
