@@ -72,3 +72,8 @@ License: CC0-1.0
 Files: examples/**/*.desktop
 Copyright: None
 License: CC0-1.0
+
+# config
+Files: config/*
+Copyright: None
+License: CC0-1.0
