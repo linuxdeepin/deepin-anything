@@ -25,7 +25,7 @@ base_event_handler::base_event_handler(std::string persistent_index_dir, std::st
       commit_volatile_index_timeout_(COMMIT_VOLATILE_INDEX_TIMEOUT),
       commit_persistent_index_timeout_(COMMIT_PERSISTENT_INDEX_TIMEOUT) {
     new AnythingAdaptor(this);
-    QDBusConnection dbus = QDBusConnection::systemBus();
+    QDBusConnection dbus = QDBusConnection::sessionBus();
     if (!dbus.isConnected()) {
         spdlog::info("Failed to connect to system bus: {}", dbus.lastError().message().toStdString());
         exit(1);
