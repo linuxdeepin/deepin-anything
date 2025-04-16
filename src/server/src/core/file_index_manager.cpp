@@ -17,6 +17,7 @@
 #include "lucene++/SimpleHTMLFormatter.h"
 
 #include "analyzers/AnythingAnalyzer.h"
+#include "analyzers/chineseanalyzer.h"
 #include "utils/log.h"
 #include "utils/sys.h"
 #include "utils/tools.h"
@@ -36,7 +37,7 @@ file_index_manager::file_index_manager(std::string persistent_index_dir, std::st
         try {
             auto create = !IndexReader::indexExists(dir);
             writer_ = newLucene<IndexWriter>(dir,
-                newLucene<KeywordAnalyzer>(),
+                newLucene<ChineseAnalyzer>(),
                 create, IndexWriter::MaxFieldLengthLIMITED);
             reader_  = IndexReader::open(dir, true);
         } catch (const LuceneException& e) {
@@ -46,7 +47,7 @@ file_index_manager::file_index_manager(std::string persistent_index_dir, std::st
             std::filesystem::remove_all(volatile_index_directory_);
 
             writer_ = newLucene<IndexWriter>(dir,
-                newLucene<KeywordAnalyzer>(),
+                newLucene<ChineseAnalyzer>(),
                 true, IndexWriter::MaxFieldLengthLIMITED);
             reader_  = IndexReader::open(dir, true);
         }
@@ -55,7 +56,7 @@ file_index_manager::file_index_manager(std::string persistent_index_dir, std::st
         nrt_searcher_ = newLucene<IndexSearcher>(nrt_reader_);
         parser_ = newLucene<QueryParser>(
             LuceneVersion::LUCENE_CURRENT, fuzzy_field_,
-            newLucene<AnythingAnalyzer>());
+            newLucene<ChineseAnalyzer>());
         type_parser_ = newLucene<QueryParser>(
             LuceneVersion::LUCENE_CURRENT, type_field_,
             newLucene<AnythingAnalyzer>());
@@ -314,9 +315,11 @@ QStringList file_index_manager::search(const QString& originPath, QString& keywo
         //     boolean_query->add(newLucene<FuzzyQuery>(newLucene<Term>(pinyin_field_, term), 0.55), BooleanClause::SHOULD);
         // });
 
-        String queryString = L"*" + StringUtils::toLower(StringUtils::toUnicode(keywords.toStdString())) + L"*";
-        TermPtr term = newLucene<Term>(L"file_name", queryString);
-        QueryPtr query = newLucene<WildcardQuery>(term);
+        // String queryString = L"*" + StringUtils::toLower(StringUtils::toUnicode(keywords.toStdString())) + L"*";
+        // TermPtr term = newLucene<Term>(L"file_name", queryString);
+        // QueryPtr query = newLucene<WildcardQuery>(term);
+
+        auto query = parser_->parse(StringUtils::toLower(StringUtils::toUnicode(keywords.toStdString())));
 
         auto search_results = searcher->search(query, max_results);
 
@@ -692,10 +695,10 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
     doc->add(newLucene<Field>(L"file_type",
         StringUtils::toUnicode(record.file_type),
-        Field::STORE_YES, Field::INDEX_ANALYZED));
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
     doc->add(newLucene<Field>(L"file_ext",
         StringUtils::toUnicode(record.file_ext),
-        Field::STORE_YES, Field::INDEX_ANALYZED));
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
 
     char *formatted_time = format_time(record.modify_time);
     doc->add(newLucene<Field>(L"modify_time_str",
@@ -714,11 +717,11 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
     // spdlog::info("pinyin: {}", pinyin_processor_.convert_to_pinyin(record.file_name));
     doc->add(newLucene<Field>(L"pinyin",
         StringUtils::toUnicode(pinyin_processor_.convert_to_pinyin(record.file_name)),
-        Field::STORE_YES, Field::INDEX_ANALYZED));
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
 
     doc->add(newLucene<Field>(L"is_hidden",
         (record.is_hidden ? L"Y" : L"N"),
-        Field::STORE_YES, Field::INDEX_ANALYZED));
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
 
     return doc;
 }
