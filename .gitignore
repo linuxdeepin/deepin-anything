@@ -90,3 +90,9 @@ debian/*.substvars
 debian/files
 /obj-x86_64-linux-gnu/
 src/server/backend/
+
+debian/deepin-anything-dkms.postinst.debhelper
+debian/deepin-anything-dkms.prerm.debhelper
+debian/deepin-anything-server.postinst.debhelper
+debian/deepin-anything-server.postrm.debhelper
+debian/deepin-anything-server.prerm.debhelper

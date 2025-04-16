@@ -214,7 +214,7 @@ void base_event_handler::jobs_push(std::string src,
 void base_event_handler::timer_worker(int64_t interval) {
     // When pending_batch_size is small, CPU usage is low, but total indexing time is longer.
     // When pending_batch_size is large, CPU usage is high, but total indexing time is shorter.
-    constexpr std::size_t pending_batch_size = 2000;
+    constexpr std::size_t pending_batch_size = 20000;
     while(!stop_timer_) {
         // {
         //     std::lock_guard<std::mutex> lock(jobs_mtx_);
