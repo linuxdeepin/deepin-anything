@@ -11,6 +11,7 @@
 #include "utils/print_helper.h"
 #include "utils/string_helper.h"
 #include "vfs_change_consts.h"
+#include "core/config.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -121,6 +122,12 @@ void default_event_handler::handle(fs_event event) {
         return;
     }
 
+    if (event.act != ACT_RENAME_FILE &&
+        event.act != ACT_RENAME_FOLDER &&
+        Config::instance().isPathInBlacklist(event.src)) {
+        return;
+    }
+
     bool ignored = false;
     ignored = ignored_event(event.dst.empty() ? event.src : event.dst, ignored);
     if (!ignored) {
@@ -128,24 +135,46 @@ void default_event_handler::handle(fs_event event) {
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
             // Do not check for the existence of files; we trust the kernel module.
             add_index_delay(std::move(event.src));
-        } else if (event.act == ACT_DEL_FILE) {
+        } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
             remove_index_delay(std::move(event.src));
-        } else if (event.act == ACT_DEL_FOLDER) {
-            // Remove all files/folders in this folder(including this folder)
-            QString path = QString::fromStdString(event.src);
-            for (auto const& result : traverse_directory(path)) {
-                remove_index_delay(result.toStdString());
-            }
         } else if (event.act == ACT_RENAME_FILE) {
-            update_index_delay(std::move(event.src), std::move(event.dst));
+            bool is_src_blacklisted = Config::instance().isPathInBlacklist(event.src);
+            bool is_dst_blacklisted = Config::instance().isPathInBlacklist(event.dst);
+
+            if (is_src_blacklisted && is_dst_blacklisted) {
+                return;
+            } else if (is_src_blacklisted) {
+                add_index_delay(std::move(event.dst));
+            } else if (is_dst_blacklisted) {
+                remove_index_delay(std::move(event.src));
+            } else {
+                update_index_delay(std::move(event.src), std::move(event.dst));
+            }
         } else if (event.act == ACT_RENAME_FOLDER) {
             // Rename all files/folders in this folder(including this folder)
+            bool is_src_blacklisted = Config::instance().isPathInBlacklist(event.src);
+            bool is_dst_blacklisted = Config::instance().isPathInBlacklist(event.dst);
+
+            if (is_src_blacklisted && is_dst_blacklisted) {
+                return;
+            }
+
+            if (is_src_blacklisted) {
+                add_index_delay(event.dst);
+                scan_index_delay(std::move(event.dst));
+                return;
+            }
+
             QString oldPath = QString::fromStdString(event.src);
             for (auto const& result : traverse_directory(oldPath)) {
                 std::string src = result.toStdString();
                 std::string dst = src;
                 dst.replace(0, event.src.length(), event.dst);
-                update_index_delay(std::move(src), std::move(dst));
+                if (is_dst_blacklisted) {
+                    remove_index_delay(std::move(src));
+                } else {
+                    update_index_delay(std::move(src), std::move(dst));
+                }
             }
         }
     }

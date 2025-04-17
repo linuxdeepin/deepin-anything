@@ -10,7 +10,6 @@
 #include <lucene++/TermAttribute.h>
 #include <lucene++/UnicodeUtils.h>
 
-#include "utils/config.h"
 #include "utils/log.h"
 
 #include <iostream>

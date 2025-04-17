@@ -35,9 +35,6 @@ public:
 
 private:
     bool is_valid_date_format(std::string& date_str);
-
-private:
-    std::unordered_map<std::string, std::string> extension_mapper_;
 };
 
 ANYTHING_NAMESPACE_END
