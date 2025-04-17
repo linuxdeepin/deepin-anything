@@ -18,7 +18,7 @@
 ANYTHING_NAMESPACE_BEGIN
 
 enum class index_job_type : char {
-    add, remove, update
+    add, remove, update, scan
 };
 
 struct index_job {
@@ -77,6 +77,7 @@ protected:
     void add_index_delay(std::string path);
     void remove_index_delay(std::string path);
     void update_index_delay(std::string src, std::string dst);
+    void scan_index_delay(std::string path);
 
 private:
     bool should_be_filtered(const std::string& path) const;

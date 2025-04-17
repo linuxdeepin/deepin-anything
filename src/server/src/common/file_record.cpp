@@ -11,19 +11,11 @@
 #include <fcntl.h>     // For AT_FDCWD
 
 #include "utils/log.h"
-#include "utils/config.h"
 #include "utils/tools.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
-file_helper::file_helper() {
-    spdlog::info("current dir: {}", std::filesystem::current_path().string());
-
-    load_config_file("config/filetypes.cfg",
-        [this](std::string&& suffix, std::string&& filetype) {
-        extension_mapper_.emplace(suffix, filetype);
-    });
-}
+file_helper::file_helper() {}
 
 file_record file_helper::make_file_record(
     const std::filesystem::path& p) {

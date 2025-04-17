@@ -10,6 +10,7 @@
 #include <mntent.h>
 
 #include "utils/log.h"
+#include "core/config.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -18,6 +19,11 @@ std::vector<std::string> disk_scanner::scan(const fs::path& root) {
     std::vector<std::string> records;
     fs::recursive_directory_iterator dirpos{ root, fs::directory_options::skip_permission_denied };
     for (auto it = begin(dirpos); it != end(dirpos); ++it) {
+        if (Config::instance().isPathInBlacklist(it->path().string())) {
+            it.disable_recursion_pending();
+            continue;
+        }
+
         if (std::filesystem::exists(it->path())) {
             records.push_back(it->path().string());
         }

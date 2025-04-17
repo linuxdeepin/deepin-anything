@@ -162,6 +162,10 @@ void base_event_handler::update_index_delay(std::string src, std::string dst) {
     jobs_push(std::move(src), anything::index_job_type::update, std::move(dst));
 }
 
+void base_event_handler::scan_index_delay(std::string path) {
+    jobs_push(std::move(path), anything::index_job_type::scan);
+}
+
 bool base_event_handler::should_be_filtered(const std::string& path) const {
     if (index_change_filter_) {
         return std::invoke(index_change_filter_, path);
@@ -192,6 +196,10 @@ void base_event_handler::eat_job(const anything::index_job& job) {
     } else if (job.type == anything::index_job_type::update) {
         if (job.dst) {
             index_manager_.update_index(job.src, *job.dst);
+        }
+    } else if (job.type == anything::index_job_type::scan) {
+        for (auto&& path : anything::disk_scanner::scan(job.src)) {
+            index_manager_.add_index(std::move(path));
         }
     }
 }
