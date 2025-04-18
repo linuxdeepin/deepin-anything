@@ -27,12 +27,16 @@ ANYTHING_NAMESPACE_BEGIN
 
 using namespace Lucene;
 
+#define INDEX_VERSION L"1"
+#define INDEX_VERSION_FIELD L"index_version"
+
 file_index_manager::file_index_manager(std::string persistent_index_dir, std::string volatile_index_dir)
     : persistent_index_directory_(std::move(persistent_index_dir)),
       volatile_index_directory_(std::move(volatile_index_dir)),
       pinyin_processor_("/usr/share/deepin-anything-server/pinyin.txt") {
     try {
         prepare_index();
+        check_index_version();
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(volatile_index_directory_));
         try {
             auto create = !IndexReader::indexExists(dir);
@@ -130,8 +134,13 @@ void file_index_manager::update_index(const std::string& old_path, const std::st
 }
 
 void file_index_manager::commit() {
-    writer_->commit();
-    spdlog::info("All changes are commited");
+    try {
+        set_index_version();
+        writer_->commit();
+        spdlog::info("All changes are commited with version: {}", StringUtils::toUTF8(INDEX_VERSION));
+    } catch (const LuceneException& e) {
+        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+    }
 }
 
 void file_index_manager::persist_index() {
@@ -727,6 +736,7 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
 }
 
 void file_index_manager::prepare_index() {
+    spdlog::info("Preparing index...");
     if (!std::filesystem::exists(volatile_index_directory_)) {
         std::error_code ec;
         std::filesystem::copy(persistent_index_directory_,
@@ -739,8 +749,55 @@ void file_index_manager::prepare_index() {
             spdlog::info("Prepared index in {}", volatile_index_directory_);
         }
     } else {
-        spdlog::info("Index already prepared in {}", volatile_index_directory_);
+        spdlog::info("Index already exists in {}", volatile_index_directory_);
     }
+}
+
+void file_index_manager::check_index_version() {
+    spdlog::info("Checking index version...");
+    Lucene::IndexReaderPtr reader;
+
+    // 打开索引
+    try {
+        FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(volatile_index_directory_));
+        reader = IndexReader::open(dir, true);
+    } catch (const LuceneException& e) {
+        spdlog::warn("The index is corrupted: {}", volatile_index_directory_);
+        if (reader) reader->close();
+        spdlog::warn("Removing the corrupted index...");
+        std::filesystem::remove_all(volatile_index_directory_);
+        return;
+    }
+
+    // 查找数据库版本
+    TermPtr term = newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION);
+    QueryPtr query = newLucene<TermQuery>(term);
+    Lucene::SearcherPtr searcher = newLucene<IndexSearcher>(reader);
+    Lucene::TopDocsPtr top_docs = searcher->search(query, 1);
+    bool found = top_docs->scoreDocs.size() == 1;
+    reader->close();
+    if (found) {
+        spdlog::info("The index version is expected({}): {}", StringUtils::toUTF8(INDEX_VERSION), volatile_index_directory_);
+    } else {
+        spdlog::warn("The index version is mismatched: {}", volatile_index_directory_);
+        spdlog::warn("Removing the incompatible index...");
+        std::filesystem::remove_all(volatile_index_directory_);
+    }
+}
+
+void file_index_manager::set_index_version() {
+    static std::once_flag flag;
+    std::call_once(flag, [this]() {
+        // 保存版本号到数据库
+        DocumentPtr doc = newLucene<Document>();
+        doc->add(newLucene<Field>(INDEX_VERSION_FIELD, INDEX_VERSION, Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+        writer_->updateDocument(newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION), doc);
+
+        // 保存版本号到文件
+        std::ofstream version_file(volatile_index_directory_ + "/version.txt");
+        version_file << StringUtils::toUTF8(INDEX_VERSION);
+        version_file.close();
+    });
 }
 
 ANYTHING_NAMESPACE_END
