@@ -140,6 +140,10 @@ private:
     Lucene::DocumentPtr create_document(const file_record& record);
 
     void prepare_index();
+
+    void check_index_version();
+
+    void set_index_version();
 private:
     std::string persistent_index_directory_;
     std::string volatile_index_directory_;
