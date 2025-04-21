@@ -263,6 +263,7 @@ void base_event_handler::timer_worker(int64_t interval) {
 
         // Automatically index missing system files to maintain index integrity when there are no jobs.
         if (idle) {
+            bool pending_paths_empty = false;
             std::vector<std::string> path_batch;
             {
                 std::lock_guard<std::mutex> lock(pending_mtx_);
@@ -273,6 +274,7 @@ void base_event_handler::timer_worker(int64_t interval) {
                         std::make_move_iterator(pending_paths_.begin()),
                         std::make_move_iterator(pending_paths_.begin() + batch_size));
                     pending_paths_.erase(pending_paths_.begin(), pending_paths_.begin() + batch_size);
+                    pending_paths_empty = pending_paths_.empty();
                 }
             }
 
@@ -296,6 +298,11 @@ void base_event_handler::timer_worker(int64_t interval) {
                         add_index_delay(std::move(path));
                     }
                 }
+            }
+
+            if (pending_paths_empty) {
+                spdlog::info("Pending paths are empty, trigger index commit");
+                index_manager_.commit();
             }
         }
 

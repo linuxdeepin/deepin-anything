@@ -6,6 +6,7 @@
 #include "core/default_event_handler.h"
 
 #include <cstdlib> // std::getenv
+#include <glib.h>
 
 #include "utils/log.h"
 #include "utils/print_helper.h"
@@ -19,7 +20,7 @@ ANYTHING_NAMESPACE_BEGIN
 default_event_handler::default_event_handler(std::string persistent_index_dir, std::string volatile_index_dir)
     : base_event_handler(std::move(persistent_index_dir), std::move(volatile_index_dir)) {
     // Index the default mount point
-    auto home_dir = get_home_directory();
+    auto home_dir = std::string(g_get_home_dir());
     if (!home_dir.empty()) {
         add_index_delay(home_dir);
         insert_index_directory(home_dir);
@@ -39,6 +40,20 @@ default_event_handler::default_event_handler(std::string persistent_index_dir, s
     });
 
     spdlog::debug("cache directory: {}", get_index_directory());
+}
+
+bool is_under_home(const std::string& path) {
+    static std::string home = "/persistent" + std::string(g_get_home_dir());
+    return path.rfind(home) == 0;
+}
+
+void remove_home_prefix(std::string& path) {
+    static size_t home_prefix_len = strlen("/persistent");
+    path.replace(0, home_prefix_len, "");
+}
+
+bool is_path_blocked(const std::string& path) {
+    return !is_under_home(path) || Config::instance().isPathInBlacklist(path);
 }
 
 void default_event_handler::handle(fs_event event) {
@@ -112,19 +127,9 @@ void default_event_handler::handle(fs_event event) {
 
     // Preparations are done, starting to process the event.
 
-    // Skip if path is not under home directory
-    std::string home = get_home_directory();
-    bool isUnderHome = event.src.rfind(home) == 0;
-    if (!isUnderHome && !event.dst.empty()) {
-        isUnderHome = event.dst.rfind(home) == 0;
-    }
-    if (!isUnderHome) {
-        return;
-    }
-
     if (event.act != ACT_RENAME_FILE &&
         event.act != ACT_RENAME_FOLDER &&
-        Config::instance().isPathInBlacklist(event.src)) {
+        is_path_blocked(event.src)) {
         return;
     }
 
@@ -134,45 +139,55 @@ void default_event_handler::handle(fs_event event) {
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
             // Do not check for the existence of files; we trust the kernel module.
+            remove_home_prefix(event.src);
             add_index_delay(std::move(event.src));
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
+            remove_home_prefix(event.src);
             remove_index_delay(std::move(event.src));
         } else if (event.act == ACT_RENAME_FILE) {
-            bool is_src_blacklisted = Config::instance().isPathInBlacklist(event.src);
-            bool is_dst_blacklisted = Config::instance().isPathInBlacklist(event.dst);
+            bool isSrcBlocked = is_path_blocked(event.src);
+            bool isDstBlocked = is_path_blocked(event.dst);
 
-            if (is_src_blacklisted && is_dst_blacklisted) {
+            if (isSrcBlocked && isDstBlocked) {
                 return;
-            } else if (is_src_blacklisted) {
+            } else if (isSrcBlocked) {
+                remove_home_prefix(event.dst);
                 add_index_delay(std::move(event.dst));
-            } else if (is_dst_blacklisted) {
+            } else if (isDstBlocked) {
+                remove_home_prefix(event.src);
                 remove_index_delay(std::move(event.src));
             } else {
+                remove_home_prefix(event.src);
+                remove_home_prefix(event.dst);
                 update_index_delay(std::move(event.src), std::move(event.dst));
             }
         } else if (event.act == ACT_RENAME_FOLDER) {
             // Rename all files/folders in this folder(including this folder)
-            bool is_src_blacklisted = Config::instance().isPathInBlacklist(event.src);
-            bool is_dst_blacklisted = Config::instance().isPathInBlacklist(event.dst);
+            bool isSrcBlocked = is_path_blocked(event.src);
+            bool isDstBlocked = is_path_blocked(event.dst);
 
-            if (is_src_blacklisted && is_dst_blacklisted) {
+            if (isSrcBlocked && isDstBlocked) {
                 return;
             }
 
-            if (is_src_blacklisted) {
+            if (isSrcBlocked) {
+                remove_home_prefix(event.dst);
                 add_index_delay(event.dst);
                 scan_index_delay(std::move(event.dst));
                 return;
             }
 
+            remove_home_prefix(event.src);
+            remove_home_prefix(event.dst);
+            size_t event_src_len = event.src.length();
             QString oldPath = QString::fromStdString(event.src);
             for (auto const& result : traverse_directory(oldPath)) {
                 std::string src = result.toStdString();
-                std::string dst = src;
-                dst.replace(0, event.src.length(), event.dst);
-                if (is_dst_blacklisted) {
+                if (isDstBlocked) {
                     remove_index_delay(std::move(src));
                 } else {
+                    std::string dst = src;
+                    dst.replace(0, event_src_len, event.dst);
                     update_index_delay(std::move(src), std::move(dst));
                 }
             }

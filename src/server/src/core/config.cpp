@@ -5,7 +5,7 @@
 
 #include "core/config.h"
 
-#include "utils/sys.h"
+#include <glib.h>
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -18,11 +18,13 @@ Config::Config()
 {
     // init path_blacklist_
     path_blacklist_ = {
-        "$HOME/.cache/deepin-anything-server",
+        "$HOME/.git",
+        "$HOME/.svn",
+        "$HOME/.cache",
         "$HOME/.local/share/Trash",
     };
     // Replace $HOME with actual home directory path
-    auto home = get_home_directory();
+    auto home = g_get_home_dir();
     for (auto& path : path_blacklist_) {
         size_t pos = path.find("$HOME");
         if (pos != std::string::npos) {
