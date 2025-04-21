@@ -18,6 +18,7 @@
 #include <netlink/genl/genl.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
+#include <QCoreApplication>
 
 #include "utils/genl_parser.hpp"
 #include "utils/log.h"
@@ -31,14 +32,14 @@ static nla_policy vfs_policy[VFSMONITOR_A_MAX + 1];
 event_listenser::event_listenser()
     : connected_{ connect(mcsk_) },
       timeout_{ -1 } {
-    auto clean_and_abort = [this] {
+    auto clean_and_exit = [this] {
         disconnect(mcsk_);
-        std::abort();
+        exit(1);
     };
 
     if (!connected_) {
         spdlog::error("Error: failed to connect to generic netlink");
-        clean_and_abort();
+        clean_and_exit();
     }
 
     // Disable sequence checks for asynchronous multicast messages
@@ -49,25 +50,25 @@ event_listenser::event_listenser()
     int mcgrp = genl_ctrl_resolve_grp(mcsk_, VFSMONITOR_FAMILY_NAME, VFSMONITOR_MCG_DENTRY_NAME);
     if (mcgrp < 0) {
 		spdlog::error("Error: failed to resolve generic netlink multicast group");
-		clean_and_abort();
+		clean_and_exit();
 	}
 
     // Joint the multicast group
     int ret = nl_socket_add_membership(mcsk_, mcgrp);
     if (ret < 0) {
         spdlog::error("Error: failed to join multicast group");
-        clean_and_abort();
+        clean_and_exit();
     }
 
     if (!set_callback(mcsk_, event_listenser::event_handler)) {
         spdlog::error("Error: failed to set callback");
-        clean_and_abort();
+        clean_and_exit();
     }
 
     stop_fd_ = eventfd(0, EFD_NONBLOCK);
     if (stop_fd_ == -1) {
         spdlog::error("Failed to create eventfd");
-        clean_and_abort();
+        clean_and_exit();
     }
 
     // Initialize policy
@@ -115,7 +116,11 @@ void event_listenser::start_listening() {
 
         for (int i = 0; i < event_cnt; ++i) {
             if (ep_events[i].data.fd == mcsk_fd) {
-                nl_recvmsgs_default(mcsk_);
+                int ret = nl_recvmsgs_default(mcsk_);
+                if (ret < 0) {
+                    spdlog::error("Failed to receive netlink messages: {}", ret);
+                    qApp->quit();
+                }
             } else if (ep_events[i].data.fd == stop_fd_) {
                 uint64_t u;
                 [[maybe_unused]] auto _ = read(stop_fd_, &u, sizeof(u));
