@@ -1,3 +1,18 @@
+deepin-anything (7.0.9) unstable; urgency=medium
+
+  * chore: Update license information
+  * refactor: Simplify file type mapping
+  * fix: Change DBus connection to sessionBus
+  * refactor: Support indexing hidden files
+  * feat: Add is_hidden field
+  * feat: Using the New Analyzer
+  * feat: Support index directory blacklist
+  * feat: Implement index version management
+  * feat: Use new home directory location
+  * feat: Implement kernel module alive check
+
+ -- wangrong <wangrong@uniontech.com>  Mon, 21 Apr 2025 17:04:58 +0800
+
 deepin-anything (7.0.8) unstable; urgency=medium
 
   * chore: Adjust build and packaging
