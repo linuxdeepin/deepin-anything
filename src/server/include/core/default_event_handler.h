@@ -8,7 +8,6 @@
 
 #include <glib.h>
 #include "core/base_event_handler.h"
-#include "utils/sys.h"
 
 ANYTHING_NAMESPACE_BEGIN
 

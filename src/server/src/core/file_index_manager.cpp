@@ -19,7 +19,6 @@
 #include "analyzers/AnythingAnalyzer.h"
 #include "analyzers/chineseanalyzer.h"
 #include "utils/log.h"
-#include "utils/sys.h"
 #include "utils/tools.h"
 #include <glib.h>
 
@@ -279,11 +278,7 @@ QStringList file_index_manager::search(
     }
 }
 
-QStringList file_index_manager::search(const QString& originPath, QString& keywords, bool nrt) {
-    QString path = originPath;
-    if (path.startsWith(g_get_home_dir()))
-        path.replace(0, strlen(g_get_home_dir()), get_home_directory().c_str());
-
+QStringList file_index_manager::search(const QString& path, QString& keywords, bool nrt) {
     spdlog::debug("Search index(keyworks: \"{}\").", keywords.toStdString());
 
     if (keywords.isEmpty()) {
@@ -738,6 +733,11 @@ DocumentPtr file_index_manager::create_document(const file_record& record) {
 void file_index_manager::prepare_index() {
     spdlog::info("Preparing index...");
     if (!std::filesystem::exists(volatile_index_directory_)) {
+        if (!std::filesystem::exists(persistent_index_directory_)) {
+            spdlog::info("Persistent index directory does not exist: {}", persistent_index_directory_);
+            return;
+        }
+
         std::error_code ec;
         std::filesystem::copy(persistent_index_directory_,
                               volatile_index_directory_,
@@ -756,6 +756,11 @@ void file_index_manager::prepare_index() {
 void file_index_manager::check_index_version() {
     spdlog::info("Checking index version...");
     Lucene::IndexReaderPtr reader;
+
+    if (!std::filesystem::exists(volatile_index_directory_)) {
+        spdlog::info("Index directory does not exist: {}", volatile_index_directory_);
+        return;
+    }
 
     // 打开索引
     try {
