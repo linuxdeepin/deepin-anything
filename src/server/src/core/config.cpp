@@ -18,9 +18,10 @@ Config::Config()
 {
     // init path_blacklist_
     path_blacklist_ = {
-        "$HOME/.git",
-        "$HOME/.svn",
+        "/.git",
+        "/.svn",
         "$HOME/.cache",
+        "$HOME/.config",
         "$HOME/.local/share/Trash",
     };
     // Replace $HOME with actual home directory path
@@ -34,7 +35,6 @@ Config::Config()
 
 }
 
-
 bool Config::isPathInBlacklist(const std::string& path) const
 {
     for (const auto& blacklisted_path : path_blacklist_) {
@@ -45,7 +45,4 @@ bool Config::isPathInBlacklist(const std::string& path) const
     return false;
 }
 
-
-
-
-ANYTHING_NAMESPACE_END 
+ANYTHING_NAMESPACE_END
