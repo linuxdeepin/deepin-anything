@@ -5,6 +5,7 @@
 
 #include "core/file_index_manager.h"
 #include "analyzers/AnythingAnalyzer.h"
+#include "core/config.h"
 
 #include <chrono>
 #include <filesystem>
@@ -638,7 +639,8 @@ bool file_index_manager::refresh_indexes() {
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher_->doc(score_doc->doc);
             std::filesystem::path full_path(doc->get(L"full_path"));
-            if (!std::filesystem::exists(full_path, ec)) {
+            if (!std::filesystem::exists(full_path, ec) ||
+                Config::instance().isPathInBlacklist(full_path.string())) {
                 remove_list.push_back(full_path.string());
             } /*else {
                 auto last_write_time = file_helper_.get_file_last_write_time(full_path);
