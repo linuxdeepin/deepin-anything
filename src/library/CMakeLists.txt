@@ -15,6 +15,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LIBPCRE REQUIRED libpcre)
+pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 
 set(3RD_DIR "../../3rdparty")
 
@@ -41,6 +42,7 @@ target_link_libraries(
     ${PROJECT_NAME}
     ${GLIB_LIBRARIES}
     ${LIBPCRE_LIBRARIES}
+    ${MOUNT_LIBRARIES}
 )
 
 target_include_directories(
@@ -48,6 +50,7 @@ target_include_directories(
 PUBLIC
     ${GLIB_INCLUDE_DIRS}
     ${LIBPCRE_INCLUDE_DIRS}
+    ${MOUNT_INCLUDE_DIRS}
     ${CMAKE_CURRENT_LIST_DIR}/inc
     ${CMAKE_CURRENT_LIST_DIR}/inc/index
     ${3RD_DIR}/fsearch

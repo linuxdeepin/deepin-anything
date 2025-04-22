@@ -1,3 +1,9 @@
+deepin-anything (6.2.7) unstable; urgency=medium
+
+  * Fix search fail in immutable system
+
+ -- wangrong <wangrong@uniontech.com>  Tue, 22 Apr 2025 18:59:55 +0800
+
 deepin-anything (6.2.6) unstable; urgency=medium
 
   * New version 6.2.6
