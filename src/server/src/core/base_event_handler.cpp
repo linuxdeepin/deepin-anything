@@ -23,7 +23,8 @@ base_event_handler::base_event_handler(std::string persistent_index_dir, std::st
       index_dirty_(false),
       volatile_index_dirty_(false),
       commit_volatile_index_timeout_(COMMIT_VOLATILE_INDEX_TIMEOUT),
-      commit_persistent_index_timeout_(COMMIT_PERSISTENT_INDEX_TIMEOUT) {
+      commit_persistent_index_timeout_(COMMIT_PERSISTENT_INDEX_TIMEOUT),
+      index_status_(anything::index_status::loading) {
     new AnythingAdaptor(this);
     QDBusConnection dbus = QDBusConnection::sessionBus();
     if (!dbus.isConnected()) {
@@ -115,6 +116,7 @@ void base_event_handler::insert_index_directory(std::filesystem::path dir) {
     pool_.enqueue_detach([this, dir = std::move(dir)]() {
         this->insert_pending_paths(anything::disk_scanner::scan(dir));
     });
+    index_status_ = anything::index_status::scanning;
 }
 
 std::size_t base_event_handler::pending_paths_count() const {
@@ -245,7 +247,7 @@ void base_event_handler::timer_worker(int64_t interval) {
             if (index_dirty_ && commit_volatile_index_timeout_ > 0)
                 --commit_volatile_index_timeout_;
             if (commit_volatile_index_timeout_ == 0 && jobs_.empty()) {
-                index_manager_.commit();
+                index_manager_.commit(index_status_);
                 commit_volatile_index_timeout_ = 10;
                 index_dirty_ = false;
                 volatile_index_dirty_ = true;
@@ -263,7 +265,6 @@ void base_event_handler::timer_worker(int64_t interval) {
 
         // Automatically index missing system files to maintain index integrity when there are no jobs.
         if (idle) {
-            bool pending_paths_empty = false;
             std::vector<std::string> path_batch;
             {
                 std::lock_guard<std::mutex> lock(pending_mtx_);
@@ -274,7 +275,6 @@ void base_event_handler::timer_worker(int64_t interval) {
                         std::make_move_iterator(pending_paths_.begin()),
                         std::make_move_iterator(pending_paths_.begin() + batch_size));
                     pending_paths_.erase(pending_paths_.begin(), pending_paths_.begin() + batch_size);
-                    pending_paths_empty = pending_paths_.empty();
                 }
             }
 
@@ -299,11 +299,16 @@ void base_event_handler::timer_worker(int64_t interval) {
                     }
                 }
             }
+        }
 
-            if (pending_paths_empty) {
-                spdlog::info("Pending paths are empty, trigger index commit");
-                index_manager_.commit();
-            }
+        if (index_status_ == anything::index_status::scanning &&
+            pending_paths_.empty() &&
+            idle &&
+            !pool_.busy()) {
+            spdlog::info("Index scan completed, trigger index commit");
+
+            index_status_ = anything::index_status::monitoring;
+            index_manager_.commit(index_status_);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(interval));

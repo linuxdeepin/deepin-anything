@@ -56,7 +56,7 @@ void setup_kernel_module_alive_check(QTimer &timer) {
             qApp->quit();
         }
     });
-    timer.setInterval(1000);
+    timer.setInterval(3000);
     timer.start();
 }
 

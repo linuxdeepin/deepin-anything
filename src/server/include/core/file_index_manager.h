@@ -19,6 +19,13 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
+enum class index_status {
+    loading,
+    scanning,
+    monitoring,
+    closed,
+};
+
 class file_index_manager {
 public:
     explicit file_index_manager(std::string persistent_index_dir, std::string volatile_index_dir);
@@ -43,7 +50,7 @@ public:
     // std::vector<file_record> search_index(const std::string& term, bool exact_match = false, bool nrt = false);
 
     /// Commit all changes to the index
-    void commit();
+    void commit(index_status status);
 
     /// @brief Persist the index to the persistent index directory
     void persist_index();
@@ -144,6 +151,8 @@ private:
     void check_index_version();
 
     void set_index_version();
+
+    void save_index_status(index_status status);
 private:
     std::string persistent_index_directory_;
     std::string volatile_index_directory_;
