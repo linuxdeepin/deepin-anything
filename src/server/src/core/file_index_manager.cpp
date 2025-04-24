@@ -75,7 +75,7 @@ file_index_manager::file_index_manager(std::string persistent_index_dir, std::st
 
 file_index_manager::~file_index_manager() {
     if (writer_) {
-        commit();
+        commit(index_status::closed);
         writer_->close();
         persist_index();
     }
@@ -133,8 +133,9 @@ void file_index_manager::update_index(const std::string& old_path, const std::st
     }
 }
 
-void file_index_manager::commit() {
+void file_index_manager::commit(index_status status) {
     try {
+        save_index_status(status);
         set_index_version();
         writer_->commit();
         spdlog::info("All changes are commited with version: {}", StringUtils::toUTF8(INDEX_VERSION));
@@ -639,6 +640,10 @@ bool file_index_manager::refresh_indexes() {
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher_->doc(score_doc->doc);
             std::filesystem::path full_path(doc->get(L"full_path"));
+            if (full_path.empty()) {
+                // doc is metadata, not a file
+                continue;
+            }
             if (!std::filesystem::exists(full_path, ec) ||
                 Config::instance().isPathInBlacklist(full_path.string())) {
                 remove_list.push_back(full_path.string());
@@ -799,12 +804,55 @@ void file_index_manager::set_index_version() {
         DocumentPtr doc = newLucene<Document>();
         doc->add(newLucene<Field>(INDEX_VERSION_FIELD, INDEX_VERSION, Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
         writer_->updateDocument(newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION), doc);
-
-        // 保存版本号到文件
-        std::ofstream version_file(volatile_index_directory_ + "/version.txt");
-        version_file << StringUtils::toUTF8(INDEX_VERSION);
-        version_file.close();
     });
+}
+
+static const char * const status_json_template = R"(
+{
+    "time": "%s",
+    "status": "%s",
+    "version": "%s"
+}
+)";
+
+void file_index_manager::save_index_status(index_status status) {
+    auto now = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&now_time_t), "%Y-%m-%dT%H:%M:%S");
+
+    std::string status_str;
+    switch (status) {
+        case index_status::loading:
+            status_str = "loading";
+            break;
+        case index_status::scanning:
+            status_str = "scanning";
+            break;
+        case index_status::monitoring:
+            status_str = "monitoring";
+            break;
+        case index_status::closed:
+            status_str = "closed";
+            break;
+        default:
+            assert(false && "Invalid index status");
+            break;
+    }
+
+    char status_json[1024];
+    int written = snprintf(status_json, sizeof(status_json), status_json_template,
+             ss.str().c_str(),
+             status_str.c_str(),
+             StringUtils::toUTF8(INDEX_VERSION).c_str());
+    if (written < 0 || written >= (int)sizeof(status_json)) {
+        spdlog::error("Failed to format status json");
+        return;
+    }
+
+    std::ofstream status_file(volatile_index_directory_ + "/status.json");
+    status_file << status_json;
+    status_file.close();
 }
 
 ANYTHING_NAMESPACE_END

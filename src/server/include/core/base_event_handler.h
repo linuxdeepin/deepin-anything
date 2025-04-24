@@ -167,6 +167,8 @@ private:
     bool volatile_index_dirty_;
     int commit_volatile_index_timeout_;
     int commit_persistent_index_timeout_;
+
+    anything::index_status index_status_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_
