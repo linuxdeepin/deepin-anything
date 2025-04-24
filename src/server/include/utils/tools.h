@@ -18,6 +18,8 @@ char *format_time(int64_t time);
 
 char *format_size(int64_t size);
 
+char *get_full_path(const char *path);
+
 #ifdef __cplusplus
 }
 #endif

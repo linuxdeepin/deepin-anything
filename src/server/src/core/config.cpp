@@ -45,4 +45,9 @@ bool Config::isPathInBlacklist(const std::string& path) const
     return false;
 }
 
+const std::vector<std::string>& Config::get_path_blocked_list() const
+{
+    return path_blacklist_;
+}
+
 ANYTHING_NAMESPACE_END

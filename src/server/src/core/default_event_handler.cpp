@@ -13,6 +13,7 @@
 #include "utils/string_helper.h"
 #include "vfs_change_consts.h"
 #include "core/config.h"
+#include "utils/tools.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -42,18 +43,54 @@ default_event_handler::default_event_handler(std::string persistent_index_dir, s
     spdlog::debug("cache directory: {}", get_index_directory());
 }
 
+const std::string& get_home_dir_event_path() {
+    static const std::string home_dir_event_path = [] {
+        char *home_dir = get_full_path(g_get_home_dir());
+        auto home_dir_event_path = std::string(home_dir);
+        g_free(home_dir);
+        spdlog::debug("home_dir_event_path: {}", home_dir_event_path);
+        return home_dir_event_path;
+    }();
+    return home_dir_event_path;
+}
+
 bool is_under_home(const std::string& path) {
-    static std::string home = "/persistent" + std::string(g_get_home_dir());
-    return path.rfind(home) == 0;
+    return path.rfind(get_home_dir_event_path()) == 0;
 }
 
-void remove_home_prefix(std::string& path) {
-    static size_t home_prefix_len = strlen("/persistent");
-    path.replace(0, home_prefix_len, "");
+// 将路径中的 /persistent/home/user 替换为 /home/user
+void replace_home_prefix(std::string& path) {
+    static bool do_replace = [] {
+        return get_home_dir_event_path() != g_get_home_dir();
+    }();
+
+    if (do_replace) {
+        path.replace(0, get_home_dir_event_path().length(), g_get_home_dir());
+    }
 }
 
-bool is_path_blocked(const std::string& path) {
-    return !is_under_home(path) || Config::instance().isPathInBlacklist(path);
+bool is_event_path_in_blacklist(const std::string& path) {
+    static const std::vector<std::string> event_path_blocked_list = [] {
+        auto path_blocked_list = Config::instance().get_path_blocked_list();
+        auto home_dir_length = strlen(g_get_home_dir());
+        for (auto& path : path_blocked_list) {
+            if (path.rfind(g_get_home_dir()) == 0) {
+                path.replace(0, home_dir_length, get_home_dir_event_path());
+            }
+        }
+        return path_blocked_list;
+    }();
+
+    for (auto& blocked_path : event_path_blocked_list) {
+        if (path.find(blocked_path) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool is_event_path_blocked(const std::string& path) {
+    return !is_under_home(path) || is_event_path_in_blacklist(path);
 }
 
 void default_event_handler::handle(fs_event event) {
@@ -129,7 +166,7 @@ void default_event_handler::handle(fs_event event) {
 
     if (event.act != ACT_RENAME_FILE &&
         event.act != ACT_RENAME_FOLDER &&
-        is_path_blocked(event.src)) {
+        is_event_path_blocked(event.src)) {
         return;
     }
 
@@ -139,46 +176,46 @@ void default_event_handler::handle(fs_event event) {
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
             // Do not check for the existence of files; we trust the kernel module.
-            remove_home_prefix(event.src);
+            replace_home_prefix(event.src);
             add_index_delay(std::move(event.src));
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
-            remove_home_prefix(event.src);
+            replace_home_prefix(event.src);
             remove_index_delay(std::move(event.src));
         } else if (event.act == ACT_RENAME_FILE) {
-            bool isSrcBlocked = is_path_blocked(event.src);
-            bool isDstBlocked = is_path_blocked(event.dst);
+            bool isSrcBlocked = is_event_path_blocked(event.src);
+            bool isDstBlocked = is_event_path_blocked(event.dst);
 
             if (isSrcBlocked && isDstBlocked) {
                 return;
             } else if (isSrcBlocked) {
-                remove_home_prefix(event.dst);
+                replace_home_prefix(event.dst);
                 add_index_delay(std::move(event.dst));
             } else if (isDstBlocked) {
-                remove_home_prefix(event.src);
+                replace_home_prefix(event.src);
                 remove_index_delay(std::move(event.src));
             } else {
-                remove_home_prefix(event.src);
-                remove_home_prefix(event.dst);
+                replace_home_prefix(event.src);
+                replace_home_prefix(event.dst);
                 update_index_delay(std::move(event.src), std::move(event.dst));
             }
         } else if (event.act == ACT_RENAME_FOLDER) {
             // Rename all files/folders in this folder(including this folder)
-            bool isSrcBlocked = is_path_blocked(event.src);
-            bool isDstBlocked = is_path_blocked(event.dst);
+            bool isSrcBlocked = is_event_path_blocked(event.src);
+            bool isDstBlocked = is_event_path_blocked(event.dst);
 
             if (isSrcBlocked && isDstBlocked) {
                 return;
             }
 
             if (isSrcBlocked) {
-                remove_home_prefix(event.dst);
+                replace_home_prefix(event.dst);
                 add_index_delay(event.dst);
                 scan_index_delay(std::move(event.dst));
                 return;
             }
 
-            remove_home_prefix(event.src);
-            remove_home_prefix(event.dst);
+            replace_home_prefix(event.src);
+            replace_home_prefix(event.dst);
             size_t event_src_len = event.src.length();
             QString oldPath = QString::fromStdString(event.src);
             for (auto const& result : traverse_directory(oldPath)) {

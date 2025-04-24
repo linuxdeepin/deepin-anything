@@ -21,6 +21,7 @@ public:
     Config& operator=(const Config&) = delete;
 
     bool isPathInBlacklist(const std::string& path) const;
+    const std::vector<std::string>& get_path_blocked_list() const;
 
 private:
     Config();
