@@ -1,3 +1,10 @@
+deepin-anything (7.0.11) unstable; urgency=medium
+
+  * feat: Enhance index management with status tracking
+  * feat: Support determine home directory dynamically
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 24 Apr 2025 21:31:01 +0800
+
 deepin-anything (7.0.10) unstable; urgency=medium
 
   * feat: Filter out blacklisted data when refreshing the index
