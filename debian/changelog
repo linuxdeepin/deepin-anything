@@ -1,3 +1,10 @@
+deepin-anything (7.0.12) unstable; urgency=medium
+
+  * fix: Fail to search after manual partitioning
+  * fix: Fix crash after turning off protection
+
+ -- wangrong <wangrong@uniontech.com>  Sun, 27 Apr 2025 14:30:41 +0800
+
 deepin-anything (7.0.11) unstable; urgency=medium
 
   * feat: Enhance index management with status tracking
