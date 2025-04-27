@@ -42,6 +42,10 @@ bool mount_manager::update() {
             continue;
 
         if (mountinfo[to_underlying(mountinfo_field::root)] == "/") {
+            // only record the first mount point of the device
+            if (mounts_.find(MKDEV(major, minor)) != mounts_.end())
+                continue;
+
             std::cout << mountinfo[to_underlying(mountinfo_field::mount_point)] << "\n";
             // mounts_.emplace(MKDEV(major, minor), mountinfo[to_underlying(mountinfo_field::mount_point)]);
             mounts_[MKDEV(major, minor)] = mountinfo[to_underlying(mountinfo_field::mount_point)];

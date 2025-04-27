@@ -807,8 +807,7 @@ void file_index_manager::set_index_version() {
     });
 }
 
-static const char * const status_json_template = R"(
-{
+static const char * const status_json_template = R"({
     "time": "%s",
     "status": "%s",
     "version": "%s"
