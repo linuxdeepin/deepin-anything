@@ -46,6 +46,10 @@ default_event_handler::default_event_handler(std::string persistent_index_dir, s
 const std::string& get_home_dir_event_path() {
     static const std::string home_dir_event_path = [] {
         char *home_dir = get_full_path(g_get_home_dir());
+        if (home_dir == nullptr) {
+            spdlog::error("Failed to get home directory");
+            return std::string(g_get_home_dir());
+        }
         auto home_dir_event_path = std::string(home_dir);
         g_free(home_dir);
         spdlog::debug("home_dir_event_path: {}", home_dir_event_path);
