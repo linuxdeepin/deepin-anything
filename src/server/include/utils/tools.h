@@ -20,6 +20,8 @@ char *format_size(int64_t size);
 
 char *get_full_path(const char *path);
 
+unsigned int get_thread_pool_size_from_env(unsigned int default_size);
+
 #ifdef __cplusplus
 }
 #endif
