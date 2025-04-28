@@ -17,8 +17,6 @@
 
 base_event_handler::base_event_handler(std::string persistent_index_dir, std::string volatile_index_dir, QObject *parent)
     : QObject(parent), index_manager_(std::move(persistent_index_dir), std::move(volatile_index_dir)), batch_size_(200),
-      // 4 threads: main thread, event thread, dbus thread, timer thread
-      pool_(get_thread_pool_size_from_env(std::max(std::thread::hardware_concurrency() - 4, 1U))),
       stop_timer_(false),
       timer_(std::thread(&base_event_handler::timer_worker, this, 1000)),
       delay_mode_(true/*index_manager_.indexed()*/),
@@ -46,14 +44,20 @@ base_event_handler::base_event_handler(std::string persistent_index_dir, std::st
         if (reply.isValid())
             pid = reply.value();
         pidStr.setNum(pid);
-        spdlog::info("Registered service: {}, {}", service_name.toStdString(), pidStr.toStdString());
+        spdlog::info("Service already registered: {}, {}", service_name.toStdString(), pidStr.toStdString());
     }
+
+    // 4 threads: main thread, event thread, dbus thread, timer thread
+    std::size_t free_threads = std::max(std::thread::hardware_concurrency() - 4, 1U);
+    std::size_t pool_size = get_thread_pool_size_from_env(free_threads);
+    spdlog::info("Thread pool size: {}", pool_size);
+    pool_ = std::make_shared<anything::thread_pool>(pool_size);
 
     index_dirty_ = index_manager_.refresh_indexes();
 }
 
 base_event_handler::~base_event_handler() {
-    pool_.wait_for_tasks();
+    pool_->wait_for_tasks();
     if (!jobs_.empty()) {
         // Eat all jobs
         for (auto&& job : jobs_) {
@@ -115,10 +119,10 @@ void base_event_handler::insert_pending_paths(
 }
 
 void base_event_handler::insert_index_directory(std::filesystem::path dir) {
-    pool_.enqueue_detach([this, dir = std::move(dir)]() {
+    pool_->enqueue_detach([this, dir = std::move(dir)]() {
         this->insert_pending_paths(anything::disk_scanner::scan(dir));
+        index_status_ = anything::index_status::scanning;
     });
-    index_status_ = anything::index_status::scanning;
 }
 
 std::size_t base_event_handler::pending_paths_count() const {
@@ -185,7 +189,7 @@ void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::s
         std::make_move_iterator(jobs.begin()),
         std::make_move_iterator(jobs.begin() + number));
     jobs.erase(jobs.begin(), jobs.begin() + number);
-    pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
+    pool_->enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
         for (const auto& job : processing_jobs) {
             eat_job(job);
         }
@@ -266,11 +270,13 @@ void base_event_handler::timer_worker(int64_t interval) {
         }
 
         // Automatically index missing system files to maintain index integrity when there are no jobs.
+        bool pending_paths_empty = false;
         if (idle) {
             std::vector<std::string> path_batch;
             {
                 std::lock_guard<std::mutex> lock(pending_mtx_);
-                if (!pending_paths_.empty()) {
+                pending_paths_empty = pending_paths_.empty();
+                if (!pending_paths_empty) {
                     std::size_t batch_size = std::min(pending_batch_size, pending_paths_.size());
                     path_batch.insert(
                         path_batch.end(),
@@ -304,9 +310,9 @@ void base_event_handler::timer_worker(int64_t interval) {
         }
 
         if (index_status_ == anything::index_status::scanning &&
-            pending_paths_.empty() &&
+            pending_paths_empty &&
             idle &&
-            !pool_.busy()) {
+            !pool_->busy()) {
             spdlog::info("Index scan completed, trigger index commit");
 
             index_status_ = anything::index_status::monitoring;

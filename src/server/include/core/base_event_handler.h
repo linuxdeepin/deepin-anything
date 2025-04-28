@@ -156,7 +156,7 @@ private:
     std::vector<std::string> pending_paths_;
     std::vector<anything::index_job> jobs_;
     std::function<bool(const std::string&)> index_change_filter_;
-    anything::thread_pool pool_;
+    std::shared_ptr<anything::thread_pool> pool_;
     std::atomic<bool> stop_timer_;
     std::mutex jobs_mtx_;
     std::mutex pending_mtx_;
