@@ -238,3 +238,19 @@ char *get_full_path(const char *path)
     char *full_path = find_dir_full_path(mountpoint, path);
     return full_path;
 }
+
+// return 1 if env is not set
+unsigned int get_thread_pool_size_from_env(unsigned int default_size)
+{
+    const char *env_thread_pool_size = getenv("ANYTHING_THREAD_POOL_SIZE");
+    if (!env_thread_pool_size)
+        return default_size;
+
+    unsigned int size = atoi(env_thread_pool_size);
+    if (size < 1)
+        size = 1;
+    if (size > 128)
+        size = 128;
+
+    return size;
+}
