@@ -246,7 +246,12 @@ unsigned int get_thread_pool_size_from_env(unsigned int default_size)
     if (!env_thread_pool_size)
         return default_size;
 
-    unsigned int size = atoi(env_thread_pool_size);
+    char *end;
+    errno = 0;
+    unsigned int size = g_ascii_strtoull(env_thread_pool_size, &end, 10);
+    if (errno != 0 || *end != '\0')
+        return default_size;
+
     if (size < 1)
         size = 1;
     if (size > 128)
