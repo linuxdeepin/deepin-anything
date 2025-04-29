@@ -48,12 +48,14 @@ void print_file_record(const file_record& record) {
         record.file_name, record.full_path, record.file_type, record.file_ext, record.modify_time, record.file_size, record.is_hidden);
 }
 
-file_record make_file_record(const std::filesystem::path& p, pinyin_processor& pinyin_processor) {
+file_record make_file_record(const std::filesystem::path& p,
+                             pinyin_processor& pinyin_processor,
+                             const std::map<std::string, std::string> &file_type_mapping) {
     file_record ret = {
         .file_name       = p.filename().string(),
         .file_name_pinyin = pinyin_processor.convert_to_pinyin(p.filename().string()),
         .full_path       = p.string(),
-        .file_type       = "",
+        .file_type       = "other",
         .file_ext        = p.extension().string(),
         .modify_time     = 0,
         .file_size       = 0,
@@ -62,14 +64,27 @@ file_record make_file_record(const std::filesystem::path& p, pinyin_processor& p
 
     if (ret.file_ext.size() > 1) {
         ret.file_ext = ret.file_ext.substr(1);
+        std::transform(ret.file_ext.begin(), ret.file_ext.end(), ret.file_ext.begin(), ::tolower);
     }
-
-    const char *file_type;
-    if (get_file_info (p.string().c_str(), &file_type, &ret.modify_time, &ret.file_size))
-        spdlog::warn("get_file_info fail: {}", p.string().c_str());
-    ret.file_type = file_type;
-
     ret.is_hidden = ret.full_path.find("/.") != std::string::npos;
+
+    struct stat statbuf;
+    if (stat(ret.full_path.c_str(), &statbuf) != 0) {
+        spdlog::warn("stat fail: {}", ret.full_path);
+        return ret;
+    } else {
+        ret.modify_time = statbuf.st_mtim.tv_sec;
+        ret.file_size = statbuf.st_size;
+
+        if (S_ISDIR(statbuf.st_mode)) {
+            ret.file_type = "dir";
+        } else if (S_ISREG(statbuf.st_mode)) {
+            auto it = file_type_mapping.find(ret.file_ext);
+            if (it != file_type_mapping.end()) {
+                ret.file_type = it->second;
+            }
+        }
+    }
 
     return ret;
 }
@@ -120,10 +135,13 @@ DocumentPtr create_document(const file_record& record) {
 #define INDEX_VERSION L"1"
 #define INDEX_VERSION_FIELD L"index_version"
 
-file_index_manager::file_index_manager(std::string persistent_index_dir, std::string volatile_index_dir)
-    : persistent_index_directory_(std::move(persistent_index_dir)),
-      volatile_index_directory_(std::move(volatile_index_dir)),
-      pinyin_processor_("/usr/share/deepin-anything-server/pinyin.txt") {
+file_index_manager::file_index_manager(const std::string& persistent_index_dir,
+                                       const std::string& volatile_index_dir,
+                                       const std::map<std::string, std::string>& file_type_mapping)
+    : persistent_index_directory_(persistent_index_dir),
+      volatile_index_directory_(volatile_index_dir),
+      pinyin_processor_("/usr/share/deepin-anything-server/pinyin.txt"),
+      file_type_mapping_(file_type_mapping) {
     try {
         prepare_index();
         check_index_version();
@@ -178,7 +196,7 @@ file_index_manager::~file_index_manager() {
 
 void file_index_manager::add_index(const std::string& path) {
     try {
-        auto doc = create_document(make_file_record(path, pinyin_processor_));
+        auto doc = create_document(make_file_record(path, pinyin_processor_, file_type_mapping_));
         writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(path)), doc);
         spdlog::debug("Indexed {}", path);
     } catch (const LuceneException& e) {
@@ -209,7 +227,7 @@ void file_index_manager::update_index(const std::string& old_path, const std::st
     try {
         if (exact_match) {
             // Exact updation: The old path must be a full path; otherwise, updateDocument will fail to locate and update the existing document.
-            auto doc = create_document(make_file_record(new_path, pinyin_processor_));
+            auto doc = create_document(make_file_record(new_path, pinyin_processor_, file_type_mapping_));
             writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(old_path)), doc);
         } else {
             // Fuzzy updation: The old path can be a file name, and all matching paths will be removed before inserting the new path.
@@ -641,7 +659,7 @@ bool file_index_manager::document_exists(const std::string &path, bool only_chec
     return termDocs->next();
 }
 
-bool file_index_manager::refresh_indexes() {
+bool file_index_manager::refresh_indexes(const std::vector<std::string>& blacklist_paths) {
     bool index_changed = false;
     std::error_code ec;
     spdlog::info("Refreshing file indexes...");
@@ -660,7 +678,7 @@ bool file_index_manager::refresh_indexes() {
                 continue;
             }
             if (!std::filesystem::exists(full_path, ec) ||
-                Config::instance().isPathInBlacklist(full_path.string())) {
+                is_path_in_blacklist(full_path.string(), blacklist_paths)) {
                 remove_list.push_back(full_path.string());
             }
         }

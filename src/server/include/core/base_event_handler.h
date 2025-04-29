@@ -16,6 +16,7 @@
 #include "core/file_index_manager.h"
 #include "core/mount_manager.h"
 #include "core/thread_pool.h"
+#include "core/config.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -43,7 +44,7 @@ class base_event_handler : public QObject
     Q_PROPERTY(bool autoIndexExternal READ autoIndexExternal WRITE setAutoIndexExternal NOTIFY autoIndexExternalChanged)
 
 public:
-    base_event_handler(std::string persistent_index_dir, std::string volatile_index_dir, QObject *parent = nullptr);
+    base_event_handler(std::shared_ptr<event_handler_config> config, QObject *parent = nullptr);
     virtual ~base_event_handler();
 
     virtual void handle(anything::fs_event event) = 0;
@@ -150,13 +151,14 @@ Q_SIGNALS:
     void asyncSearchCompleted(const QStringList& results);
 
 private:
+    std::shared_ptr<event_handler_config> config_;
     anything::mount_manager mnt_manager_;
     anything::file_index_manager index_manager_;
     std::size_t batch_size_;
     std::vector<std::string> pending_paths_;
     std::vector<anything::index_job> jobs_;
     std::function<bool(const std::string&)> index_change_filter_;
-    std::shared_ptr<anything::thread_pool> pool_;
+    anything::thread_pool pool_;
     std::atomic<bool> stop_timer_;
     std::mutex jobs_mtx_;
     std::mutex pending_mtx_;

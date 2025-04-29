@@ -18,7 +18,7 @@ namespace fs = std::filesystem;
 
 /// A class to scan mounted disks and perform operations on their files and directories.
 struct disk_scanner {
-    static std::vector<std::string> scan(const fs::path& root);
+    static std::vector<std::string> scan(const fs::path& root, const std::vector<std::string>& blacklist_paths);
     static bool is_hidden(const fs::path& p);
     inline static std::atomic<bool> stop_scanning = false;
 };

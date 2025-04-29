@@ -27,7 +27,9 @@ enum class index_status {
 
 class file_index_manager {
 public:
-    explicit file_index_manager(std::string persistent_index_dir, std::string volatile_index_dir);
+    explicit file_index_manager(const std::string& persistent_index_dir,
+                                const std::string& volatile_index_dir,
+                                const std::map<std::string, std::string>& file_type_mapping);
     ~file_index_manager();
 
     /// @brief Add a path to the index.
@@ -106,7 +108,7 @@ public:
      */
     bool document_exists(const std::string& path, bool only_check_initial_index = false);
 
-    bool refresh_indexes();
+    bool refresh_indexes(const std::vector<std::string>& blacklist_paths);
 
 private:
     /// Refresh the index reader if there are changes
@@ -152,6 +154,7 @@ private:
     std::mutex reader_mtx_;
     pinyin_processor pinyin_processor_;
     std::atomic<bool> search_cancelled_{false};
+    const std::map<std::string, std::string> file_type_mapping_;
 };
 
 ANYTHING_NAMESPACE_END

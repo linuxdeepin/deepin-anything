@@ -17,13 +17,57 @@
 ANYTHING_NAMESPACE_BEGIN
 
 // /data 和非 data 需要保持一致，最好有一种方式能够获取当前的状态
-default_event_handler::default_event_handler(std::string persistent_index_dir, std::string volatile_index_dir)
-    : base_event_handler(std::move(persistent_index_dir), std::move(volatile_index_dir)) {
-    // Index the default mount point
-    auto home_dir = std::string(g_get_home_dir());
-    if (!home_dir.empty()) {
-        add_index_delay(home_dir);
-        insert_index_directory(home_dir);
+default_event_handler::default_event_handler(std::shared_ptr<event_handler_config> config)
+    : base_event_handler(config), config_(config) {
+    // init indexing_items_
+    spdlog::debug("processing indexing_paths...");
+    for (auto& origin_path : config_->indexing_paths) {
+        if (!std::filesystem::exists(origin_path)) {
+            continue;
+        }
+
+        indexing_item item = {
+            .origin_path = origin_path,
+            .event_path = "",
+            .different_path = false,
+        };
+
+        char *event_path = get_full_path(origin_path.c_str());
+        if (event_path == nullptr) {
+            spdlog::error("Failed to get event path: {}", origin_path);
+            continue;
+        }
+        item.event_path = std::string(event_path) + "/";
+        g_free(event_path);
+        spdlog::debug("Determine the event path: {} -> {}", origin_path, item.event_path);
+
+        item.different_path = item.origin_path != item.event_path;
+        item.origin_path += "/";
+
+        indexing_items_.emplace_back(item);
+    }
+
+    // init event_path_blocked_list_
+    spdlog::debug("processing blacklist_paths...");
+    for (auto& path : config_->blacklist_paths) {
+        if (!std::filesystem::exists(path)) {
+            event_path_blocked_list_.emplace_back(path);
+        } else {
+            char *event_path = get_full_path(path.c_str());
+            if (event_path == nullptr) {
+                spdlog::error("Failed to get event path: {}", path);
+                continue;
+            }
+            event_path_blocked_list_.emplace_back(std::string(event_path));
+            g_free(event_path);
+            spdlog::debug("Determine the event path: {} -> {}", path, event_path_blocked_list_.back());
+        }
+    }
+
+    // scan the indexing_items_
+    for (auto& item : indexing_items_) {
+        add_index_delay(item.origin_path);
+        insert_index_directory(item.origin_path);
     }
 
     // Initialize mount cache
@@ -42,58 +86,25 @@ default_event_handler::default_event_handler(std::string persistent_index_dir, s
     spdlog::debug("cache directory: {}", get_index_directory());
 }
 
-const std::string& get_home_dir_event_path() {
-    static const std::string home_dir_event_path = [] {
-        char *home_dir = get_full_path(g_get_home_dir());
-        if (home_dir == nullptr) {
-            spdlog::error("Failed to get home directory");
-            return std::string(g_get_home_dir());
-        }
-        auto home_dir_event_path = std::string(home_dir);
-        g_free(home_dir);
-        spdlog::debug("home_dir_event_path: {}", home_dir_event_path);
-        return home_dir_event_path;
-    }();
-    return home_dir_event_path;
-}
-
-bool is_under_home(const std::string& path) {
-    return path.rfind(get_home_dir_event_path()) == 0;
-}
-
-// 将路径中的 /persistent/home/user 替换为 /home/user
-void replace_home_prefix(std::string& path) {
-    static bool do_replace = [] {
-        return get_home_dir_event_path() != g_get_home_dir();
-    }();
-
-    if (do_replace) {
-        path.replace(0, get_home_dir_event_path().length(), g_get_home_dir());
-    }
-}
-
-bool is_event_path_in_blacklist(const std::string& path) {
-    static const std::vector<std::string> event_path_blocked_list = [] {
-        auto path_blocked_list = Config::instance().get_path_blocked_list();
-        auto home_dir_length = strlen(g_get_home_dir());
-        for (auto& path : path_blocked_list) {
-            if (path.rfind(g_get_home_dir()) == 0) {
-                path.replace(0, home_dir_length, get_home_dir_event_path());
-            }
-        }
-        return path_blocked_list;
-    }();
-
-    for (auto& blocked_path : event_path_blocked_list) {
-        if (path.find(blocked_path) != std::string::npos) {
+bool default_event_handler::is_under_indexing_path(const std::string& path, indexing_item *&indexing_item) {
+    for (auto& item : indexing_items_) {
+        if (path.rfind(item.event_path) == 0) {
+            indexing_item = &item;
             return true;
         }
     }
     return false;
 }
 
-bool is_event_path_blocked(const std::string& path) {
-    return !is_under_home(path) || is_event_path_in_blacklist(path);
+// 将路径中的 /persistent/home/user 替换为 /home/user
+void default_event_handler::convert_event_path_to_origin_path(std::string& path, const indexing_item& item) {
+    if (item.different_path) {
+        path.replace(0, item.event_path.length(), item.origin_path);
+    }
+}
+
+bool default_event_handler::is_event_path_blocked(const std::string& path, indexing_item *&indexing_item) {
+    return !is_under_indexing_path(path, indexing_item) || is_path_in_blacklist(path, event_path_blocked_list_);
 }
 
 void default_event_handler::handle(fs_event event) {
@@ -167,9 +178,11 @@ void default_event_handler::handle(fs_event event) {
 
     // Preparations are done, starting to process the event.
 
+    indexing_item *src_indexing_item = nullptr;
+    indexing_item *dst_indexing_item = nullptr;
     if (event.act != ACT_RENAME_FILE &&
         event.act != ACT_RENAME_FOLDER &&
-        is_event_path_blocked(event.src)) {
+        is_event_path_blocked(event.src, src_indexing_item)) {
         return;
     }
 
@@ -179,46 +192,48 @@ void default_event_handler::handle(fs_event event) {
         if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
             event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
             // Do not check for the existence of files; we trust the kernel module.
-            replace_home_prefix(event.src);
+            convert_event_path_to_origin_path(event.src, *src_indexing_item);
             add_index_delay(std::move(event.src));
         } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
-            replace_home_prefix(event.src);
+            convert_event_path_to_origin_path(event.src, *src_indexing_item);
             remove_index_delay(std::move(event.src));
         } else if (event.act == ACT_RENAME_FILE) {
-            bool isSrcBlocked = is_event_path_blocked(event.src);
-            bool isDstBlocked = is_event_path_blocked(event.dst);
+            bool isSrcBlocked = is_event_path_blocked(event.src, src_indexing_item);
+            bool isDstBlocked = is_event_path_blocked(event.dst, dst_indexing_item);
 
             if (isSrcBlocked && isDstBlocked) {
                 return;
             } else if (isSrcBlocked) {
-                replace_home_prefix(event.dst);
+                convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
                 add_index_delay(std::move(event.dst));
             } else if (isDstBlocked) {
-                replace_home_prefix(event.src);
+                convert_event_path_to_origin_path(event.src, *src_indexing_item);
                 remove_index_delay(std::move(event.src));
             } else {
-                replace_home_prefix(event.src);
-                replace_home_prefix(event.dst);
+                convert_event_path_to_origin_path(event.src, *src_indexing_item);
+                convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
                 update_index_delay(std::move(event.src), std::move(event.dst));
             }
         } else if (event.act == ACT_RENAME_FOLDER) {
             // Rename all files/folders in this folder(including this folder)
-            bool isSrcBlocked = is_event_path_blocked(event.src);
-            bool isDstBlocked = is_event_path_blocked(event.dst);
+            bool isSrcBlocked = is_event_path_blocked(event.src, src_indexing_item);
+            bool isDstBlocked = is_event_path_blocked(event.dst, dst_indexing_item);
 
             if (isSrcBlocked && isDstBlocked) {
                 return;
             }
 
             if (isSrcBlocked) {
-                replace_home_prefix(event.dst);
+                convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
                 add_index_delay(event.dst);
                 scan_index_delay(std::move(event.dst));
                 return;
             }
 
-            replace_home_prefix(event.src);
-            replace_home_prefix(event.dst);
+            convert_event_path_to_origin_path(event.src, *src_indexing_item);
+            if (!isDstBlocked) {
+                convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
+            }
             size_t event_src_len = event.src.length();
             QString oldPath = QString::fromStdString(event.src);
             for (auto const& result : traverse_directory(oldPath)) {
