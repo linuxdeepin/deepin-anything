@@ -9,6 +9,8 @@
 #include <QObject>
 #include <QDBusAbstractAdaptor>
 
+#include <filesystem>
+
 #include "common/anything_fwd.hpp"
 #include "common/fs_event.h"
 #include "core/file_index_manager.h"
@@ -112,8 +114,6 @@ public slots:
     QStringList search(const QString& path, QString keywords);
 
     QStringList search(const QString& path, QString keywords, const QString& type);
-
-    QStringList search(const QString& path, QString keywords, const QString& after, const QString& before);
 
     QStringList traverse_directory(const QString& path);
 

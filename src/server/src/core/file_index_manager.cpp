@@ -21,11 +21,101 @@
 #include "analyzers/chineseanalyzer.h"
 #include "utils/log.h"
 #include "utils/tools.h"
+
 #include <glib.h>
+#include <sys/stat.h>  // For statx and struct statx
+#include <fcntl.h>     // For AT_FDCWD
 
 ANYTHING_NAMESPACE_BEGIN
 
 using namespace Lucene;
+
+// file_record
+
+struct file_record {
+    std::string file_name;
+    std::string file_name_pinyin;
+    std::string full_path;
+    std::string file_type;
+    std::string file_ext;
+    int64_t modify_time; // milliseconds time since epoch
+    int64_t file_size;
+    bool is_hidden;
+};
+
+void print_file_record(const file_record& record) {
+    spdlog::info("file_name: {} full_path: {} file_type: {} file_ext: {} modify_time: {} file_size: {} is_hidden: {}",
+        record.file_name, record.full_path, record.file_type, record.file_ext, record.modify_time, record.file_size, record.is_hidden);
+}
+
+file_record make_file_record(const std::filesystem::path& p, pinyin_processor& pinyin_processor) {
+    file_record ret = {
+        .file_name       = p.filename().string(),
+        .file_name_pinyin = pinyin_processor.convert_to_pinyin(p.filename().string()),
+        .full_path       = p.string(),
+        .file_type       = "",
+        .file_ext        = p.extension().string(),
+        .modify_time     = 0,
+        .file_size       = 0,
+        .is_hidden       = false,
+    };
+
+    if (ret.file_ext.size() > 1) {
+        ret.file_ext = ret.file_ext.substr(1);
+    }
+
+    const char *file_type;
+    if (get_file_info (p.string().c_str(), &file_type, &ret.modify_time, &ret.file_size))
+        spdlog::warn("get_file_info fail: {}", p.string().c_str());
+    ret.file_type = file_type;
+
+    ret.is_hidden = ret.full_path.find("/.") != std::string::npos;
+
+    return ret;
+}
+
+DocumentPtr create_document(const file_record& record) {
+    DocumentPtr doc = newLucene<Document>();
+    // File name with fuzzy match; parser is required for searching and deleting.
+    doc->add(newLucene<Field>(L"file_name",
+        StringUtils::toLower(StringUtils::toUnicode(record.file_name)),
+        Field::STORE_YES, Field::INDEX_ANALYZED));
+    // Full path with exact match; parser is not needed for deleting and exact searching, which improves perferemce.
+    doc->add(newLucene<Field>(L"full_path",
+        StringUtils::toUnicode(record.full_path),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+    doc->add(newLucene<Field>(L"file_type",
+        StringUtils::toUnicode(record.file_type),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+    doc->add(newLucene<Field>(L"file_ext",
+        StringUtils::toUnicode(record.file_ext),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+
+    char *formatted_time = format_time(record.modify_time);
+    doc->add(newLucene<Field>(L"modify_time_str",
+        StringUtils::toUnicode(formatted_time),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+    g_free(formatted_time);
+
+    char *formatted_size = format_size(record.file_size);
+    doc->add(newLucene<Field>(L"file_size_str",
+        StringUtils::toUnicode(formatted_size),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+    g_free(formatted_size);
+
+    doc->add(newLucene<NumericField>(L"modify_time")->setLongValue(record.modify_time));
+    doc->add(newLucene<NumericField>(L"file_size")->setLongValue(record.file_size));
+    doc->add(newLucene<Field>(L"pinyin",
+        StringUtils::toUnicode(record.file_name_pinyin),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+
+    doc->add(newLucene<Field>(L"is_hidden",
+        (record.is_hidden ? L"Y" : L"N"),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+
+    return doc;
+}
+
 
 #define INDEX_VERSION L"1"
 #define INDEX_VERSION_FIELD L"index_version"
@@ -88,7 +178,7 @@ file_index_manager::~file_index_manager() {
 
 void file_index_manager::add_index(const std::string& path) {
     try {
-        auto doc = create_document(file_helper_.make_file_record(path));
+        auto doc = create_document(make_file_record(path, pinyin_processor_));
         writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(path)), doc);
         spdlog::debug("Indexed {}", path);
     } catch (const LuceneException& e) {
@@ -119,7 +209,7 @@ void file_index_manager::update_index(const std::string& old_path, const std::st
     try {
         if (exact_match) {
             // Exact updation: The old path must be a full path; otherwise, updateDocument will fail to locate and update the existing document.
-            auto doc = create_document(file_helper_.make_file_record(new_path));
+            auto doc = create_document(make_file_record(new_path, pinyin_processor_));
             writer_->updateDocument(newLucene<Term>(L"full_path", StringUtils::toUnicode(old_path)), doc);
         } else {
             // Fuzzy updation: The old path can be a file name, and all matching paths will be removed before inserting the new path.
@@ -428,81 +518,6 @@ QStringList file_index_manager::search(const QString& path, QString& keywords, c
     return {};
 }
 
-QStringList file_index_manager::search(const QString& path, QString& keywords,
-    const QString& after, const QString& before, bool nrt) {
-    spdlog::debug("Search index(keywords: \"{}\", after: \"{}\", before: \"{}\").",
-        keywords.toStdString(), after.toStdString(), before.toStdString());
-    if (keywords.isEmpty()) {
-        return {};
-    }
-
-    if (after.isEmpty() && before.isEmpty()) {
-        return search(path, keywords, nrt);
-    }
-
-    String query_terms = StringUtils::toUnicode(keywords.toStdString());
-
-    try {
-        SearcherPtr searcher;
-        int32_t max_results;
-        if (nrt) {
-            try_refresh_reader(true);
-            searcher = nrt_searcher_;
-            max_results = nrt_reader_->numDocs();
-        } else {
-            try_refresh_reader();
-            searcher = searcher_;
-            max_results = reader_->numDocs();
-        }
-
-        int64_t after_timestamp = 0;
-        int64_t before_timestamp = std::numeric_limits<int64_t>::max();
-        if (!after.isEmpty()) {
-            after_timestamp = file_helper_.to_milliseconds_since_epoch(after.toStdString());
-        }
-        if (!before.isEmpty()) {
-            before_timestamp = file_helper_.to_milliseconds_since_epoch(before.toStdString());
-        }
-
-        auto boolean_query = newLucene<BooleanQuery>();
-        auto query = parser_->parse(query_terms);
-        auto time_query = NumericRangeQuery::newLongRange(L"modify_time", after_timestamp, before_timestamp, true, true);
-        boolean_query->add(time_query, BooleanClause::MUST);
-
-        auto sub_boolean_query = newLucene<BooleanQuery>();
-        sub_boolean_query->add(query, BooleanClause::SHOULD);
-        auto pinyin_query = pinyin_parser_->parse(query_terms);
-        sub_boolean_query->add(pinyin_query, BooleanClause::SHOULD);
-        AnythingAnalyzer::forEachTerm(query_terms, [this, &sub_boolean_query](const auto& term) {
-            sub_boolean_query->add(newLucene<PrefixQuery>(newLucene<Term>(pinyin_field_, term)), BooleanClause::SHOULD);
-            sub_boolean_query->add(newLucene<FuzzyQuery>(newLucene<Term>(pinyin_field_, term), 0.65), BooleanClause::SHOULD);
-        });
-
-        sub_boolean_query->setMinimumNumberShouldMatch(1);
-        boolean_query->add(sub_boolean_query, BooleanClause::MUST);
-
-        auto search_results = searcher->search(boolean_query, max_results);
-
-        QStringList results;
-        results.reserve(search_results->scoreDocs.size());
-        for (const auto& score_doc : search_results->scoreDocs) {
-            DocumentPtr doc = searcher->doc(score_doc->doc);
-            QString result = QString::fromStdWString(doc->get(L"full_path"));
-            if (result.startsWith(path)) {
-                results.append(std::move(result));
-            }
-        }
-
-        return results;
-    } catch (const LuceneException& e) {
-        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
-    } catch (const std::exception& e) {
-        spdlog::error(e.what());
-    }
-
-    return {};
-}
-
 void file_index_manager::async_search(QString& keywords, bool nrt,
     std::function<void(const QStringList&)> callback) {
     spdlog::debug("Async search index(keyworks: \"{}\").", keywords.toStdString());
@@ -647,13 +662,7 @@ bool file_index_manager::refresh_indexes() {
             if (!std::filesystem::exists(full_path, ec) ||
                 Config::instance().isPathInBlacklist(full_path.string())) {
                 remove_list.push_back(full_path.string());
-            } /*else {
-                auto last_write_time = file_helper_.get_file_last_write_time(full_path);
-                std::filesystem::path current_write_time(doc->get(L"last_write_time"));
-                if (last_write_time != current_write_time.string()) {
-                    update_list.push_back(full_path.string());
-                }
-            }*/
+            }
         }
 
         for (const auto& path : remove_list) {
@@ -692,49 +701,6 @@ void file_index_manager::try_refresh_reader(bool nrt) {
             }
         }
     }
-}
-
-DocumentPtr file_index_manager::create_document(const file_record& record) {
-    DocumentPtr doc = newLucene<Document>();
-    // File name with fuzzy match; parser is required for searching and deleting.
-    doc->add(newLucene<Field>(L"file_name",
-        StringUtils::toLower(StringUtils::toUnicode(record.file_name)),
-        Field::STORE_YES, Field::INDEX_ANALYZED));
-    // Full path with exact match; parser is not needed for deleting and exact searching, which improves perferemce.
-    doc->add(newLucene<Field>(L"full_path",
-        StringUtils::toUnicode(record.full_path),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-    doc->add(newLucene<Field>(L"file_type",
-        StringUtils::toUnicode(record.file_type),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-    doc->add(newLucene<Field>(L"file_ext",
-        StringUtils::toUnicode(record.file_ext),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-
-    char *formatted_time = format_time(record.modify_time);
-    doc->add(newLucene<Field>(L"modify_time_str",
-        StringUtils::toUnicode(formatted_time),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-    g_free(formatted_time);
-
-    char *formatted_size = format_size(record.file_size);
-    doc->add(newLucene<Field>(L"file_size_str",
-        StringUtils::toUnicode(formatted_size),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-    g_free(formatted_size);
-
-    doc->add(newLucene<NumericField>(L"modify_time")->setLongValue(record.modify_time));
-    doc->add(newLucene<NumericField>(L"file_size")->setLongValue(record.file_size));
-    // spdlog::info("pinyin: {}", pinyin_processor_.convert_to_pinyin(record.file_name));
-    doc->add(newLucene<Field>(L"pinyin",
-        StringUtils::toUnicode(pinyin_processor_.convert_to_pinyin(record.file_name)),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-
-    doc->add(newLucene<Field>(L"is_hidden",
-        (record.is_hidden ? L"Y" : L"N"),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-
-    return doc;
 }
 
 void file_index_manager::prepare_index() {

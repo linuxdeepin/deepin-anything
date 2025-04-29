@@ -6,7 +6,6 @@
 #include "core/base_event_handler.h"
 
 #include "core/disk_scanner.h"
-#include "common/file_record.h"
 #include "utils/log.h"
 #include "utils/string_helper.h"
 #include <anythingadaptor.h>
@@ -338,11 +337,6 @@ QStringList base_event_handler::search(const QString& path, QString keywords) {
 
 QStringList base_event_handler::search(const QString& path, QString keywords, const QString& type) {
     return index_manager_.search(path, keywords, type, true);
-}
-
-QStringList base_event_handler::search(const QString& path,
-    QString keywords, const QString& after, const QString& before) {
-    return index_manager_.search(path, keywords, after, before, true);
 }
 
 QStringList base_event_handler::traverse_directory(const QString& path) {

@@ -9,7 +9,6 @@
 #include <glib.h>
 
 #include "utils/log.h"
-#include "utils/print_helper.h"
 #include "utils/string_helper.h"
 #include "vfs_change_consts.h"
 #include "core/config.h"
