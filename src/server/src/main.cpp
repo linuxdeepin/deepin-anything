@@ -9,6 +9,7 @@
 #include <QTimer>
 
 #include "anything.hpp"
+#include "core/config.h"
 
 using namespace anything;
 
@@ -73,7 +74,7 @@ int main(int argc, char* argv[]) {
     spdlog::info("Qt version: {}", qVersion());
 
     event_listenser listenser;
-    default_event_handler handler;
+    default_event_handler handler(Config::instance().make_event_handler_config());
     listenser.set_handler([&handler](fs_event event) {
         handler.handle(std::move(event));
     });

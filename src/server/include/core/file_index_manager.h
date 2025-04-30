@@ -14,7 +14,6 @@
 #include <lucene++/LuceneHeaders.h>
 
 #include "common/anything_fwd.hpp"
-#include "common/file_record.h"
 #include "core/pinyin_processor.h"
 
 ANYTHING_NAMESPACE_BEGIN
@@ -28,7 +27,9 @@ enum class index_status {
 
 class file_index_manager {
 public:
-    explicit file_index_manager(std::string persistent_index_dir, std::string volatile_index_dir);
+    explicit file_index_manager(const std::string& persistent_index_dir,
+                                const std::string& volatile_index_dir,
+                                const std::map<std::string, std::string>& file_type_mapping);
     ~file_index_manager();
 
     /// @brief Add a path to the index.
@@ -46,8 +47,6 @@ public:
     /// @param exact_match If true, performs an exact match when removing the old path; 
     ///                    otherwise, performs a fuzzy match.
     void update_index(const std::string& old_path, const std::string& new_path, bool exact_match = true);
-
-    // std::vector<file_record> search_index(const std::string& term, bool exact_match = false, bool nrt = false);
 
     /// Commit all changes to the index
     void commit(index_status status);
@@ -98,21 +97,6 @@ public:
     ///         If no files are found, an empty list is returned.
     QStringList search(const QString& path, QString& keywords, const QString& type, bool nrt);
 
-    /// @brief Searches all files created between a specified time range, returning a list of matching file names.
-    /// @param keywords The keywords to search for.
-    /// @param after The start time for the search range. Files created after this time will be included in the search.
-    ///              The time should be provided in a recognized format (e.g., "YYYY-MM-DD HH:MM:SS"). If this parameter is empty,
-    ///              the search will include all files created before the `before` parameter.
-    /// @param before The end time for the search range. Files created before this time will be included in the search.
-    ///               The time should be provided in a recognized format (e.g., "YYYY-MM-DD HH:MM:SS"). If this parameter is empty,
-    ///               the search will include all files created after the `after` parameter.
-    ///               If both `after` and `before` are empty, the search will include all files matching the keywords regardless of time.
-    /// @param nrt If true, performs a near real-time search that includes recent changes not yet committed; 
-    ///            otherwise, searches the last committed index for more stable results.
-    /// @return A QStringList containing the paths of all files where the keywords are found within the specified time range. 
-    ///         If no files are found, an empty list is returned.
-    QStringList search(const QString& path, QString& keywords, const QString& after, const QString& before, bool nrt);
-
     void async_search(QString& keywords, bool nrt, std::function<void(const QStringList&)> callback);
 
     QStringList traverse_directory(const QString& path, bool nrt);
@@ -124,7 +108,7 @@ public:
      */
     bool document_exists(const std::string& path, bool only_check_initial_index = false);
 
-    bool refresh_indexes();
+    bool refresh_indexes(const std::vector<std::string>& blacklist_paths);
 
 private:
     /// Refresh the index reader if there are changes
@@ -143,8 +127,6 @@ private:
      * 在 NRT 模式下，即便这些数据尚未写入磁盘（commit），也可以通过获取一个近实时的 IndexReader 来从内存中读取最新的索引数据
      */
     // Lucene::TopScoreDocCollectorPtr nrt_search(const std::string& path, bool exact_match = false);
-
-    Lucene::DocumentPtr create_document(const file_record& record);
 
     void prepare_index();
 
@@ -170,9 +152,9 @@ private:
     Lucene::String pinyin_field_{ L"pinyin" };
     std::mutex mtx_;
     std::mutex reader_mtx_;
-    file_helper file_helper_;
     pinyin_processor pinyin_processor_;
     std::atomic<bool> search_cancelled_{false};
+    const std::map<std::string, std::string> file_type_mapping_;
 };
 
 ANYTHING_NAMESPACE_END

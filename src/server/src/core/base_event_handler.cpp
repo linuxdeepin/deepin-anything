@@ -6,7 +6,6 @@
 #include "core/base_event_handler.h"
 
 #include "core/disk_scanner.h"
-#include "common/file_record.h"
 #include "utils/log.h"
 #include "utils/string_helper.h"
 #include <anythingadaptor.h>
@@ -15,8 +14,12 @@
 #define COMMIT_VOLATILE_INDEX_TIMEOUT 10
 #define COMMIT_PERSISTENT_INDEX_TIMEOUT 600
 
-base_event_handler::base_event_handler(std::string persistent_index_dir, std::string volatile_index_dir, QObject *parent)
-    : QObject(parent), index_manager_(std::move(persistent_index_dir), std::move(volatile_index_dir)), batch_size_(200),
+base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> config, QObject *parent)
+    : QObject(parent),
+      config_(config),
+      index_manager_(config->persistent_index_dir, config->volatile_index_dir, config->file_type_mapping),
+      batch_size_(200),
+      pool_(config->thread_pool_size),
       stop_timer_(false),
       timer_(std::thread(&base_event_handler::timer_worker, this, 1000)),
       delay_mode_(true/*index_manager_.indexed()*/),
@@ -47,17 +50,11 @@ base_event_handler::base_event_handler(std::string persistent_index_dir, std::st
         spdlog::info("Service already registered: {}, {}", service_name.toStdString(), pidStr.toStdString());
     }
 
-    // 4 threads: main thread, event thread, dbus thread, timer thread
-    std::size_t free_threads = std::max(std::thread::hardware_concurrency() - 4, 1U);
-    std::size_t pool_size = get_thread_pool_size_from_env(free_threads);
-    spdlog::info("Thread pool size: {}", pool_size);
-    pool_ = std::make_shared<anything::thread_pool>(pool_size);
-
-    index_dirty_ = index_manager_.refresh_indexes();
+    index_dirty_ = index_manager_.refresh_indexes(config_->blacklist_paths);
 }
 
 base_event_handler::~base_event_handler() {
-    pool_->wait_for_tasks();
+    pool_.wait_for_tasks();
     if (!jobs_.empty()) {
         // Eat all jobs
         for (auto&& job : jobs_) {
@@ -119,8 +116,8 @@ void base_event_handler::insert_pending_paths(
 }
 
 void base_event_handler::insert_index_directory(std::filesystem::path dir) {
-    pool_->enqueue_detach([this, dir = std::move(dir)]() {
-        this->insert_pending_paths(anything::disk_scanner::scan(dir));
+    pool_.enqueue_detach([this, dir = std::move(dir)]() {
+        this->insert_pending_paths(anything::disk_scanner::scan(dir, config_->blacklist_paths));
         index_status_ = anything::index_status::scanning;
     });
 }
@@ -189,7 +186,7 @@ void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::s
         std::make_move_iterator(jobs.begin()),
         std::make_move_iterator(jobs.begin() + number));
     jobs.erase(jobs.begin(), jobs.begin() + number);
-    pool_->enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
+    pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
         for (const auto& job : processing_jobs) {
             eat_job(job);
         }
@@ -206,7 +203,7 @@ void base_event_handler::eat_job(const anything::index_job& job) {
             index_manager_.update_index(job.src, *job.dst);
         }
     } else if (job.type == anything::index_job_type::scan) {
-        for (auto&& path : anything::disk_scanner::scan(job.src)) {
+        for (auto&& path : anything::disk_scanner::scan(job.src, config_->blacklist_paths)) {
             index_manager_.add_index(std::move(path));
         }
     }
@@ -312,7 +309,7 @@ void base_event_handler::timer_worker(int64_t interval) {
         if (index_status_ == anything::index_status::scanning &&
             pending_paths_empty &&
             idle &&
-            !pool_->busy()) {
+            !pool_.busy()) {
             spdlog::info("Index scan completed, trigger index commit");
 
             index_status_ = anything::index_status::monitoring;
@@ -338,11 +335,6 @@ QStringList base_event_handler::search(const QString& path, QString keywords) {
 
 QStringList base_event_handler::search(const QString& path, QString keywords, const QString& type) {
     return index_manager_.search(path, keywords, type, true);
-}
-
-QStringList base_event_handler::search(const QString& path,
-    QString keywords, const QString& after, const QString& before) {
-    return index_manager_.search(path, keywords, after, before, true);
 }
 
 QStringList base_event_handler::traverse_directory(const QString& path) {

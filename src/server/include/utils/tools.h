@@ -12,8 +12,6 @@
 extern "C" {
 #endif
 
-int get_file_info(const char *file_path, const char **file_type, int64_t *modify_time, int64_t *file_size);
-
 char *format_time(int64_t time);
 
 char *format_size(int64_t size);

@@ -14,12 +14,12 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
-std::vector<std::string> disk_scanner::scan(const fs::path& root) {
+std::vector<std::string> disk_scanner::scan(const fs::path& root, const std::vector<std::string>& blacklist_paths) {
     spdlog::info("Scanning {}...", root.string());
     std::vector<std::string> records;
     fs::recursive_directory_iterator dirpos{ root, fs::directory_options::skip_permission_denied };
     for (auto it = begin(dirpos); it != end(dirpos); ++it) {
-        if (Config::instance().isPathInBlacklist(it->path().string())) {
+        if (is_path_in_blacklist(it->path().string(), blacklist_paths)) {
             it.disable_recursion_pending();
             continue;
         }

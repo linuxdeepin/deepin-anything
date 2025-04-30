@@ -6,11 +6,19 @@
 #ifndef CORE_CONFIG_H
 #define CORE_CONFIG_H
 
-#include "common/anything_fwd.hpp"
 #include <string>
 #include <vector>
+#include <map>
+#include <memory>
 
-ANYTHING_NAMESPACE_BEGIN
+struct event_handler_config {
+    std::string persistent_index_dir;
+    std::string volatile_index_dir;
+    std::size_t thread_pool_size;
+    std::vector<std::string> blacklist_paths;
+    std::vector<std::string> indexing_paths;
+    std::map<std::string, std::string> file_type_mapping;
+};
 
 class Config {
 public:
@@ -20,18 +28,19 @@ public:
     Config(const Config&) = delete;
     Config& operator=(const Config&) = delete;
 
-    bool isPathInBlacklist(const std::string& path) const;
-    const std::vector<std::string>& get_path_blocked_list() const;
+    std::shared_ptr<event_handler_config> make_event_handler_config();
 
 private:
     Config();
     ~Config() = default;
 
 private:
-    std::vector<std::string> path_blacklist_;
+    std::vector<std::string> blacklist_paths_;
+    std::vector<std::string> indexing_paths_;
+    std::map<std::string, std::string> file_type_mapping_;
 
 };
 
-ANYTHING_NAMESPACE_END
+bool is_path_in_blacklist(const std::string& path, const std::vector<std::string>& blacklist_paths);
 
 #endif // CORE_CONFIG_H 
