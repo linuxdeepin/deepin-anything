@@ -1,6 +1,6 @@
 [Unit]
 Description=Deepin anything daemon service
-After=dbus.service udisks2.service
+After=udisks2.service
 
 [Service]
 ExecStart=/usr/bin/deepin-anything-daemon

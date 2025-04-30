@@ -8,15 +8,13 @@
 #include "core/disk_scanner.h"
 #include "utils/log.h"
 #include "utils/string_helper.h"
-#include <anythingadaptor.h>
 #include "utils/tools.h"
 
 #define COMMIT_VOLATILE_INDEX_TIMEOUT 10
 #define COMMIT_PERSISTENT_INDEX_TIMEOUT 600
 
-base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> config, QObject *parent)
-    : QObject(parent),
-      config_(config),
+base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> config)
+    : config_(config),
       index_manager_(config->persistent_index_dir, config->volatile_index_dir, config->file_type_mapping),
       batch_size_(200),
       pool_(config->thread_pool_size),
@@ -28,28 +26,6 @@ base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> con
       commit_volatile_index_timeout_(COMMIT_VOLATILE_INDEX_TIMEOUT),
       commit_persistent_index_timeout_(COMMIT_PERSISTENT_INDEX_TIMEOUT),
       index_status_(anything::index_status::loading) {
-    new AnythingAdaptor(this);
-    QDBusConnection dbus = QDBusConnection::sessionBus();
-    if (!dbus.isConnected()) {
-        spdlog::info("Failed to connect to system bus: {}", dbus.lastError().message().toStdString());
-        exit(1);
-    }
-    QString service_name = "com.deepin.anything";
-    QString object_name = "/com/deepin/anything";
-    if (!dbus.interface()->isServiceRegistered(service_name)) {
-        spdlog::info("Registering service: {}", service_name.toStdString());
-        dbus.registerService(service_name);
-        dbus.registerObject(object_name, this);
-    } else {
-        quint32 pid = 0;
-        QString pidStr;
-        QDBusReply<quint32> reply = dbus.interface()->servicePid(service_name);
-        if (reply.isValid())
-            pid = reply.value();
-        pidStr.setNum(pid);
-        spdlog::info("Service already registered: {}, {}", service_name.toStdString(), pidStr.toStdString());
-    }
-
     index_dirty_ = index_manager_.refresh_indexes(config_->blacklist_paths);
 }
 
@@ -320,105 +296,6 @@ void base_event_handler::timer_worker(int64_t interval) {
     }
 }
 
-QStringList base_event_handler::search(const QString& path,
-    QString keywords, int offset, int max_count) {
-    if (offset < 0) {
-        return {};
-    }
-
-    return index_manager_.search(path, keywords, offset, max_count, true);
-}
-
-QStringList base_event_handler::search(const QString& path, QString keywords) {
-    return index_manager_.search(path, keywords, true);
-}
-
-QStringList base_event_handler::search(const QString& path, QString keywords, const QString& type) {
-    return index_manager_.search(path, keywords, type, true);
-}
-
 QStringList base_event_handler::traverse_directory(const QString& path) {
     return index_manager_.traverse_directory(path, true);
-}
-
-// No special handling for non-existent files; success is determined if the path does not exist.
-bool base_event_handler::removePath(const QString& fullPath) {
-    auto path = fullPath.toStdString();
-    index_manager_.remove_index(path);
-    return !index_manager_.document_exists(path);
-}
-
-bool base_event_handler::hasLFT(const QString& path) {
-    return index_manager_.document_exists(path.toStdString());
-}
-
-QStringList base_event_handler::hasLFTSubdirectories(QString path) const {
-    (void)path;
-    return {};
-}
-
-void base_event_handler::addPath(const QString &fullPath) {
-    auto path = fullPath.toStdString();
-    if (std::filesystem::exists(path)) {
-        add_index_delay(path);
-    }
-}
-
-void base_event_handler::index_files_in_directory(const QString& directory_path) {
-    insert_index_directory(directory_path.toStdString());
-}
-
-void base_event_handler::delay_indexing(bool delay) {
-    delay_mode_ = delay;
-}
-
-QString base_event_handler::cache_directory() {
-    return QString::fromStdString(index_manager_.index_directory());
-}
-
-QStringList base_event_handler::search(
-    int maxCount, qint64 icase, quint32 startOffset,
-    quint32 endOffset, const QString& path,
-    QString keyword, bool useRegExp,
-    quint32& startOffsetReturn, quint32& endOffsetReturn) {
-    QString prefix = "\\A(?:[^/]*";
-    QString suffix = "[^/]*)\\z";
-    // spdlog::info("Original path: {}, keyword:{}, maxCount: {}", path.toStdString(), keyword.toStdString(), maxCount);
-    if (keyword.startsWith(prefix) && keyword.endsWith(suffix)) {
-        keyword.remove(0, prefix.length());
-        keyword.remove(keyword.length() - suffix.length(), suffix.length());
-    }
-    auto result = search(path, keyword, startOffset, maxCount);
-    (void)icase;
-    (void)endOffset;
-    (void)useRegExp;
-    startOffsetReturn = startOffset + 1;
-    endOffsetReturn = result.size() == maxCount
-                    ? startOffsetReturn + 1
-                    : startOffsetReturn;
-    return result;
-}
-
-QStringList base_event_handler::parallelsearch(
-    const QString& path, quint32 startOffset,
-    quint32 endOffset, const QString& keyword,
-    const QStringList& rules, quint32& startOffsetReturn,
-    quint32& endOffsetReturn) {
-    // if (!rules.isEmpty()) {
-    //     QString firstElement = rules.at(0);
-    //     qDebug() << "First element:" << firstElement;
-    // } else {
-    //     qDebug() << "List is empty!";
-    // }
-    (void)rules;
-    return search(100, 0, startOffset, endOffset, path, keyword, true, startOffsetReturn, endOffsetReturn);
-}
-
-void base_event_handler::async_search(QString keywords)
-{
-    index_manager_.async_search(keywords, true, [this](const QStringList& results) {
-        if (!results.isEmpty()) {
-            Q_EMIT asyncSearchCompleted(results);
-        }
-    });
 }

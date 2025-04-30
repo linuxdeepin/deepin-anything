@@ -6,9 +6,6 @@
 #ifndef ANYTHING_BASE_EVENT_HANDLER_H_
 #define ANYTHING_BASE_EVENT_HANDLER_H_
 
-#include <QObject>
-#include <QDBusAbstractAdaptor>
-
 #include <filesystem>
 
 #include "common/anything_fwd.hpp"
@@ -35,27 +32,15 @@ struct index_job {
 
 ANYTHING_NAMESPACE_END
 
-class base_event_handler : public QObject
+class base_event_handler
 {
-    Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "com.deepin.anything")
-
-    Q_PROPERTY(bool autoIndexInternal READ autoIndexInternal WRITE setAutoIndexInternal NOTIFY autoIndexInternalChanged)
-    Q_PROPERTY(bool autoIndexExternal READ autoIndexExternal WRITE setAutoIndexExternal NOTIFY autoIndexExternalChanged)
-
 public:
-    base_event_handler(std::shared_ptr<event_handler_config> config, QObject *parent = nullptr);
+    base_event_handler(std::shared_ptr<event_handler_config> config);
     virtual ~base_event_handler();
 
     virtual void handle(anything::fs_event event) = 0;
 
     void terminate_processing();
-
-    // Do nothing
-    bool autoIndexInternal() const { return true; }
-    void setAutoIndexInternal(bool) {}
-    bool autoIndexExternal() const { return true; }
-    void setAutoIndexExternal(bool) {}
 
 protected:
     void set_batch_size(std::size_t size);
@@ -82,6 +67,8 @@ protected:
     void update_index_delay(std::string src, std::string dst);
     void scan_index_delay(std::string path);
 
+    QStringList traverse_directory(const QString& path);
+
 private:
     bool should_be_filtered(const std::string& path) const;
 
@@ -91,64 +78,6 @@ private:
     void jobs_push(std::string src, anything::index_job_type type, std::optional<std::string> dst = std::nullopt);
 
     void timer_worker(int64_t interval);
-
-public slots:
-    /**
-     * Searches for files containing the specified keyword within a given path,
-     * starting from the specified offset, and returns a list of up to max_count results.
-     *
-     * @param path     The directory path to search within.
-     * @param keyword  The keyword to search for in the files.
-     * @param offset   The starting point in the result set for the search.
-     * @param max_count The maximum number of results to return.
-     * @return A QStringList containing the paths of the found files.
-     */
-    QStringList search(const QString& path, QString keywords, int offset, int max_count);
-
-    /**
-     * Searches all files for a specified keyword and returns a list of matching file names.
-     * 
-     * @param keyword  The keyword to search for in the files.
-     * @return A QStringList containing the paths of all files where the keyword is found.
-     *         If no files are found, an empty list is returned.
-     */
-    QStringList search(const QString& path, QString keywords);
-
-    QStringList search(const QString& path, QString keywords, const QString& type);
-
-    QStringList traverse_directory(const QString& path);
-
-    bool removePath(const QString& fullPath);
-
-    bool hasLFT(const QString& path);
-    QStringList hasLFTSubdirectories(QString path) const;
-
-    void addPath(const QString& fullPath);
-
-    void index_files_in_directory(const QString& directory_path);
-
-    void delay_indexing(bool delay);
-
-    QString cache_directory();
-
-    /////////////////////////
-    // Adapter
-
-    QStringList search(int maxCount, qint64 icase, quint32 startOffset, quint32 endOffset,
-                       const QString &path, QString keyword, bool useRegExp,
-                       quint32 &startOffsetReturn, quint32 &endOffsetReturn);
-
-    QStringList parallelsearch(const QString &path, quint32 startOffset, quint32 endOffset,
-                               const QString &keyword, const QStringList &rules,
-                               quint32 &startOffsetReturn, quint32 &endOffsetReturn);
-
-    // Asynchronously search
-    Q_NOREPLY void async_search(QString keywords);
-
-Q_SIGNALS:
-    void autoIndexInternalChanged(bool autoIndexInternal);
-    void autoIndexExternalChanged(bool autoIndexExternal);
-    void asyncSearchCompleted(const QStringList& results);
 
 private:
     std::shared_ptr<event_handler_config> config_;
