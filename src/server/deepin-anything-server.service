@@ -1,6 +1,6 @@
 [Unit]
 Description=Deepin anything server service
-After=dbus.service udisks2.service
+After=udisks2.service
 
 [Service]
 User=root
