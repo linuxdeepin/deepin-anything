@@ -27,10 +27,13 @@ REALNAME = $(TARGET).$(PROJECT_VERSION)
 GLIB_INCL := $(shell pkg-config --cflags glib-2.0)
 GLIB_LIB := $(shell pkg-config --libs glib-2.0)
 
-INCLUDE_DIR := -Iinc -Iinc/index -I$(EXTERNAL_DIR)/fsearch ${GLIB_INCL}
+PCRE_INCL := $(shell pkg-config --cflags libpcre2-8)
+PCRE_LIB := $(shell pkg-config --libs libpcre2-8)
+
+INCLUDE_DIR := -Iinc -Iinc/index -I$(EXTERNAL_DIR)/fsearch ${GLIB_INCL} ${PCRE_INCL}
 
 CFLAGS := -std=gnu99 -Wall -Wl,--no-undefined -D_GNU_SOURCE ${INCLUDE_DIR} -shared -fPIC -fvisibility=hidden
-LDFLAGS := -lpthread -lpcre ${GLIB_LIB} -shared -Wl,-soname,$(REALNAME)
+LDFLAGS := -lpthread ${GLIB_LIB} ${PCRE_LIB} -shared -Wl,-soname,$(REALNAME)
 
 all: release debug
 
