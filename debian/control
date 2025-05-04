@@ -12,7 +12,7 @@ Build-Depends:
  libpolkit-qt6-1-dev | libpolkit-qt5-1-dev,
  libmount-dev,
  libglib2.0-dev,
- libpcre3-dev,
+ libpcre2-dev,
  libnl-genl-3-dev,
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
