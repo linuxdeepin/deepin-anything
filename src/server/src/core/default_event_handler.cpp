@@ -86,10 +86,13 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
     }
 
     // scan the indexing_items_
+    std::vector<std::string> indexing_paths;
     for (auto& item : indexing_items_) {
-        add_index_delay(item.origin_path);
-        insert_index_directory(item.origin_path);
+        indexing_paths.emplace_back(item.origin_path);
+        // remove the last "/"
+        indexing_paths.back().pop_back();
     }
+    set_index_dirs(indexing_paths);
 
     // Initialize mount cache
     refresh_mount_status();

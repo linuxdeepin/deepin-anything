@@ -48,7 +48,8 @@ protected:
     bool ignored_event(const std::string& path, bool ignored);
 
     void insert_pending_paths(std::vector<std::string> paths);
-    void insert_index_directory(std::filesystem::path dir);
+    void insert_index_directory(const std::string &dir);
+    void set_index_dirs(const std::vector<std::string> &paths);
 
     std::size_t pending_paths_count() const;
 
@@ -100,6 +101,9 @@ private:
     int commit_persistent_index_timeout_;
 
     anything::index_status index_status_;
+
+    std::vector<std::string> index_dirs_;
+    std::mutex index_dirs_mtx_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_
