@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
     }
 
     // 创建搜索器实例
-    Anything::Searcher searcher;
+    anything::Searcher searcher;
     
     // 初始化搜索器
     if (!searcher.initialize(index_path)) {
