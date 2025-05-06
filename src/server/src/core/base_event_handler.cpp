@@ -91,11 +91,27 @@ void base_event_handler::insert_pending_paths(
     }
 }
 
-void base_event_handler::insert_index_directory(std::filesystem::path dir) {
-    pool_.enqueue_detach([this, dir = std::move(dir)]() {
+void base_event_handler::insert_index_directory(const std::string &dir) {
+    pool_.enqueue_detach([this, dir]() {
         this->insert_pending_paths(anything::disk_scanner::scan(dir, config_->blacklist_paths));
-        index_status_ = anything::index_status::scanning;
+
+        {
+            std::lock_guard<std::mutex> lock(index_dirs_mtx_);
+            index_dirs_.erase(std::find(index_dirs_.begin(), index_dirs_.end(), dir));
+            if (index_dirs_.empty()) {
+                index_status_ = anything::index_status::scanning;
+            }
+        }
     });
+}
+
+void base_event_handler::set_index_dirs(const std::vector<std::string> &paths) {
+    std::lock_guard<std::mutex> lock(index_dirs_mtx_);
+    index_dirs_ = paths;
+    for (auto&& path : index_dirs_) {
+        add_index_delay(path);
+        insert_index_directory(path);
+    }
 }
 
 std::size_t base_event_handler::pending_paths_count() const {
