@@ -11,7 +11,7 @@
 #include <memory>
 #include <lucene++/LuceneHeaders.h>
 
-namespace Anything {
+namespace anything {
 
 class Searcher {
 public:
@@ -33,6 +33,6 @@ private:
     bool checkIndexPath(const std::string& path);
 };
 
-} // namespace Anything
+} // namespace anything
 
 #endif // DEEPIN_ANYTHING_SEARCHER_H 

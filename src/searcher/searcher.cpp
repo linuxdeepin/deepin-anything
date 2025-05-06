@@ -5,12 +5,13 @@
 
 #include "searcher.h"
 #include "analyzers/chineseanalyzer.h"
+#include "utils/string_helper.h"
 #include <glib.h>
 #include <iostream>
 
 using namespace Lucene;
 
-namespace Anything {
+namespace anything {
 
 Searcher::Searcher() {
 }
@@ -64,19 +65,24 @@ std::vector<std::string> Searcher::search(const std::string& path, const std::st
         TopDocsPtr topDocs = searcher->search(query_ptr, max_results);
         
         // 处理搜索结果
+        std::string path_with_slash = path;
+        if (!string_helper::ends_with(path_with_slash, "/")) {
+            path_with_slash += "/";
+        }
         for (int32_t i = 0; i < topDocs->totalHits; ++i) {
             ScoreDocPtr scoreDoc = topDocs->scoreDocs[i];
             DocumentPtr doc = searcher->doc(scoreDoc->doc);
-            std::stringstream ss;
-            ss << StringUtils::toUTF8(doc->get(L"full_path"))
-                << "<\\>" << StringUtils::toUTF8(doc->get(L"file_type"))
-                << "<\\>" << StringUtils::toUTF8(doc->get(L"file_ext"))
-                << "<\\>" << StringUtils::toUTF8(doc->get(L"modify_time_str"))
-                << "<\\>" << StringUtils::toUTF8(doc->get(L"file_size_str"))
-                << "<\\>" << StringUtils::toUTF8(doc->get(L"pinyin"))
-                << "<\\>" << StringUtils::toUTF8(doc->get(L"is_hidden"));
-            std::string result = ss.str();
-            if (result.rfind(path, 0) == 0) {
+            std::string full_path = StringUtils::toUTF8(doc->get(L"full_path"));
+            if (string_helper::starts_with(full_path, path_with_slash)) {
+                std::stringstream ss;
+                ss << full_path
+                    << "<\\>" << StringUtils::toUTF8(doc->get(L"file_type"))
+                    << "<\\>" << StringUtils::toUTF8(doc->get(L"file_ext"))
+                    << "<\\>" << StringUtils::toUTF8(doc->get(L"modify_time_str"))
+                    << "<\\>" << StringUtils::toUTF8(doc->get(L"file_size_str"))
+                    << "<\\>" << StringUtils::toUTF8(doc->get(L"pinyin"))
+                    << "<\\>" << StringUtils::toUTF8(doc->get(L"is_hidden"));
+                std::string result = ss.str();
                 results.push_back(result);
             }
         }
@@ -91,4 +97,4 @@ bool Searcher::checkIndexPath(const std::string& path) {
     return g_file_test(path.c_str(), G_FILE_TEST_IS_DIR);
 }
 
-} // namespace Anything 
+} // namespace anything
