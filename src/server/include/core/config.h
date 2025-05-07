@@ -22,7 +22,8 @@ struct event_handler_config {
 
 class Config {
 public:
-    static Config& instance();
+    Config();
+    ~Config() = default;
 
     // Delete copy constructor and assignment operator
     Config(const Config&) = delete;
@@ -31,14 +32,11 @@ public:
     std::shared_ptr<event_handler_config> make_event_handler_config();
 
 private:
-    Config();
-    ~Config() = default;
-
-private:
     std::vector<std::string> blacklist_paths_;
     std::vector<std::string> indexing_paths_;
     std::map<std::string, std::string> file_type_mapping_;
 
+    std::shared_ptr<void> dbus_connection_;
 };
 
 bool is_path_in_blacklist(const std::string& path, const std::vector<std::string>& blacklist_paths);
