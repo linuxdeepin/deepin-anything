@@ -76,6 +76,7 @@ public:
 
     bool refresh_indexes(const std::vector<std::string>& blacklist_paths);
 
+    void set_index_invalid();
 private:
     /// Refresh the index reader if there are changes
     void try_refresh_reader(bool nrt = false);

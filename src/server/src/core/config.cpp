@@ -152,30 +152,51 @@ bool replace_home_dir(std::string& path) {
     return false;
 }
 
+void dconfig_changed (G_GNUC_UNUSED GDBusConnection *connection,
+                    G_GNUC_UNUSED const gchar *sender_name,
+                    G_GNUC_UNUSED const gchar *object_path,
+                    G_GNUC_UNUSED const gchar *interface_name,
+                    G_GNUC_UNUSED const gchar *signal_name,
+                    GVariant *parameters,
+                    gpointer user_data) {
+    gchar *str;
+    std::string key;
+    Config* config = (Config*)user_data;
+
+    g_variant_get(parameters, "(s)", &str);
+    if (str) {
+        key = str;
+        g_free(str);
+    }
+
+    if (!key.empty())
+        config->notify_config_changed(key);
+}
+
 Config::Config()
-    : dbus_connection_(g_bus_get_sync(G_BUS_TYPE_SYSTEM, nullptr, nullptr), g_object_unref)
 {
     // 获取dconfig配置
+    dbus_connection_ = g_bus_get_sync(G_BUS_TYPE_SYSTEM, nullptr, nullptr);
     if (!dbus_connection_) {
         spdlog::error("Failed to connect to system bus");
         exit(1);
     }
 
-    std::string resource_path = get_dconfig_resource_path((GDBusConnection*)dbus_connection_.get());
+    std::string resource_path = get_dconfig_resource_path((GDBusConnection*)dbus_connection_);
     if(resource_path.empty()) {
         spdlog::error("Failed to get dconfig resource path");
         exit(1);
     }
 
-    indexing_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_.get(), resource_path, "indexing_paths");
-    blacklist_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_.get(), resource_path, "blacklist_paths");
+    indexing_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path, "indexing_paths");
+    blacklist_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path, "blacklist_paths");
     std::string app_file_suffix, archive_file_suffix, audio_file_suffix, doc_file_suffix, pic_file_suffix, video_file_suffix;
-    app_file_suffix = get_config_string((GDBusConnection*)dbus_connection_.get(), resource_path, "app_file_suffix");
-    archive_file_suffix = get_config_string((GDBusConnection*)dbus_connection_.get(), resource_path, "archive_file_suffix");
-    audio_file_suffix = get_config_string((GDBusConnection*)dbus_connection_.get(), resource_path, "audio_file_suffix");
-    doc_file_suffix = get_config_string((GDBusConnection*)dbus_connection_.get(), resource_path, "doc_file_suffix");
-    pic_file_suffix = get_config_string((GDBusConnection*)dbus_connection_.get(), resource_path, "pic_file_suffix");
-    video_file_suffix = get_config_string((GDBusConnection*)dbus_connection_.get(), resource_path, "video_file_suffix");
+    app_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "app_file_suffix");
+    archive_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "archive_file_suffix");
+    audio_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "audio_file_suffix");
+    doc_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "doc_file_suffix");
+    pic_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "pic_file_suffix");
+    video_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "video_file_suffix");
     file_type_mapping_ = {
         {"app",     app_file_suffix},
         {"archive", archive_file_suffix},
@@ -212,6 +233,22 @@ Config::Config()
     }
 
     print_config(blacklist_paths_, indexing_paths_, file_type_mapping_);
+
+    subscription_id_ = g_dbus_connection_signal_subscribe((GDBusConnection*)dbus_connection_,
+                                                        "org.desktopspec.ConfigManager",            // sender
+                                                        "org.desktopspec.ConfigManager.Manager",    // interface
+                                                        "valueChanged",                             // signal
+                                                        resource_path.c_str(),                      // object path
+                                                        NULL,
+                                                        G_DBUS_SIGNAL_FLAGS_NONE,
+                                                        dconfig_changed,
+                                                        this,
+                                                        NULL);
+}
+
+Config::~Config() {
+    g_dbus_connection_signal_unsubscribe((GDBusConnection*)dbus_connection_, subscription_id_);
+    g_object_unref(dbus_connection_);
 }
 
 std::shared_ptr<event_handler_config> Config::make_event_handler_config()
@@ -234,6 +271,17 @@ std::shared_ptr<event_handler_config> Config::make_event_handler_config()
     }
 
     return config;
+}
+
+void Config::set_config_change_handler(std::function<void(std::string)> config_change_handler)
+{
+    config_change_handler_ = config_change_handler;
+}
+
+void Config::notify_config_changed(const std::string &key)
+{
+    if (config_change_handler_)
+        config_change_handler_(key);
 }
 
 bool is_path_in_blacklist(const std::string& path, const std::vector<std::string>& blacklist_paths)
