@@ -21,11 +21,12 @@ pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 pkg_check_modules(LUCENE REQUIRED liblucene++)
 pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
+pkg_check_modules(GIO REQUIRED gio-2.0)
 
 # Found all source files
 file(GLOB_RECURSE SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp" "${PROJECT_SOURCE_DIR}/src/*.c")
 list(LENGTH SOURCE_FILES SRC_FILES_SIZE)
-message(STATUS "Found ${SRC_FILES_SIZE} source files of deepin-server")
+message(STATUS "Found ${SRC_FILES_SIZE} source files of deepin-anything-daemon")
 foreach(source_file ${SOURCE_FILES})
     message(STATUS "  ${source_file}")
 endforeach()
@@ -45,6 +46,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${GNL_INCLUDE_DIRS}
     ${MOUNT_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
+    ${GIO_INCLUDE_DIRS}
     ${Qt${QT_VERSION_MAJOR}Core_INCLUDE_DIRS}
 )
 
@@ -58,6 +60,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     stdc++fs
     spdlog::spdlog
     ${GLIB_LIBRARIES}
+    ${GIO_LIBRARIES}
     Qt${QT_VERSION_MAJOR}::Core
 )
 
@@ -75,3 +78,6 @@ install(TARGETS ${PROJECT_NAME}
 install(PROGRAMS deepin-anything-server DESTINATION bin)
 install(FILES deepin-anything-daemon.service DESTINATION lib/systemd/user)
 install(FILES deepin-anything-server.service DESTINATION lib/systemd/system)
+
+# Install dconfig meta file
+install(FILES ${CMAKE_SOURCE_DIR}/assets/org.deepin.anything.json DESTINATION share/dsg/configs/org.deepin.anything)

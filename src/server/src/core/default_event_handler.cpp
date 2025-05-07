@@ -71,7 +71,7 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
     // init event_path_blocked_list_
     spdlog::debug("processing blacklist_paths...");
     for (auto& path : config_->blacklist_paths) {
-        if (!std::filesystem::exists(path)) {
+        if (!anything::string_helper::starts_with(path, "/") || !std::filesystem::exists(path)) {
             event_path_blocked_list_.emplace_back(path);
         } else {
             char *event_path = get_full_path(path.c_str());

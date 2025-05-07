@@ -73,8 +73,9 @@ int main(int argc, char* argv[]) {
     spdlog::info("Anything daemon starting...");
     spdlog::info("Qt version: {}", qVersion());
 
+    Config config;
     event_listenser listenser;
-    default_event_handler handler(Config::instance().make_event_handler_config());
+    default_event_handler handler(config.make_event_handler_config());
     listenser.set_handler([&handler](fs_event event) {
         handler.handle(std::move(event));
     });
