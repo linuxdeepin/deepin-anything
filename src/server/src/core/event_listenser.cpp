@@ -86,7 +86,7 @@ event_listenser::~event_listenser() {
 }
 
 void event_listenser::start_listening() {
-    spdlog::debug("listening for messages");
+    spdlog::info("listening for messages");
     int ep_fd = epoll_create1(0);
     if (ep_fd < 0) {
         spdlog::error("Epoll creation failed.");

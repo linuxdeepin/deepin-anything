@@ -182,21 +182,21 @@ Config::Config()
         exit(1);
     }
 
-    std::string resource_path = get_dconfig_resource_path((GDBusConnection*)dbus_connection_);
-    if(resource_path.empty()) {
+    resource_path_ = get_dconfig_resource_path((GDBusConnection*)dbus_connection_);
+    if(resource_path_.empty()) {
         spdlog::error("Failed to get dconfig resource path");
         exit(1);
     }
 
-    indexing_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path, "indexing_paths");
-    blacklist_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path, "blacklist_paths");
+    indexing_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path_, "indexing_paths");
+    blacklist_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path_, "blacklist_paths");
     std::string app_file_suffix, archive_file_suffix, audio_file_suffix, doc_file_suffix, pic_file_suffix, video_file_suffix;
-    app_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "app_file_suffix");
-    archive_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "archive_file_suffix");
-    audio_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "audio_file_suffix");
-    doc_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "doc_file_suffix");
-    pic_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "pic_file_suffix");
-    video_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path, "video_file_suffix");
+    app_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "app_file_suffix");
+    archive_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "archive_file_suffix");
+    audio_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "audio_file_suffix");
+    doc_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "doc_file_suffix");
+    pic_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "pic_file_suffix");
+    video_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "video_file_suffix");
     file_type_mapping_ = {
         {"app",     app_file_suffix},
         {"archive", archive_file_suffix},
@@ -216,6 +216,8 @@ Config::Config()
         spdlog::error("Failed to get dconfig config");
         exit(1);
     }
+
+    log_level_ = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, LOG_LEVEL_KEY);
 
     // Replace $HOME with actual home directory path
     for (auto& path : blacklist_paths_) {
@@ -238,7 +240,7 @@ Config::Config()
                                                         "org.desktopspec.ConfigManager",            // sender
                                                         "org.desktopspec.ConfigManager.Manager",    // interface
                                                         "valueChanged",                             // signal
-                                                        resource_path.c_str(),                      // object path
+                                                        resource_path_.c_str(),                     // object path
                                                         NULL,
                                                         G_DBUS_SIGNAL_FLAGS_NONE,
                                                         dconfig_changed,
@@ -280,9 +282,19 @@ void Config::set_config_change_handler(std::function<void(std::string)> config_c
 
 void Config::notify_config_changed(const std::string &key)
 {
+    if (key == LOG_LEVEL_KEY) {
+        log_level_ = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, LOG_LEVEL_KEY);
+    }
+
     if (config_change_handler_)
         config_change_handler_(key);
 }
+
+std::string Config::get_log_level()
+{
+    return log_level_;
+}
+
 
 bool is_path_in_blacklist(const std::string& path, const std::vector<std::string>& blacklist_paths)
 {

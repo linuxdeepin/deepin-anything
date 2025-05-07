@@ -31,7 +31,7 @@ bool is_event_path_in_indexing_items(const std::string& event_path, const std::v
 default_event_handler::default_event_handler(std::shared_ptr<event_handler_config> config)
     : base_event_handler(config), config_(config) {
     // init indexing_items_
-    spdlog::debug("processing indexing_paths...");
+    spdlog::info("processing indexing_paths...");
     for (auto& origin_path : config_->indexing_paths) {
         if (!std::filesystem::exists(origin_path)) {
             continue;
@@ -63,13 +63,13 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
             .event_path = event_path_with_slash,
             .different_path = origin_path_with_slash != event_path_with_slash,
         };
-        spdlog::debug("Determine the event path: {} -> {}", origin_path_with_slash, item.event_path);
+        spdlog::info("Determine the event path: {} -> {}", origin_path_with_slash, item.event_path);
 
         indexing_items_.emplace_back(item);
     }
 
     // init event_path_blocked_list_
-    spdlog::debug("processing blacklist_paths...");
+    spdlog::info("processing blacklist_paths...");
     for (auto& path : config_->blacklist_paths) {
         if (!anything::string_helper::starts_with(path, "/") || !std::filesystem::exists(path)) {
             event_path_blocked_list_.emplace_back(path);
@@ -81,7 +81,7 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
             }
             event_path_blocked_list_.emplace_back(std::string(event_path));
             g_free(event_path);
-            spdlog::debug("Determine the event path: {} -> {}", path, event_path_blocked_list_.back());
+            spdlog::info("Determine the event path: {} -> {}", path, event_path_blocked_list_.back());
         }
     }
 
@@ -155,8 +155,6 @@ void default_event_handler::handle(fs_event event) {
             root.clear();
     }
 
-    // spdlog::debug("Last Action: {}, src: {}", +event.act, event.src);
-
     switch (event.act) {
     case ACT_NEW_FILE:
     case ACT_NEW_SYMLINK:
@@ -198,7 +196,7 @@ void default_event_handler::handle(fs_event event) {
         rename_from_.erase(event.cookie);
     }
 
-    // spdlog::debug("Received a(an) {} message(src={},dst={})", act_names[event.act], event.src, event.dst);
+    spdlog::debug("Received event: {} {} {}", act_names[event.act], event.src, event.dst);
 
     // Preparations are done, starting to process the event.
 

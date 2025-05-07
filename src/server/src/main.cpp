@@ -67,21 +67,26 @@ int main(int argc, char* argv[]) {
     if (!can_user_login())
         exit(0);
 
+    Config config;
+
     // spdlog::set_default_logger(spdlog::basic_logger_mt("file_logger", "/var/cache/deepin/deepin-anything/app.log"));
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_level(spdlog::level::from_str(config.get_log_level()));
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [thread %t] %v");
     spdlog::info("Anything daemon starting...");
     spdlog::info("Qt version: {}", qVersion());
 
-    Config config;
     event_listenser listenser;
     default_event_handler handler(config.make_event_handler_config());
     listenser.set_handler([&handler](fs_event event) {
         handler.handle(std::move(event));
     });
-    config.set_config_change_handler([&handler](std::string key) {
+    config.set_config_change_handler([&handler, &config](std::string key) {
         spdlog::info("Config changed: {}", key);
-        handler.notify_config_changed();
+        if (key == LOG_LEVEL_KEY) {
+            spdlog::set_level(spdlog::level::from_str(config.get_log_level()));
+        } else {
+            handler.notify_config_changed();
+        }
     });
 
     // Process the interrupt signal

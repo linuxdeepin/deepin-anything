@@ -233,7 +233,7 @@ void file_index_manager::commit(index_status status) {
         save_index_status(status);
         set_index_version();
         writer_->commit();
-        spdlog::info("All changes are commited with version: {}", StringUtils::toUTF8(INDEX_VERSION));
+        spdlog::debug("All changes are commited with version: {}", StringUtils::toUTF8(INDEX_VERSION));
     } catch (const LuceneException& e) {
         spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
     }

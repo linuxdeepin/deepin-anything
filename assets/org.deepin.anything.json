@@ -89,6 +89,17 @@
             "description[zh_CN]":"视频文件后缀",
             "permissions": "readwrite",
             "visibility": "public"
+        },
+        "log_level": {
+            "value": "info",
+            "serial": 0,
+            "flags": [],
+            "name": "log level",
+            "name[zh_CN]": "日志级别",
+            "description": "log level",
+            "description[zh_CN]": "日志级别",
+            "permissions": "readwrite",
+            "visibility": "public"
         }
     }
 }

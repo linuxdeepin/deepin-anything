@@ -205,7 +205,6 @@ void base_event_handler::eat_job(const anything::index_job& job) {
 
 void base_event_handler::jobs_push(std::string src,
     anything::index_job_type type, std::optional<std::string> dst) {
-    // spdlog::debug("jobs_push: src({}), dst({})", src, dst ? *dst : "");
     if (should_be_filtered(src) || (dst && should_be_filtered(*dst))) {
         return;
     }
