@@ -21,6 +21,8 @@ struct event_handler_config {
     std::map<std::string, std::string> file_type_mapping;
 };
 
+#define LOG_LEVEL_KEY "log_level"
+
 class Config {
 public:
     Config();
@@ -35,12 +37,16 @@ public:
     void set_config_change_handler(std::function<void(std::string)> config_change_handler);
     void notify_config_changed(const std::string &key);
 
+    std::string get_log_level();
+
 private:
     std::vector<std::string> blacklist_paths_;
     std::vector<std::string> indexing_paths_;
     std::map<std::string, std::string> file_type_mapping_;
+    std::string log_level_;
 
     void* dbus_connection_;
+    std::string resource_path_;
     std::function<void(std::string)> config_change_handler_;
     int subscription_id_;
 };
