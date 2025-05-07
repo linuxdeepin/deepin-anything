@@ -79,6 +79,10 @@ int main(int argc, char* argv[]) {
     listenser.set_handler([&handler](fs_event event) {
         handler.handle(std::move(event));
     });
+    config.set_config_change_handler([&handler](std::string key) {
+        spdlog::info("Config changed: {}", key);
+        handler.notify_config_changed();
+    });
 
     // Process the interrupt signal
     auto signalHandler = [&listenser, &handler, &app](int sig) {

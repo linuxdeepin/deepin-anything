@@ -10,6 +10,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <functional>
 
 struct event_handler_config {
     std::string persistent_index_dir;
@@ -23,7 +24,7 @@ struct event_handler_config {
 class Config {
 public:
     Config();
-    ~Config() = default;
+    ~Config();
 
     // Delete copy constructor and assignment operator
     Config(const Config&) = delete;
@@ -31,12 +32,17 @@ public:
 
     std::shared_ptr<event_handler_config> make_event_handler_config();
 
+    void set_config_change_handler(std::function<void(std::string)> config_change_handler);
+    void notify_config_changed(const std::string &key);
+
 private:
     std::vector<std::string> blacklist_paths_;
     std::vector<std::string> indexing_paths_;
     std::map<std::string, std::string> file_type_mapping_;
 
-    std::shared_ptr<void> dbus_connection_;
+    void* dbus_connection_;
+    std::function<void(std::string)> config_change_handler_;
+    int subscription_id_;
 };
 
 bool is_path_in_blacklist(const std::string& path, const std::vector<std::string>& blacklist_paths);

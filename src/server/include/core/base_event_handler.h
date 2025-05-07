@@ -42,6 +42,8 @@ public:
 
     void terminate_processing();
 
+    void notify_config_changed();
+
 protected:
     void set_batch_size(std::size_t size);
 

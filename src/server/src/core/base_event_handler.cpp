@@ -10,6 +10,8 @@
 #include "utils/string_helper.h"
 #include "utils/tools.h"
 
+#include <QCoreApplication>
+
 #define COMMIT_VOLATILE_INDEX_TIMEOUT 10
 #define COMMIT_PERSISTENT_INDEX_TIMEOUT 600
 
@@ -314,4 +316,12 @@ void base_event_handler::timer_worker(int64_t interval) {
 
 QStringList base_event_handler::traverse_directory(const QString& path) {
     return index_manager_.traverse_directory(path, true);
+}
+
+void base_event_handler::notify_config_changed() {
+    spdlog::info("Set index invalid and quit");
+
+    index_manager_.set_index_invalid();
+
+    qApp->quit();
 }

@@ -143,6 +143,7 @@ DocumentPtr create_document(const file_record& record) {
 
 
 #define INDEX_VERSION L"1"
+#define INVALID_INDEX_VERSION L"0"
 #define INDEX_VERSION_FIELD L"index_version"
 
 file_index_manager::file_index_manager(const std::string& persistent_index_dir,
@@ -372,6 +373,15 @@ bool file_index_manager::refresh_indexes(const std::vector<std::string>& blackli
     }
 
     return index_changed;
+}
+
+void file_index_manager::set_index_invalid()
+{
+    set_index_version();
+
+    DocumentPtr doc = newLucene<Document>();
+    doc->add(newLucene<Field>(INDEX_VERSION_FIELD, INVALID_INDEX_VERSION, Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+    writer_->updateDocument(newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION), doc);
 }
 
 void file_index_manager::try_refresh_reader(bool nrt) {
