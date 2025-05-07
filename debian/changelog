@@ -1,3 +1,20 @@
+deepin-anything (7.0.13) unstable; urgency=medium
+
+  * feat: Add thread pool size config from env
+  * fix: Fix set index status to monitoring too early
+  * refactor: Remove file_record structure and related functionality
+  * feat: Refactor event handler to use shared configuration
+  * feat: Add deepin-anything-searcher utils
+  * refactor: Removing DBus-related code
+  * refactor: Simplify file index management methods
+  * refactor: Standardize namespace naming and enhance string handling
+  * refactor: Enhance index directory management in event handler
+  * feat: Support obtaining configuration via dconfig
+  * feat: Implement configuration change notification
+  * feat: Introduce log level configuration
+
+ -- wangrong <wangrong@uniontech.com>  Wed, 07 May 2025 16:50:03 +0800
+
 deepin-anything (7.0.12) unstable; urgency=medium
 
   * fix: Fail to search after manual partitioning
