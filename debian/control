@@ -38,7 +38,7 @@ Description: anything module
 
 Package: deepin-anything-server
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, deepin-anything-dkms
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: anything server application and lib
  anything server package
 
