@@ -13,7 +13,8 @@
 #include <stdio.h>
 // #include <regex.h>
 #include <limits.h>
-#include <pcre.h>
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 
 #include "fs_buf.h"
 #include "utils.h"
@@ -1183,28 +1184,27 @@ static int is_regex (const char *query)
     return (strpbrk(query, regex_chars) != NULL);
 }
 
-static int do_regex(pcre *regex, const char *haystack)
+static int do_regex(pcre2_code *regex, PCRE2_SPTR haystack)
 {
-	size_t haystack_len = strlen(haystack);
-	int ovector[3]; // set number as 3n
-
-	return pcre_exec(regex, NULL, haystack, haystack_len, 0, 0, ovector, 3) >= 0 ? 0 : 1;
+	PCRE2_SIZE haystack_len = strlen((const char *)haystack);
+	pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(regex, NULL);
+	
+	return pcre2_match(regex, haystack, haystack_len, 0, 0, match_data, NULL) >= 0 ? 0 : 1;
 }
 
 static int pcre_regex(const char *name, void *query)
 {
-	compare_query_t *comquery = (compare_query_t *)query; // do not check it at here, make sure it fast.
-	pcre *regex = (pcre *)(comquery->query);
+	compare_query_t *comquery = (compare_query_t *)query;
+	pcre2_code *regex = (pcre2_code *)(comquery->query);
+	PCRE2_SPTR name_ptr = (PCRE2_SPTR)name;
 
-	int notmatch = do_regex(regex, name);
-	// if not match the query, then check it whether need to convert the name string.
+	int notmatch = do_regex(regex, name_ptr);
 	if (notmatch) {
-		// check language support first and then parse the words as the compare string.
 		if (comquery->lang & LANG_PINYIN) {
-			// try to convert chinese to pinyin and compare with name
 			char *pinyin = cat_pinyin(name);
 			if (pinyin != NULL) {
-				notmatch = do_regex(regex, pinyin);
+				PCRE2_SPTR pinyin_ptr = (PCRE2_SPTR)pinyin;
+				notmatch = do_regex(regex, pinyin_ptr);
 				free(pinyin);
 			}
 		}
@@ -1412,13 +1412,16 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 	}
 
 	const bool is_reg = reg_enable && is_regex(query);
-	pcre *regex = NULL;
+
+	pcre2_code *regex = NULL;
 
 	if (is_reg) {
-		const char *error;
-		int erroffset;
-		regex = pcre_compile(query, PCRE_CASELESS, &error, &erroffset, NULL);
+		int errornumber;
+		PCRE2_SIZE erroffset;
+
+		regex = pcre2_compile((PCRE2_SPTR)query, PCRE2_ZERO_TERMINATED, PCRE2_CASELESS, &errornumber, &erroffset, NULL);
 	}
+	
 	if (regex) {
 		comquery->query = (void*)regex;
 	} else {
@@ -1492,7 +1495,7 @@ __attribute__((visibility("default"))) void parallelsearch_files(fs_buf *fsbuf, 
 	pthread_rwlock_unlock(&fsbuf->lock);
 
 	if (regex)
-		pcre_free(regex);
+		pcre2_code_free(regex);
 	if (comquery)
 		free(comquery);
 
