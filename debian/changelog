@@ -1,3 +1,9 @@
+deepin-anything (6.2.8) unstable; urgency=medium
+
+  * feat: Not compile kernel module when in-tree ones already exist
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 08 May 2025 19:24:36 +0800
+
 deepin-anything (6.2.7) unstable; urgency=medium
 
   * Fix search fail in immutable system
