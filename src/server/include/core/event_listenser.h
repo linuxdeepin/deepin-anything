@@ -49,7 +49,6 @@ private:
     nl_sock_ptr mcsk_;
     bool connected_;
     int stop_fd_;
-    int fam_;
     int timeout_;
     std::function<void(fs_event)> handler_;
     std::thread listening_thread_;

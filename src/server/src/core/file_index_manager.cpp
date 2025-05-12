@@ -257,7 +257,7 @@ void file_index_manager::persist_index() {
         return;
     }
 
-    spdlog::info("Persist index to {}", persistent_index_directory_);
+    spdlog::debug("Persist index to {}", persistent_index_directory_);
 }
 
 bool file_index_manager::indexed() const {

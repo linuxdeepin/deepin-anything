@@ -27,30 +27,44 @@ bool is_event_path_in_indexing_items(const std::string& event_path, const std::v
     return false;
 }
 
+std::string get_event_path(const std::string& origin_path, const std::vector<indexing_item>& indexing_items) {
+    if (!std::filesystem::exists(origin_path)) {
+        spdlog::error("The origin path {} does not exist", origin_path);
+        return "";
+    }
+
+    std::string event_path_str;
+    char *event_path = get_full_path(origin_path.c_str());
+    if (event_path == nullptr) {
+        spdlog::warn("Failed to get event path, use the origin path: {}", origin_path);
+        event_path_str = origin_path;
+    } else {
+        event_path_str = std::string(event_path);
+        g_free(event_path);
+    }
+
+    // add "/" to the end of the event_path for simplify the comparison
+    std::string event_path_with_slash = event_path_str;
+    if (!string_helper::ends_with(event_path_with_slash, "/")) {
+        event_path_with_slash += "/";
+    }
+
+    if (is_event_path_in_indexing_items(event_path_with_slash, indexing_items)) {
+        spdlog::warn("Event path {} is already configured, skip", event_path_with_slash);
+        return "";
+    }
+
+    return event_path_with_slash;
+}
+
 // /data 和非 data 需要保持一致，最好有一种方式能够获取当前的状态
 default_event_handler::default_event_handler(std::shared_ptr<event_handler_config> config)
     : base_event_handler(config), config_(config) {
     // init indexing_items_
     spdlog::info("processing indexing_paths...");
     for (auto& origin_path : config_->indexing_paths) {
-        if (!std::filesystem::exists(origin_path)) {
-            continue;
-        }
-
-        char *event_path = get_full_path(origin_path.c_str());
-        if (event_path == nullptr) {
-            spdlog::error("Failed to get event path: {}", origin_path);
-            continue;
-        }
-        // add "/" to the end of the event_path for simplify the comparison
-        std::string event_path_with_slash = std::string(event_path);
-        if (!string_helper::ends_with(event_path_with_slash, "/")) {
-            event_path_with_slash += "/";
-        }
-        g_free(event_path);
-
-        if (is_event_path_in_indexing_items(event_path_with_slash, indexing_items_)) {
-            spdlog::error("Event path {} is already configured, skip", event_path_with_slash);
+        std::string event_path_with_slash = get_event_path(origin_path, indexing_items_);
+        if (event_path_with_slash.empty()) {
             continue;
         }
 
@@ -63,7 +77,7 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
             .event_path = event_path_with_slash,
             .different_path = origin_path_with_slash != event_path_with_slash,
         };
-        spdlog::info("Determine the event path: {} -> {}", origin_path_with_slash, item.event_path);
+        spdlog::info("Determine the event path: {} -> {}", item.origin_path, item.event_path);
 
         indexing_items_.emplace_back(item);
     }
