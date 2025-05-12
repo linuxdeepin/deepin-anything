@@ -1,3 +1,9 @@
+deepin-anything (7.0.14) unstable; urgency=medium
+
+  * feat: Clean up event handling and logging
+
+ -- wangrong <wangrong@uniontech.com>  Mon, 12 May 2025 14:21:12 +0800
+
 deepin-anything (7.0.13) unstable; urgency=medium
 
   * feat: Add thread pool size config from env
