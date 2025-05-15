@@ -18,15 +18,15 @@ std::vector<std::string> disk_scanner::scan(const fs::path& root, const std::vec
     spdlog::info("Scanning {}...", root.string());
     std::vector<std::string> records;
     fs::recursive_directory_iterator dirpos{ root, fs::directory_options::skip_permission_denied };
+    std::error_code ec;
     for (auto it = begin(dirpos); it != end(dirpos); ++it) {
-        if (is_path_in_blacklist(it->path().string(), blacklist_paths)) {
+        if (is_path_in_blacklist(it->path().string(), blacklist_paths) ||
+            !std::filesystem::exists(it->path(), ec)) {
             it.disable_recursion_pending();
             continue;
         }
 
-        if (std::filesystem::exists(it->path())) {
-            records.push_back(it->path().string());
-        }
+        records.push_back(it->path().string());
 
         if (disk_scanner::stop_scanning) {
             spdlog::info("Scanning interrupted");

@@ -409,13 +409,19 @@ void file_index_manager::try_refresh_reader(bool nrt) {
 
 void file_index_manager::prepare_index() {
     spdlog::info("Preparing index...");
-    if (!std::filesystem::exists(volatile_index_directory_)) {
-        if (!std::filesystem::exists(persistent_index_directory_)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(volatile_index_directory_, ec)) {
+        if (ec) {
+            spdlog::error("Failed to check volatile index directory: {}", ec.message());
+            exit(EXIT_FAILURE);
+        }
+
+        if (!std::filesystem::exists(persistent_index_directory_, ec)) {
             spdlog::info("Persistent index directory does not exist: {}", persistent_index_directory_);
             return;
         }
 
-        std::error_code ec;
+        ec.clear();
         std::filesystem::copy(persistent_index_directory_,
                               volatile_index_directory_,
                               std::filesystem::copy_options::recursive,
@@ -434,7 +440,8 @@ void file_index_manager::check_index_version() {
     spdlog::info("Checking index version...");
     Lucene::IndexReaderPtr reader;
 
-    if (!std::filesystem::exists(volatile_index_directory_)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(volatile_index_directory_, ec)) {
         spdlog::info("Index directory does not exist: {}", volatile_index_directory_);
         return;
     }

@@ -28,8 +28,9 @@ bool is_event_path_in_indexing_items(const std::string& event_path, const std::v
 }
 
 std::string get_event_path(const std::string& origin_path, const std::vector<indexing_item>& indexing_items) {
-    if (!std::filesystem::exists(origin_path)) {
-        spdlog::error("The origin path {} does not exist", origin_path);
+    std::error_code ec;
+    if (!std::filesystem::exists(origin_path, ec)) {
+        spdlog::error("The origin path {} does not exist: {}", origin_path, ec.message());
         return "";
     }
 
@@ -85,7 +86,8 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
     // init event_path_blocked_list_
     spdlog::info("processing blacklist_paths...");
     for (auto& path : config_->blacklist_paths) {
-        if (!anything::string_helper::starts_with(path, "/") || !std::filesystem::exists(path)) {
+        std::error_code ec;
+        if (!anything::string_helper::starts_with(path, "/") || !std::filesystem::exists(path, ec)) {
             event_path_blocked_list_.emplace_back(path);
         } else {
             char *event_path = get_full_path(path.c_str());
