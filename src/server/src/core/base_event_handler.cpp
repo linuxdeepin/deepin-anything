@@ -292,7 +292,8 @@ void base_event_handler::timer_worker(int64_t interval) {
                 // - Index integrity is considered only for insertion here; deletions are not checked individually, as that would be inefficient.
                 //   Instead, existence checks for indexed paths are handled at query time.
                 if (!index_manager_.document_exists(path, true)) {
-                    if (std::filesystem::exists(path)) {
+                    std::error_code ec;
+                    if (std::filesystem::exists(path, ec)) {
                         add_index_delay(std::move(path));
                     }
                 }
