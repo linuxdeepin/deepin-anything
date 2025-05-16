@@ -17,6 +17,7 @@ ANYTHING_NAMESPACE_BEGIN
 std::vector<std::string> disk_scanner::scan(const fs::path& root, const std::vector<std::string>& blacklist_paths) {
     spdlog::info("Scanning {}...", root.string());
     std::vector<std::string> records;
+    // By default, symlinks are not followed
     fs::recursive_directory_iterator dirpos{ root, fs::directory_options::skip_permission_denied };
     std::error_code ec;
     for (auto it = begin(dirpos); it != end(dirpos); ++it) {
