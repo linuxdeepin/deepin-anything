@@ -17,10 +17,12 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
-// 检查 event_path 是否已经包含在 indexing_items_ 中
-bool is_event_path_in_indexing_items(const std::string& event_path, const std::vector<indexing_item>& indexing_items) {
+// 检查 event_path 与 indexing_items_ 中的 event_path 是否冲突
+bool is_event_path_conflict_with_indexing_items(const std::string& event_path,
+                                                const std::vector<indexing_item>& indexing_items) {
     for (auto& item : indexing_items) {
-        if (string_helper::starts_with(event_path, item.event_path)) {
+        if (string_helper::starts_with(event_path, item.event_path) ||
+            string_helper::starts_with(item.event_path, event_path)) {
             return true;
         }
     }
@@ -50,8 +52,8 @@ std::string get_event_path(const std::string& origin_path, const std::vector<ind
         event_path_with_slash += "/";
     }
 
-    if (is_event_path_in_indexing_items(event_path_with_slash, indexing_items)) {
-        spdlog::warn("Event path {} is already configured, skip", event_path_with_slash);
+    if (is_event_path_conflict_with_indexing_items(event_path_with_slash, indexing_items)) {
+        spdlog::warn("Event path {} conflicts with already configured event paths, skip", event_path_with_slash);
         return "";
     }
 
