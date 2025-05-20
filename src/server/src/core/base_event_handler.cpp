@@ -285,7 +285,7 @@ void base_event_handler::timer_worker(int64_t interval) {
     }
 }
 
-QStringList base_event_handler::traverse_directory(const QString& path) {
+std::vector<std::string> base_event_handler::traverse_directory(const std::string& path) {
     return index_manager_.traverse_directory(path, true);
 }
 

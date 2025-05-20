@@ -68,7 +68,7 @@ protected:
     void update_index_delay(std::string src, std::string dst);
     void scan_index_delay(std::string path);
 
-    QStringList traverse_directory(const QString& path);
+    std::vector<std::string> traverse_directory(const std::string& path);
 
 private:
     void eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number);

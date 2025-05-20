@@ -302,12 +302,12 @@ std::string file_index_manager::index_directory() const {
     return persistent_index_directory_;
 }
 
-QStringList file_index_manager::traverse_directory(const QString& path, bool nrt) {
-    if (path.isEmpty()) {
+std::vector<std::string> file_index_manager::traverse_directory(const std::string& path, bool nrt) {
+    if (path.empty()) {
         return {};
     }
 
-    String query_terms = StringUtils::toUnicode(path.toStdString());
+    String query_terms = StringUtils::toUnicode(path);
 
     try {
         SearcherPtr searcher;
@@ -325,16 +325,16 @@ QStringList file_index_manager::traverse_directory(const QString& path, bool nrt
         auto query = newLucene<PrefixQuery>(newLucene<Term>(FULL_PATH_FIELD, query_terms));
         auto search_results = searcher->search(query, max_results);
 
-        QStringList results;
+        std::vector<std::string> results;
         results.reserve(search_results->scoreDocs.size());
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher->doc(score_doc->doc);
-            results.append(QString::fromStdWString(doc->get(FULL_PATH_FIELD)));
+            results.push_back(StringUtils::toUTF8(doc->get(FULL_PATH_FIELD)));
         }
 
         return results;
     } catch (const LuceneException& e) {
-        spdlog::error("Failed to traverse directory {}: {}", path.toStdString(), StringUtils::toUTF8(e.getError()));
+        spdlog::error("Failed to traverse directory {}: {}", path, StringUtils::toUTF8(e.getError()));
         return {};
     }
 }
