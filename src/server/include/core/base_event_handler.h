@@ -63,8 +63,6 @@ protected:
 
     std::string get_index_directory() const;
 
-    void set_index_change_filter(std::function<bool(const std::string&)> filter);
-
     void add_index_delay(std::string path);
     void remove_index_delay(std::string path);
     void update_index_delay(std::string src, std::string dst);
@@ -73,8 +71,6 @@ protected:
     QStringList traverse_directory(const QString& path);
 
 private:
-    bool should_be_filtered(const std::string& path) const;
-
     void eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number);
     void eat_job(const anything::index_job& job);
 
@@ -89,7 +85,6 @@ private:
     std::size_t batch_size_;
     std::vector<std::string> pending_paths_;
     std::vector<anything::index_job> jobs_;
-    std::function<bool(const std::string&)> index_change_filter_;
     anything::thread_pool pool_;
     std::atomic<bool> stop_timer_;
     std::mutex jobs_mtx_;

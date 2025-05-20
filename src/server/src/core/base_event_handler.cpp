@@ -84,11 +84,6 @@ void base_event_handler::insert_pending_paths(
     } else {
         for (auto&& path : paths) {
             add_index_delay(std::move(path));
-            // if (should_be_filtered(path)) {
-            //     return;
-            // }
-
-            // index_manager_.add_index(std::move(path));
         }
     }
 }
@@ -136,25 +131,12 @@ std::string base_event_handler::get_index_directory() const {
     return index_manager_.index_directory();
 }
 
-void base_event_handler::set_index_change_filter(
-    std::function<bool(const std::string&)> filter) {
-    index_change_filter_ = std::move(filter);
-}
-
 void base_event_handler::add_index_delay(std::string path) {
     jobs_push(std::move(path), anything::index_job_type::add);
-    // if (should_be_filtered(path)) {
-    //     return;
-    // }
-    // index_manager_.add_index(std::move(path));
 }
 
 void base_event_handler::remove_index_delay(std::string path) {
     jobs_push(std::move(path), anything::index_job_type::remove);
-    // if (should_be_filtered(path)) {
-    //     return;
-    // }
-    // index_manager_.remove_index(path);
 }
 
 void base_event_handler::update_index_delay(std::string src, std::string dst) {
@@ -163,14 +145,6 @@ void base_event_handler::update_index_delay(std::string src, std::string dst) {
 
 void base_event_handler::scan_index_delay(std::string path) {
     jobs_push(std::move(path), anything::index_job_type::scan);
-}
-
-bool base_event_handler::should_be_filtered(const std::string& path) const {
-    if (index_change_filter_) {
-        return std::invoke(index_change_filter_, path);
-    }
-
-    return false;
 }
 
 void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number) {
@@ -205,9 +179,6 @@ void base_event_handler::eat_job(const anything::index_job& job) {
 
 void base_event_handler::jobs_push(std::string src,
     anything::index_job_type type, std::optional<std::string> dst) {
-    if (should_be_filtered(src) || (dst && should_be_filtered(*dst))) {
-        return;
-    }
 
     std::lock_guard<std::mutex> lock(jobs_mtx_);
     index_dirty_ = true;
@@ -282,10 +253,6 @@ void base_event_handler::timer_worker(int64_t interval) {
 
             try {
                 for (auto&& path : path_batch) {
-                    if (should_be_filtered(path)) {
-                        continue;
-                    }
-
                     // Before insertion, check if the file actually exists locally to avoid re-adding an index for a recently removed path.
                     // - The document_exists check does not need to be real-time; it only needs to reflect the state at program startup to avoid
                     //   efficiency issues caused by thread synchronization. 
