@@ -38,14 +38,14 @@ void setup_kernel_module_alive_check(QTimer &timer) {
     // 创建 qtimer 定时检查 /sys/kernel/vfs_monitor 的 inode 是否发生变化
     std::string path = "/sys/kernel/vfs_monitor";
     struct stat st_begin;
-    if (stat(path.c_str(), &st_begin) != 0) {
+    if (lstat(path.c_str(), &st_begin) != 0) {
         spdlog::error("Check {} failed: {}", path, strerror(errno));
         exit(1);
     }
 
     QObject::connect(&timer, &QTimer::timeout, [path, st_begin]() {
         struct stat st_current;
-        if (stat(path.c_str(), &st_current) != 0) {
+        if (lstat(path.c_str(), &st_current) != 0) {
             spdlog::error("Check {} failed: {}", path, strerror(errno));
             qApp->quit();
         }
