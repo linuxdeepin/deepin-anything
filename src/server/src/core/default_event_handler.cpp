@@ -263,9 +263,7 @@ void default_event_handler::handle(fs_event event) {
                 convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
             }
             size_t event_src_len = event.src.length();
-            QString oldPath = QString::fromStdString(event.src);
-            for (auto const& result : traverse_directory(oldPath)) {
-                std::string src = result.toStdString();
+            for (auto const& src : traverse_directory(event.src)) {
                 if (isDstBlocked) {
                     remove_index_delay(std::move(src));
                 } else {

@@ -27,9 +27,7 @@ bool can_user_login() {
     // 检查登录 Shell
     if (g_strcmp0(pwd.pw_shell, "/sbin/nologin") == 0 ||
         g_strcmp0(pwd.pw_shell, "/bin/false") == 0) {
-        QString uidStr;
-        uidStr.setNum(uid);
-        spdlog::warn("User can not login: {}", uidStr.toStdString());
+        spdlog::warn("User can not login: {}", uid);
         return false;
     }
 

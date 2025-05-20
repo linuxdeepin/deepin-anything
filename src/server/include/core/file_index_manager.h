@@ -9,8 +9,6 @@
 #include <atomic>
 #include <mutex>
 
-#include <QString>
-#include <QStringList>
 #include <lucene++/LuceneHeaders.h>
 
 #include "common/anything_fwd.hpp"
@@ -65,7 +63,7 @@ public:
     /// Return the cache directory of the index.
     std::string index_directory() const;
 
-    QStringList traverse_directory(const QString& path, bool nrt);
+    std::vector<std::string> traverse_directory(const std::string& path, bool nrt);
 
     /**
      * Check if the given file path is already indexed using an exact match search.
