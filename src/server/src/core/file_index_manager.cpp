@@ -6,6 +6,7 @@
 #include "core/file_index_manager.h"
 #include "analyzers/AnythingAnalyzer.h"
 #include "core/config.h"
+#include "utils/string_helper.h"
 
 #include <chrono>
 #include <filesystem>
@@ -69,8 +70,9 @@ file_record make_file_record(const std::filesystem::path& p,
     ret.is_hidden = ret.full_path.find("/.") != std::string::npos;
 
     struct stat statbuf;
-    if (stat(ret.full_path.c_str(), &statbuf) != 0) {
-        spdlog::warn("stat fail: {}", ret.full_path);
+    if (lstat(ret.full_path.c_str(), &statbuf) != 0) {
+        auto err = errno;
+        spdlog::warn("stat fail: {} {}", ret.full_path, strerror(err));
         return ret;
     } else {
         ret.modify_time = statbuf.st_mtim.tv_sec;
@@ -307,7 +309,12 @@ std::vector<std::string> file_index_manager::traverse_directory(const std::strin
         return {};
     }
 
-    String query_terms = StringUtils::toUnicode(path);
+    std::string path_with_slash = path;
+    if (!string_helper::ends_with(path_with_slash, "/")) {
+        path_with_slash += "/";
+    }
+
+    String query_terms = StringUtils::toUnicode(path_with_slash);
 
     try {
         SearcherPtr searcher;
