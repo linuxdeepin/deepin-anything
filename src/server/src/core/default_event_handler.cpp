@@ -114,18 +114,6 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
 
     // Initialize mount cache
     refresh_mount_status();
-
-    // index_directory 必须设置为完整路径
-    set_index_change_filter([this](const std::string& path) {
-        auto index_directory = get_index_directory();
-        auto names = string_helper::split(path, "/");
-        using string_helper::starts_with;
-        return starts_with(path, index_directory) ||
-               (starts_with(index_directory, "/") && starts_with(path, "/data" + index_directory)) /*||
-               std::any_of(names.begin(), names.end(), [](const std::string& name) { return starts_with(name, "."); })*/;
-    });
-
-    spdlog::debug("cache directory: {}", get_index_directory());
 }
 
 bool default_event_handler::is_under_indexing_path(const std::string& path, indexing_item *&indexing_item) {
