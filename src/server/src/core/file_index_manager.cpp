@@ -239,7 +239,19 @@ void file_index_manager::update_index(const std::string& old_path, const std::st
     }
 }
 
-void file_index_manager::commit(index_status status) {
+bool check_index_corrupted(const std::string& index_directory) {
+    try {
+        FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory));
+        Lucene::IndexReaderPtr reader = IndexReader::open(dir, true);
+        reader->close();
+        return false;
+    } catch (const LuceneException& e) {
+        spdlog::error("The index is corrupted: {}, {}", index_directory, StringUtils::toUTF8(e.getError()));
+        return true;
+    }
+}
+
+bool file_index_manager::commit(index_status status) {
     try {
         save_index_status(status);
         set_index_version();
@@ -247,7 +259,10 @@ void file_index_manager::commit(index_status status) {
         spdlog::debug("All changes are commited with version: {}", StringUtils::toUTF8(INDEX_VERSION));
     } catch (const LuceneException& e) {
         spdlog::error("Failed to commit index: {}", StringUtils::toUTF8(e.getError()));
+        return false;
     }
+
+    return !check_index_corrupted(volatile_index_directory_);
 }
 
 void file_index_manager::persist_index() {

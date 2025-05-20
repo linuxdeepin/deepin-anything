@@ -44,7 +44,7 @@ public:
     void update_index(const std::string& old_path, const std::string& new_path);
 
     /// Commit all changes to the index
-    void commit(index_status status);
+    bool commit(index_status status);
 
     /// @brief Persist the index to the persistent index directory
     void persist_index();
