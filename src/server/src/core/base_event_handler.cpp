@@ -214,7 +214,10 @@ void base_event_handler::timer_worker(int64_t interval) {
             if (index_dirty_ && commit_volatile_index_timeout_ > 0)
                 --commit_volatile_index_timeout_;
             if (commit_volatile_index_timeout_ == 0 && jobs_.empty()) {
-                index_manager_.commit(index_status_);
+                if (!index_manager_.commit(index_status_)) {
+                    spdlog::info("Failed to commit index, quit");
+                    qApp->quit();
+                }
                 commit_volatile_index_timeout_ = 10;
                 index_dirty_ = false;
                 volatile_index_dirty_ = true;
@@ -278,7 +281,10 @@ void base_event_handler::timer_worker(int64_t interval) {
             spdlog::info("Index scan completed, trigger index commit");
 
             index_status_ = anything::index_status::monitoring;
-            index_manager_.commit(index_status_);
+            if (!index_manager_.commit(index_status_)) {
+                spdlog::info("Failed to commit index, quit");
+                qApp->quit();
+            }
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(interval));
