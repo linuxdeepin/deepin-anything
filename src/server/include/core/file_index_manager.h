@@ -51,16 +51,16 @@ public:
     /// @brief Persist the index to the persistent index directory
     void persist_index();
 
-    bool indexed() const;
+    // bool indexed() const;
 
-    void test(const Lucene::String& path);
-    void pinyin_test(const std::string& path);
+    // void test(const Lucene::String& path);
+    // void pinyin_test(const std::string& path);
 
-    /// @brief Return the size of the indexed documents.
-    /// @param nrt If true, returns the near real-time size, reflecting the most recent changes; 
-    ///            otherwise, returns the persisted size from the last commit.
-    /// @return The total number of indexed documents.
-    int32_t document_size(bool nrt = false) const;
+    // /// @brief Return the size of the indexed documents.
+    // /// @param nrt If true, returns the near real-time size, reflecting the most recent changes; 
+    // ///            otherwise, returns the persisted size from the last commit.
+    // /// @return The total number of indexed documents.
+    // int32_t document_size(bool nrt = false) const;
 
     /// Return the cache directory of the index.
     std::string index_directory() const;

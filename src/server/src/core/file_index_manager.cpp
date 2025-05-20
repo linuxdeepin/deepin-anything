@@ -178,22 +178,27 @@ file_index_manager::file_index_manager(const std::string& persistent_index_dir,
         searcher_ = newLucene<IndexSearcher>(reader_);
         nrt_searcher_ = newLucene<IndexSearcher>(nrt_reader_);
     } catch (const LuceneException& e) {
-        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()) +
-            ". Make sure you are running the program as root.");
+        std::string error_msg = "Failed to initialize file_index_manager: " + StringUtils::toUTF8(e.getError());
+        spdlog::critical(error_msg);
+        throw std::runtime_error(error_msg);
     }
 }
 
 file_index_manager::~file_index_manager() {
-    if (writer_) {
-        commit(index_status::closed);
-        writer_->close();
-        persist_index();
-    }
+    try {
+        if (writer_) {
+            commit(index_status::closed);
+            writer_->close();
+            persist_index();
+        }
 
-    if (searcher_) searcher_->close();
-    if (nrt_searcher_) nrt_searcher_->close();
-    if (reader_) reader_->close();
-    if (nrt_reader_) nrt_reader_->close();
+        if (searcher_) searcher_->close();
+        if (nrt_searcher_) nrt_searcher_->close();
+        if (reader_) reader_->close();
+        if (nrt_reader_) nrt_reader_->close();
+    } catch (const LuceneException& e) {
+        spdlog::error("Failed to close file_index_manager: {}", StringUtils::toUTF8(e.getError()));
+    }
 }
 
 void file_index_manager::add_index(const std::string& path) {
@@ -204,7 +209,7 @@ void file_index_manager::add_index(const std::string& path) {
     } catch (const LuceneException& e) {
         spdlog::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
     } catch (const std::exception& e) {
-        spdlog::error(e.what());
+        spdlog::error("Failed to index {}: {}", path, e.what());
     }
 }
 
@@ -214,7 +219,9 @@ void file_index_manager::remove_index(const std::string& path) {
         writer_->deleteDocuments(pterm);
         spdlog::debug("Removed index: {}", path);
     } catch (const LuceneException& e) {
-        throw std::runtime_error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        spdlog::error("Failed to remove index {}: {}", path, StringUtils::toUTF8(e.getError()));
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to remove index {}: {}", path, e.what());
     }
 }
 
@@ -223,8 +230,10 @@ void file_index_manager::update_index(const std::string& old_path, const std::st
         auto doc = create_document(make_file_record(new_path, pinyin_processor_, file_type_mapping_));
         writer_->updateDocument(newLucene<Term>(FULL_PATH_FIELD, StringUtils::toUnicode(old_path)), doc);
         spdlog::debug("Renamed: {} --> {}", old_path, new_path);
+    } catch (const LuceneException& e) {
+        spdlog::error("Failed to rename index {} to {}: {}", old_path, new_path, StringUtils::toUTF8(e.getError()));
     } catch (const std::exception& e) {
-        spdlog::error(e.what());
+        spdlog::error("Failed to rename index {} to {}: {}", old_path, new_path, e.what());
     }
 }
 
@@ -235,7 +244,7 @@ void file_index_manager::commit(index_status status) {
         writer_->commit();
         spdlog::debug("All changes are commited with version: {}", StringUtils::toUTF8(INDEX_VERSION));
     } catch (const LuceneException& e) {
-        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        spdlog::error("Failed to commit index: {}", StringUtils::toUTF8(e.getError()));
     }
 }
 
@@ -260,34 +269,34 @@ void file_index_manager::persist_index() {
     spdlog::debug("Persist index to {}", persistent_index_directory_);
 }
 
-bool file_index_manager::indexed() const {
-    return document_size() > 0;
-}
+// bool file_index_manager::indexed() const {
+//     return document_size() > 0;
+// }
 
-void file_index_manager::test(const String& path) {
-    spdlog::info("test path: {}", StringUtils::toUTF8(path));
-    // AnalyzerPtr analyzer = newLucene<StandardAnalyzer>(LuceneVersion::LUCENE_CURRENT);
-    AnalyzerPtr analyzer = newLucene<AnythingAnalyzer>();
+// void file_index_manager::test(const String& path) {
+//     spdlog::info("test path: {}", StringUtils::toUTF8(path));
+//     // AnalyzerPtr analyzer = newLucene<StandardAnalyzer>(LuceneVersion::LUCENE_CURRENT);
+//     AnalyzerPtr analyzer = newLucene<AnythingAnalyzer>();
     
-    // Use a StringReader to simulate input
-    TokenStreamPtr tokenStream = analyzer->tokenStream(L"", newLucene<StringReader>(path));
-    // TokenPtr token = newLucene<Token>();
+//     // Use a StringReader to simulate input
+//     TokenStreamPtr tokenStream = analyzer->tokenStream(L"", newLucene<StringReader>(path));
+//     // TokenPtr token = newLucene<Token>();
     
-    // Tokenize and print out the results
-    while (tokenStream->incrementToken()) {
-        spdlog::info("Token: {}", StringUtils::toUTF8(tokenStream->toString()));
-    }
-}
+//     // Tokenize and print out the results
+//     while (tokenStream->incrementToken()) {
+//         spdlog::info("Token: {}", StringUtils::toUTF8(tokenStream->toString()));
+//     }
+// }
 
-void file_index_manager::pinyin_test(const std::string& path) {
-    spdlog::info("pinyin test path: {}", path);
-    auto pinyin_path = pinyin_processor_.convert_to_pinyin(path);
-    test(StringUtils::toUnicode(pinyin_path));
-}
+// void file_index_manager::pinyin_test(const std::string& path) {
+//     spdlog::info("pinyin test path: {}", path);
+//     auto pinyin_path = pinyin_processor_.convert_to_pinyin(path);
+//     test(StringUtils::toUnicode(pinyin_path));
+// }
 
-int32_t file_index_manager::document_size(bool nrt) const {
-    return nrt ? nrt_reader_->numDocs() : reader_->numDocs();
-}
+// int32_t file_index_manager::document_size(bool nrt) const {
+//     return nrt ? nrt_reader_->numDocs() : reader_->numDocs();
+// }
 
 std::string file_index_manager::index_directory() const {
     return persistent_index_directory_;
@@ -325,7 +334,7 @@ QStringList file_index_manager::traverse_directory(const QString& path, bool nrt
 
         return results;
     } catch (const LuceneException& e) {
-        spdlog::error("Lucene exception: " + StringUtils::toUTF8(e.getError()));
+        spdlog::error("Failed to traverse directory {}: {}", path.toStdString(), StringUtils::toUTF8(e.getError()));
         return {};
     }
 }
@@ -344,32 +353,38 @@ bool file_index_manager::document_exists(const std::string &path, bool only_chec
 
 bool file_index_manager::refresh_indexes(const std::vector<std::string>& blacklist_paths) {
     bool index_changed = false;
-    std::error_code ec;
-    spdlog::info("Refreshing file indexes...");
-    try_refresh_reader();
-    auto query = newLucene<Lucene::MatchAllDocsQuery>();
-    auto num_docs = reader_->numDocs();
-    if (num_docs > 0) {
-        auto search_results = searcher_->search(query, num_docs);
-        std::vector<std::string> remove_list;
-        for (const auto& score_doc : search_results->scoreDocs) {
-            DocumentPtr doc = searcher_->doc(score_doc->doc);
-            std::filesystem::path full_path(doc->get(FULL_PATH_FIELD));
-            if (full_path.empty()) {
-                // doc is metadata, not a file
-                continue;
+    try {
+        std::error_code ec;
+        spdlog::info("Refreshing file indexes...");
+        try_refresh_reader();
+        auto query = newLucene<Lucene::MatchAllDocsQuery>();
+        auto num_docs = reader_->numDocs();
+        if (num_docs > 0) {
+            auto search_results = searcher_->search(query, num_docs);
+            std::vector<std::string> remove_list;
+            for (const auto& score_doc : search_results->scoreDocs) {
+                DocumentPtr doc = searcher_->doc(score_doc->doc);
+                std::filesystem::path full_path(doc->get(FULL_PATH_FIELD));
+                if (full_path.empty()) {
+                    // doc is metadata, not a file
+                    continue;
+                }
+                if (!std::filesystem::exists(full_path, ec) ||
+                    is_path_in_blacklist(full_path.string(), blacklist_paths)) {
+                    remove_list.push_back(full_path.string());
+                }
             }
-            if (!std::filesystem::exists(full_path, ec) ||
-                is_path_in_blacklist(full_path.string(), blacklist_paths)) {
-                remove_list.push_back(full_path.string());
-            }
-        }
 
-        for (const auto& path : remove_list) {
-            // Remove non-existent path from the indexes
-            remove_index(path);
-            index_changed = true;
+            for (const auto& path : remove_list) {
+                // Remove non-existent path from the indexes
+                remove_index(path);
+                index_changed = true;
+            }
         }
+    } catch (const LuceneException& e) {
+        spdlog::error("Failed to refresh indexes: {}", StringUtils::toUTF8(e.getError()));
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to refresh indexes: {}", e.what());
     }
 
     return index_changed;
@@ -377,11 +392,17 @@ bool file_index_manager::refresh_indexes(const std::vector<std::string>& blackli
 
 void file_index_manager::set_index_invalid()
 {
-    set_index_version();
+    try {
+        set_index_version();
 
-    DocumentPtr doc = newLucene<Document>();
-    doc->add(newLucene<Field>(INDEX_VERSION_FIELD, INVALID_INDEX_VERSION, Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-    writer_->updateDocument(newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION), doc);
+        DocumentPtr doc = newLucene<Document>();
+        doc->add(newLucene<Field>(INDEX_VERSION_FIELD, INVALID_INDEX_VERSION, Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+        writer_->updateDocument(newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION), doc);
+    } catch (const LuceneException& e) {
+        spdlog::error("Failed to set index invalid: {}", StringUtils::toUTF8(e.getError()));
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to set index invalid: {}", e.what());
+    }
 }
 
 void file_index_manager::try_refresh_reader(bool nrt) {
@@ -459,12 +480,19 @@ void file_index_manager::check_index_version() {
     }
 
     // 查找数据库版本
-    TermPtr term = newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION);
-    QueryPtr query = newLucene<TermQuery>(term);
-    Lucene::SearcherPtr searcher = newLucene<IndexSearcher>(reader);
-    Lucene::TopDocsPtr top_docs = searcher->search(query, 1);
-    bool found = top_docs->scoreDocs.size() == 1;
-    reader->close();
+    bool found = false;
+    try {
+        TermPtr term = newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION);
+        QueryPtr query = newLucene<TermQuery>(term);
+        Lucene::SearcherPtr searcher = newLucene<IndexSearcher>(reader);
+        Lucene::TopDocsPtr top_docs = searcher->search(query, 1);
+        found = top_docs->scoreDocs.size() == 1;
+        reader->close();
+    } catch (const LuceneException& e) {
+        spdlog::error("Failed to check index version: {}", StringUtils::toUTF8(e.getError()));
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to check index version: {}", e.what());
+    }
     if (found) {
         spdlog::info("The index version is expected({}): {}", StringUtils::toUTF8(INDEX_VERSION), volatile_index_directory_);
     } else {
@@ -478,9 +506,15 @@ void file_index_manager::set_index_version() {
     static std::once_flag flag;
     std::call_once(flag, [this]() {
         // 保存版本号到数据库
-        DocumentPtr doc = newLucene<Document>();
-        doc->add(newLucene<Field>(INDEX_VERSION_FIELD, INDEX_VERSION, Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-        writer_->updateDocument(newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION), doc);
+        try {
+            DocumentPtr doc = newLucene<Document>();
+            doc->add(newLucene<Field>(INDEX_VERSION_FIELD, INDEX_VERSION, Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+            writer_->updateDocument(newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION), doc);
+        } catch (const LuceneException& e) {
+            spdlog::error("Failed to set index version: {}", StringUtils::toUTF8(e.getError()));
+        } catch (const std::exception& e) {
+            spdlog::error("Failed to set index version: {}", e.what());
+        }
     });
 }
 
@@ -526,9 +560,13 @@ void file_index_manager::save_index_status(index_status status) {
         return;
     }
 
-    std::ofstream status_file(volatile_index_directory_ + "/status.json");
-    status_file << status_json;
-    status_file.close();
+    try {
+        std::ofstream status_file(volatile_index_directory_ + "/status.json");
+        status_file << status_json;
+        status_file.close();
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to save index status: {}", e.what());
+    }
 }
 
 ANYTHING_NAMESPACE_END
