@@ -280,23 +280,27 @@ void base_event_handler::timer_worker(int64_t interval) {
                 spdlog::debug("path batch size: {}", path_batch.size());
             }
 
-            for (auto&& path : path_batch) {
-                if (should_be_filtered(path)) {
-                    continue;
-                }
+            try {
+                for (auto&& path : path_batch) {
+                    if (should_be_filtered(path)) {
+                        continue;
+                    }
 
-                // Before insertion, check if the file actually exists locally to avoid re-adding an index for a recently removed path.
-                // - The document_exists check does not need to be real-time; it only needs to reflect the state at program startup to avoid
-                //   efficiency issues caused by thread synchronization. 
-                // - Since existing files without an index will not trigger new insertion events, only the initial state comparison is necessary.
-                // - Index integrity is considered only for insertion here; deletions are not checked individually, as that would be inefficient.
-                //   Instead, existence checks for indexed paths are handled at query time.
-                if (!index_manager_.document_exists(path, true)) {
-                    std::error_code ec;
-                    if (std::filesystem::exists(path, ec)) {
-                        add_index_delay(std::move(path));
+                    // Before insertion, check if the file actually exists locally to avoid re-adding an index for a recently removed path.
+                    // - The document_exists check does not need to be real-time; it only needs to reflect the state at program startup to avoid
+                    //   efficiency issues caused by thread synchronization. 
+                    // - Since existing files without an index will not trigger new insertion events, only the initial state comparison is necessary.
+                    // - Index integrity is considered only for insertion here; deletions are not checked individually, as that would be inefficient.
+                    //   Instead, existence checks for indexed paths are handled at query time.
+                    if (!index_manager_.document_exists(path, true)) {
+                        std::error_code ec;
+                        if (std::filesystem::exists(path, ec)) {
+                            add_index_delay(std::move(path));
+                        }
                     }
                 }
+            } catch (const std::exception& e) {
+                spdlog::error("Failed to add index in timer worker: {}", e.what());
             }
         }
 
