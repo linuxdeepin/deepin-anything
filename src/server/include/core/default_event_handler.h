@@ -19,11 +19,17 @@ struct indexing_item {
     bool different_path;
 };
 
+struct fs_event_with_full_path {
+    uint8_t     act;
+    std::string src;
+    std::string dst;
+};
+
 class default_event_handler : public base_event_handler {
 public:
     explicit default_event_handler(std::shared_ptr<event_handler_config> config);
     
-    void handle(fs_event event) override;
+    void handle(fs_event *event) override;
 
     bool is_under_indexing_path(const std::string& path, indexing_item *&indexing_item);
 
@@ -31,11 +37,22 @@ public:
 
     bool is_event_path_blocked(const std::string& path, indexing_item *&indexing_item);
 
+    void filter_event(fs_event *event);
+
+    bool convert_fs_event(fs_event *event, fs_event_with_full_path *event_with_full_path);
+
+    void terminate_filter();
+
+    static void* event_filter_thread_func(void* data);
+
 private:
     std::unordered_map<uint32_t, std::string> rename_from_;
     std::shared_ptr<event_handler_config> config_;
     std::vector<indexing_item> indexing_items_;
     std::vector<std::string> event_path_blocked_list_;
+
+    GAsyncQueue* event_queue_;
+    GThread* event_filter_thread_;
 };
 
 ANYTHING_NAMESPACE_END

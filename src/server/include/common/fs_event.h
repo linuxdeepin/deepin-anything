@@ -12,13 +12,15 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
+#define MAX_PATH_LEN 4096
+
 struct fs_event {
     uint8_t     act;
     uint32_t    cookie;
     uint16_t    major;
     uint8_t     minor;
-    std::string src;
-    std::string dst;
+    char        src[MAX_PATH_LEN];
+    char        dst[MAX_PATH_LEN];
 };
 
 ANYTHING_NAMESPACE_END

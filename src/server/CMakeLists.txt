@@ -22,6 +22,7 @@ pkg_check_modules(LUCENE REQUIRED liblucene++)
 pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GIO REQUIRED gio-2.0)
+pkg_check_modules(GMODULE REQUIRED gmodule-2.0)
 
 # Found all source files
 file(GLOB_RECURSE SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp" "${PROJECT_SOURCE_DIR}/src/*.c")
@@ -47,6 +48,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${MOUNT_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
     ${GIO_INCLUDE_DIRS}
+    ${GMODULE_INCLUDE_DIRS}
     ${Qt${QT_VERSION_MAJOR}Core_INCLUDE_DIRS}
 )
 
@@ -61,6 +63,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     spdlog::spdlog
     ${GLIB_LIBRARIES}
     ${GIO_LIBRARIES}
+    ${GMODULE_LIBRARIES}
     Qt${QT_VERSION_MAJOR}::Core
 )
 
