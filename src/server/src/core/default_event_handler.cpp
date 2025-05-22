@@ -112,7 +112,9 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
     for (auto& item : indexing_items_) {
         indexing_paths.emplace_back(item.origin_path);
         // remove the last "/"
-        indexing_paths.back().pop_back();
+        if (indexing_paths.back() != "/") {
+            indexing_paths.back().pop_back();
+        }
     }
     set_index_dirs(indexing_paths);
 
