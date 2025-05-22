@@ -7,6 +7,7 @@
 
 #include <cstdlib> // std::getenv
 #include <glib.h>
+#include <gmodule.h>
 
 #include "utils/log.h"
 #include "utils/string_helper.h"
@@ -63,6 +64,9 @@ std::string get_event_path(const std::string& origin_path, const std::vector<ind
 // /data 和非 data 需要保持一致，最好有一种方式能够获取当前的状态
 default_event_handler::default_event_handler(std::shared_ptr<event_handler_config> config)
     : base_event_handler(config), config_(config) {
+    event_queue_ = g_async_queue_new();
+    event_filter_thread_ = g_thread_new("event_filter", event_filter_thread_func, this);
+
     // init indexing_items_
     spdlog::info("processing indexing_paths...");
     for (auto& origin_path : config_->indexing_paths) {
@@ -137,23 +141,27 @@ bool default_event_handler::is_event_path_blocked(const std::string& path, index
     return !is_under_indexing_path(path, indexing_item) || is_path_in_blacklist(path, event_path_blocked_list_);
 }
 
-void default_event_handler::handle(fs_event event) {
-    [[maybe_unused]] const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
+void default_event_handler::handle(fs_event *event) {
+    g_async_queue_push(event_queue_, event);
+}
 
+// 将 fs_event 转换为 fs_event_with_full_path
+// return true 表示处理完成，false 表示需要继续处理
+bool default_event_handler::convert_fs_event(fs_event *event, fs_event_with_full_path *event_with_full_path) {
     // Update partition event
-    if (event.act == ACT_MOUNT || event.act == ACT_UNMOUNT) {
-        spdlog::info("{}: {}", (event.act == ACT_MOUNT ? "Mount a device" : "Unmount a device"), event.src);
+    if (event->act == ACT_MOUNT || event->act == ACT_UNMOUNT) {
+        spdlog::info("{}: {}", (event->act == ACT_MOUNT ? "Mount a device" : "Unmount a device"), event->src);
         refresh_mount_status();
-        return;
+        return true;
     }
 
     std::string root;
-    if (event.act < ACT_MOUNT) {
-        unsigned int device_id = MKDEV(event.major, event.minor);
+    if (event->act < ACT_MOUNT) {
+        unsigned int device_id = MKDEV(event->major, event->minor);
         if (!device_available(device_id)) {
             spdlog::warn("Unknown device: {}, dev: {}:{}, path: {}, cookie: {}",
-                +event.act, event.major, +event.minor, event.src, event.cookie);
-            return;
+                +event->act, event->major, +event->minor, event->src, event->cookie);
+            return true;
         }
 
         root = fetch_mount_point_for_device(device_id);
@@ -161,45 +169,60 @@ void default_event_handler::handle(fs_event event) {
             root.clear();
     }
 
-    switch (event.act) {
+    switch (event->act) {
     case ACT_NEW_FILE:
     case ACT_NEW_SYMLINK:
     case ACT_NEW_LINK:
     case ACT_NEW_FOLDER:
     case ACT_DEL_FILE:
     case ACT_DEL_FOLDER:
-        // Keeps the dst empty.
+        {
+            event_with_full_path->act = event->act;
+            event_with_full_path->src = event->src;
+            event_with_full_path->dst = "";
+        }
         break;
     case ACT_RENAME_FROM_FILE:
     case ACT_RENAME_FROM_FOLDER:
-        rename_from_.emplace(event.cookie, event.src);
-        return;
+        rename_from_.emplace(event->cookie, event->src);
+        return true;
     case ACT_RENAME_TO_FILE:
     case ACT_RENAME_TO_FOLDER:
-        if (auto search = rename_from_.find(event.cookie);
+        if (auto search = rename_from_.find(event->cookie);
             search != rename_from_.end()) {
-            event.act = event.act == ACT_RENAME_TO_FILE ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
-            event.dst = event.src;
-            event.src = rename_from_[event.cookie];
+            event_with_full_path->act = event->act == ACT_RENAME_TO_FILE ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
+            event_with_full_path->dst = event->src;
+            event_with_full_path->src = rename_from_[event->cookie];
         }
         break;
     case ACT_RENAME_FILE:
     case ACT_RENAME_FOLDER:
-        spdlog::warn("Don't support file action: {}", +event.act);
-        return;
+        spdlog::warn("Don't support file action: {}", +event->act);
+        return true;
     default:
-        spdlog::warn("Unknown file action: {}", +event.act);
-        return;
+        spdlog::warn("Unknown file action: {}", +event->act);
+        return true;
     }
 
     if (!root.empty()) {
-        event.src = root + event.src;
-        if (!event.dst.empty())
-            event.dst = root + event.dst;
+        event_with_full_path->src = root + event_with_full_path->src;
+        if (!event_with_full_path->dst.empty())
+            event_with_full_path->dst = root + event_with_full_path->dst;
     }
 
-    if (event.act == ACT_RENAME_FILE || event.act == ACT_RENAME_FOLDER) {
-        rename_from_.erase(event.cookie);
+    if (event->act == ACT_RENAME_FILE || event->act == ACT_RENAME_FOLDER) {
+        rename_from_.erase(event->cookie);
+    }
+
+    return false;
+}
+
+void default_event_handler::filter_event(fs_event *fs_event) {
+    [[maybe_unused]] const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
+
+    fs_event_with_full_path event;
+    if (convert_fs_event(fs_event, &event)) {
+        return;
     }
 
     spdlog::debug("Received event: {} {} {}", act_names[event.act], event.src, event.dst);
@@ -274,6 +297,27 @@ void default_event_handler::handle(fs_event event) {
             }
         }
     }
+}
+
+void default_event_handler::terminate_filter() {
+    g_async_queue_push(event_queue_, nullptr);
+    g_thread_join(event_filter_thread_);
+    spdlog::info("Event filter thread terminated");
+    g_async_queue_unref(event_queue_);
+}
+
+void* default_event_handler::event_filter_thread_func(void* data) {
+    auto handler = static_cast<default_event_handler*>(data);
+    while (true) {
+        fs_event* event = (fs_event*)g_async_queue_pop(handler->event_queue_);
+        if (event == nullptr) {
+            break;
+        }
+        handler->filter_event(event);
+        g_slice_free(fs_event, event);
+    }
+
+    return NULL;
 }
 
 ANYTHING_NAMESPACE_END

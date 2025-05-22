@@ -24,6 +24,8 @@
 #include "utils/log.h"
 #include "vfs_change_consts.h"
 
+#include <gmodule.h>
+
 ANYTHING_NAMESPACE_BEGIN
 
 constexpr int epoll_size = 10;
@@ -151,7 +153,7 @@ void event_listenser::stop_listening() {
     }
 }
 
-void event_listenser::set_handler(std::function<void(fs_event)> handler) {
+void event_listenser::set_handler(std::function<void(fs_event*)> handler) {
     handler_ = std::move(handler);
 }
 
@@ -172,10 +174,28 @@ int event_listenser::get_fd(nl_sock_ptr& sk) const {
     return nl_socket_get_fd(sk);
 }
 
-void event_listenser::forward_event_to_handler(fs_event event) const {
+void event_listenser::forward_event_to_handler(fs_event *event) const {
     if (handler_) {
-        std::invoke(handler_, std::move(event));
+        std::invoke(handler_, event);
     }
+}
+
+fs_event* make_fs_event(uint8_t act,
+                        uint32_t cookie,
+                        uint16_t major,
+                        uint8_t minor,
+                        const char* src,
+                        const char* dst) {
+    fs_event* event = g_slice_new(fs_event);
+    event->act = act;
+    event->cookie = cookie;
+    event->major = major;
+    event->minor = minor;
+    strncpy(event->src, src, MAX_PATH_LEN);
+    event->src[MAX_PATH_LEN - 1] = '\0';
+    strncpy(event->dst, dst, MAX_PATH_LEN);
+    event->dst[MAX_PATH_LEN - 1] = '\0';
+    return event;
 }
 
 int event_listenser::event_handler(nl_msg_ptr msg, void* arg) {
@@ -202,9 +222,9 @@ int event_listenser::event_handler(nl_msg_ptr msg, void* arg) {
         return NL_SKIP;
     }
 
-    fs_event event{*act, *cookie, *major, *minor, std::string(*src), ""};
+    fs_event* event = make_fs_event(*act, *cookie, *major, *minor, *src, "");
     auto listenser = static_cast<event_listenser*>(arg);
-    listenser->forward_event_to_handler(std::move(event));
+    listenser->forward_event_to_handler(event);
     return NL_OK;
 }
 

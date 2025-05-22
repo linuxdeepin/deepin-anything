@@ -38,7 +38,7 @@ public:
     base_event_handler(std::shared_ptr<event_handler_config> config);
     virtual ~base_event_handler();
 
-    virtual void handle(anything::fs_event event) = 0;
+    virtual void handle(anything::fs_event *event) = 0;
 
     void terminate_processing();
 

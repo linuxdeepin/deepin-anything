@@ -33,7 +33,7 @@ public:
 
     void stop_listening();
 
-    void set_handler(std::function<void(fs_event)> handler);
+    void set_handler(std::function<void(fs_event*)> handler);
 
 private:
     bool connect(nl_sock_ptr& sk) const;
@@ -41,7 +41,7 @@ private:
     bool set_callback(nl_sock_ptr& sk, nl_recvmsg_msg_cb_t func);
     int get_fd(nl_sock_ptr& sk) const;
 
-    void forward_event_to_handler(fs_event event) const;
+    void forward_event_to_handler(fs_event *event) const;
 
     static int event_handler(nl_msg_ptr msg, void* arg);
 
@@ -50,7 +50,7 @@ private:
     bool connected_;
     int stop_fd_;
     int timeout_;
-    std::function<void(fs_event)> handler_;
+    std::function<void(fs_event*)> handler_;
     std::thread listening_thread_;
 };
 

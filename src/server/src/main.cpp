@@ -75,8 +75,8 @@ int main(int argc, char* argv[]) {
 
     event_listenser listenser;
     default_event_handler handler(config.make_event_handler_config());
-    listenser.set_handler([&handler](fs_event event) {
-        handler.handle(std::move(event));
+    listenser.set_handler([&handler](fs_event *event) {
+        handler.handle(event);
     });
     config.set_config_change_handler([&handler, &config](std::string key) {
         spdlog::info("Config changed: {}", key);
@@ -103,6 +103,7 @@ int main(int argc, char* argv[]) {
 
     spdlog::info("Performing cleanup tasks...");
     listenser.stop_listening();
+    handler.terminate_filter();
     handler.terminate_processing();
 
     spdlog::info("Anything daemon stopped.");
