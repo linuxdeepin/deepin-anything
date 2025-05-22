@@ -147,7 +147,8 @@ void event_listenser::start_listening() {
                 int ret = nl_recvmsgs_default(mcsk_);
                 if (ret < 0) {
                     spdlog::error("Failed to receive netlink messages: {}", ret);
-                    // not exit, continue listening
+                    spdlog::info("Found events lost, quit");
+                    qApp->quit();
                 }
             } else if (ep_events[i].data.fd == stop_fd_) {
                 uint64_t u;
