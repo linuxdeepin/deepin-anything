@@ -1,3 +1,16 @@
+deepin-anything (7.0.16) unstable; urgency=medium
+
+  * fix: Enhance error handling in file index management
+  * refactor: Remove unused index change filter functionality
+  * refactor: Remove QStringList and QString
+  * fix: Fix incorrect index traversal in the specified directory
+  * feat: Check index corrupted in runtime
+  * refactor: Using separate thread for event handling
+  * feat: Set the maximum socket receive buffer size
+  * fix: Improve event listening error handling
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 22 May 2025 11:22:31 +0800
+
 deepin-anything (7.0.15) unstable; urgency=medium
 
   * fix: Improve filesystem existence checks with error handling
