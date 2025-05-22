@@ -300,7 +300,9 @@ void default_event_handler::filter_event(fs_event *fs_event) {
 }
 
 void default_event_handler::terminate_filter() {
-    g_async_queue_push(event_queue_, nullptr);
+    fs_event* event = g_slice_new(fs_event);
+    event->act = ACT_TERMINATE;
+    g_async_queue_push(event_queue_, event);
     g_thread_join(event_filter_thread_);
     spdlog::info("Event filter thread terminated");
     g_async_queue_unref(event_queue_);
@@ -310,7 +312,8 @@ void* default_event_handler::event_filter_thread_func(void* data) {
     auto handler = static_cast<default_event_handler*>(data);
     while (true) {
         fs_event* event = (fs_event*)g_async_queue_pop(handler->event_queue_);
-        if (event == nullptr) {
+        if (event->act == ACT_TERMINATE) {
+            g_slice_free(fs_event, event);
             break;
         }
         handler->filter_event(event);

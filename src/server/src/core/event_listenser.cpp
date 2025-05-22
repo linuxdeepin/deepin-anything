@@ -22,6 +22,7 @@
 
 #include "utils/genl_parser.hpp"
 #include "utils/log.h"
+#include "utils/tools.h"
 #include "vfs_change_consts.h"
 
 #include <gmodule.h>
@@ -30,6 +31,29 @@ ANYTHING_NAMESPACE_BEGIN
 
 constexpr int epoll_size = 10;
 static nla_policy vfs_policy[VFSMONITOR_A_MAX + 1];
+
+bool set_max_socket_receive_buffer_size(nl_sock_ptr& sk) {
+    // Get max socket receive buffer size
+    char *contents = nullptr;
+    if (!g_file_get_contents("/proc/sys/net/core/rmem_max", &contents, NULL, NULL)) {
+        spdlog::error("Failed to open /proc/sys/net/core/rmem_max");
+        return false;
+    }
+    int max_rcvbuf = atoi(contents);
+    g_free(contents);
+
+    int ret = nl_socket_set_buffer_size(sk, max_rcvbuf, 0);
+    if (ret < 0) {
+        spdlog::error("Failed to set max socket receive buffer size: {}", ret);
+        return false;
+    }
+
+    char *formatted_size = format_size(max_rcvbuf);
+    spdlog::info("Set max socket receive buffer size: {}", formatted_size);
+    g_free(formatted_size);
+
+    return true;
+}
 
 event_listenser::event_listenser()
     : connected_{ connect(mcsk_) },
@@ -43,6 +67,8 @@ event_listenser::event_listenser()
         spdlog::error("Error: failed to connect to generic netlink");
         clean_and_exit();
     }
+
+    set_max_socket_receive_buffer_size(mcsk_);
 
     // Disable sequence checks for asynchronous multicast messages
     nl_socket_disable_seq_check(mcsk_);
