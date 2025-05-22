@@ -228,6 +228,7 @@ Config::Config()
         if (replace_home_dir(path)) {
             continue;
         }
+        // not allow relative path
         if (!anything::string_helper::starts_with(path, "/")) {
             path.insert(0, "/");
             continue;
@@ -258,8 +259,8 @@ std::shared_ptr<event_handler_config> Config::make_event_handler_config()
     auto config = std::make_shared<event_handler_config>();
     config->persistent_index_dir = std::string(g_get_user_cache_dir()) + "/deepin-anything-server";
     config->volatile_index_dir = std::string(g_get_user_runtime_dir()) + "/deepin-anything-server";
-    // 4 threads: main thread, event thread, dbus thread, timer thread
-    std::size_t free_threads = std::max(std::thread::hardware_concurrency() - 4, 1U);
+    // 3 primary threads: event receiving thread, event filter thread, timer thread
+    std::size_t free_threads = std::max(std::thread::hardware_concurrency() - 3, 1U);
     config->thread_pool_size = get_thread_pool_size_from_env(free_threads);
     config->blacklist_paths = blacklist_paths_;
     config->indexing_paths = indexing_paths_;
