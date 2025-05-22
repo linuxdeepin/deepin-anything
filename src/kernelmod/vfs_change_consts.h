@@ -21,3 +21,5 @@
 #define ACT_UNMOUNT	            13
 #define ACT_CLOSE_WRITE_FILE	14
 #define ACT_CLOSE_NOWRITE_FILE	15
+
+#define ACT_TERMINATE	        100
