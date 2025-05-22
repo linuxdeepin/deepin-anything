@@ -1,3 +1,9 @@
+deepin-anything (7.0.17) unstable; urgency=medium
+
+  * fix: Fix scan "/" crash
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 22 May 2025 16:24:31 +0800
+
 deepin-anything (7.0.16) unstable; urgency=medium
 
   * fix: Enhance error handling in file index management
