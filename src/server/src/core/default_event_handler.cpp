@@ -288,7 +288,9 @@ void default_event_handler::filter_event(fs_event *fs_event) {
                 convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
             }
             size_t event_src_len = event.src.length();
-            for (auto const& src : traverse_directory(event.src)) {
+            auto src_subitems = traverse_directory(event.src);
+            src_subitems.emplace_back(event.src);
+            for (auto const& src : src_subitems) {
                 if (isDstBlocked) {
                     remove_index_delay(std::move(src));
                 } else {
