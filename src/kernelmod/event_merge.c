@@ -291,8 +291,13 @@ struct timer_list *t
 static inline void check_events(struct vfs_event **events_tosend)
 {
     if (!events_number) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+        timer_delete(&event_timeout_notify);
+        mpr_log("check_events, timer_delete\n");
+#else
         del_timer(&event_timeout_notify);
         mpr_log("check_events, del_timer\n");
+#endif
     } else if (1 == events_number) {
         mod_timer(&event_timeout_notify, jiffies + MERGE_TIMEOUT);
         mpr_log("check_events, mod_timer\n");
