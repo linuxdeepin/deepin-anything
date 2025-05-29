@@ -18,6 +18,8 @@
 
 ANYTHING_NAMESPACE_BEGIN
 
+#define ACT_TERMINATE 100
+
 // 检查 event_path 与 indexing_items_ 中的 event_path 是否冲突
 bool is_event_path_conflict_with_indexing_items(const std::string& event_path,
                                                 const std::vector<indexing_item>& indexing_items) {
