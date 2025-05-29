@@ -1,3 +1,14 @@
+deepin-anything (7.0.19) unstable; urgency=medium
+
+  * feat: Adapt kernel module for LOONGARCH architecture
+  * feat: Optimize recoginizing ARM
+  * feat: add support for s360x, ppc64le and riscv
+  * feat: Not compile kernel module when in-tree ones already exist
+  * feat: Add support for SW64 architecture in argument extraction
+  * fix: Fix kernel Oops on SW64
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 29 May 2025 21:22:31 +0800
+
 deepin-anything (7.0.18) unstable; urgency=medium
 
   * fix: Fix fail to update index for dir rename
