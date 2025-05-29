@@ -217,6 +217,9 @@ static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs
     set_fs(org_fs);
 #endif
 #else
+#if defined(CONFIG_SW64)
+    args->dir_name[0] = '\0';
+#else
     /* int path_umount(struct path *path, int flags) */
     dir_name = d_path((struct path *)get_arg(regs, 1), args->dir_name, sizeof(args->dir_name));
     if (IS_ERR(dir_name)) {
@@ -224,6 +227,7 @@ static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs
         return 1;
     }
     strcpy(args->dir_name, dir_name);
+#endif
 #endif
 
     return 0;
