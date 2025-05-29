@@ -82,12 +82,8 @@ static ssize_t vfs_unnamed_devices_store(struct kobject *kobj,
     return count;
 }
 
-static struct kobj_attribute vfs_unnamed_devices_attribute = {
-        .attr = {.name = __stringify(vfs_unnamed_devices),
-                .mode = S_IRUGO|S_IWUGO },
-        .show	= vfs_unnamed_devices_show,
-        .store	= (void *)vfs_unnamed_devices_store,
-    };
+static struct kobj_attribute vfs_unnamed_devices_attribute =
+    __ATTR(vfs_unnamed_devices, 0660, vfs_unnamed_devices_show, (void *)vfs_unnamed_devices_store);
 
 int vfs_init_sysfs(void)
 {
@@ -111,3 +107,8 @@ void vfs_exit_sysfs(void)
 {
     kobject_put(vfs_monitor);
 }
+
+
+
+
+
