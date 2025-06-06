@@ -6,7 +6,7 @@ includedir=${prefix}/include/@PROJECT_NAME@
 Name: @PROJECT_NAME@
 Description: Deepin anything backend library
 Version: @PROJECT_VERSION@
-Requires: libmount glib-2.0 libpcre3-1 libnl-genl-3
+Requires: mount glib-2.0 libpcre2-8 libnl-genl-3.0
 Libs: -l@PROJECT_NAME@
 Cflags: -I${includedir}
 
