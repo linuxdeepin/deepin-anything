@@ -212,7 +212,8 @@ void base_event_handler::timer_worker(int64_t interval) {
                 --commit_volatile_index_timeout_;
             if (commit_volatile_index_timeout_ == 0 && jobs_.empty()) {
                 if (!index_manager_.commit(index_status_)) {
-                    spdlog::info("Failed to commit index, quit");
+                    spdlog::info("Failed to commit index, restart");
+                    set_app_restart(true);
                     qApp->quit();
                 }
                 commit_volatile_index_timeout_ = config_->commit_volatile_index_timeout;
@@ -279,7 +280,8 @@ void base_event_handler::timer_worker(int64_t interval) {
 
             index_status_ = anything::index_status::monitoring;
             if (!index_manager_.commit(index_status_)) {
-                spdlog::info("Failed to commit index, quit");
+                spdlog::info("Failed to commit index, restart");
+                set_app_restart(true);
                 qApp->quit();
             }
         }
@@ -293,9 +295,10 @@ std::vector<std::string> base_event_handler::traverse_directory(const std::strin
 }
 
 void base_event_handler::notify_config_changed() {
-    spdlog::info("Set index invalid and quit");
+    spdlog::info("Set index invalid and restart");
 
     index_manager_.set_index_invalid();
 
+    set_app_restart(true);
     qApp->quit();
 }

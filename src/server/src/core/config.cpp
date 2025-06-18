@@ -206,13 +206,13 @@ Config::Config()
     dbus_connection_ = g_bus_get_sync(G_BUS_TYPE_SYSTEM, nullptr, nullptr);
     if (!dbus_connection_) {
         spdlog::error("Failed to connect to system bus");
-        exit(1);
+        exit(APP_QUIT_CODE);
     }
 
     resource_path_ = get_dconfig_resource_path((GDBusConnection*)dbus_connection_);
     if(resource_path_.empty()) {
         spdlog::error("Failed to get dconfig resource path");
-        exit(1);
+        exit(APP_QUIT_CODE);
     }
 
     indexing_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path_, "indexing_paths");
@@ -241,7 +241,7 @@ Config::Config()
         pic_file_suffix.empty() ||
         video_file_suffix.empty()) {
         spdlog::error("Failed to get dconfig config");
-        exit(1);
+        exit(APP_QUIT_CODE);
     }
 
     log_level_ = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, LOG_LEVEL_KEY);
@@ -343,4 +343,16 @@ bool is_path_in_blacklist(const std::string& path, const std::vector<std::string
         }
     }
     return false;
+}
+
+static int app_ret_code = 0;
+
+void set_app_restart(bool restart)
+{
+    app_ret_code = restart ? APP_RESTART_CODE : APP_QUIT_CODE;
+}
+
+int get_app_ret_code()
+{
+    return app_ret_code;
 }

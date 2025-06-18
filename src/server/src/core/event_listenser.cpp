@@ -24,6 +24,7 @@
 #include "utils/log.h"
 #include "utils/tools.h"
 #include "vfs_change_consts.h"
+#include "core/config.h"
 
 #include <gmodule.h>
 
@@ -60,7 +61,7 @@ event_listenser::event_listenser()
       timeout_{ -1 } {
     auto clean_and_exit = [this] {
         disconnect(mcsk_);
-        exit(1);
+        exit(APP_QUIT_CODE);
     };
 
     if (!connected_) {
@@ -147,7 +148,8 @@ void event_listenser::start_listening() {
                 int ret = nl_recvmsgs_default(mcsk_);
                 if (ret < 0) {
                     spdlog::error("Failed to receive netlink messages: {}", ret);
-                    spdlog::info("Found events lost, quit");
+                    spdlog::info("Found events lost, restart");
+                    set_app_restart(true);
                     qApp->quit();
                 }
             } else if (ep_events[i].data.fd == stop_fd_) {

@@ -22,6 +22,7 @@
 #include "analyzers/chineseanalyzer.h"
 #include "utils/log.h"
 #include "utils/tools.h"
+#include "core/config.h"
 
 #include <glib.h>
 #include <sys/stat.h>  // For statx and struct statx
@@ -460,7 +461,7 @@ void file_index_manager::prepare_index() {
     if (!std::filesystem::exists(volatile_index_directory_, ec)) {
         if (ec) {
             spdlog::error("Failed to check volatile index directory: {}", ec.message());
-            exit(EXIT_FAILURE);
+            exit(APP_RESTART_CODE);
         }
 
         if (!std::filesystem::exists(persistent_index_directory_, ec)) {
