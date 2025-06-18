@@ -25,6 +25,6 @@ Description: anything module
 
 Package: deepin-anything-server
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, deepin-anything-dkms
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Deepin Anything server package
  This is the server part of Deepin Anything, which includes core functionality for the application.
