@@ -100,6 +100,28 @@
             "description[zh_CN]": "日志级别",
             "permissions": "readwrite",
             "visibility": "public"
+        },
+        "commit_volatile_index_timeout": {
+            "value": 2,
+            "serial": 0,
+            "flags": [],
+            "name": "commit volatile index timeout",
+            "name[zh_CN]": "提交瞬态索引超时时间",
+            "description": "commit volatile index timeout",
+            "description[zh_CN]": "提交瞬态索引超时时间",
+            "permissions": "readwrite",
+            "visibility": "public"
+        },
+        "commit_persistent_index_timeout": {
+            "value": 600,
+            "serial": 0,
+            "flags": [],
+            "name": "commit persistent index timeout",
+            "name[zh_CN]": "提交持久化索引超时时间",
+            "description": "commit persistent index timeout",
+            "description[zh_CN]": "提交持久化索引超时时间",
+            "permissions": "readwrite",
+            "visibility": "public"
         }
     }
 }

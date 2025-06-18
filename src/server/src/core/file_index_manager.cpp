@@ -165,6 +165,10 @@ file_index_manager::file_index_manager(const std::string& persistent_index_dir,
                 newLucene<ChineseAnalyzer>(),
                 create, IndexWriter::MaxFieldLengthLIMITED);
             reader_  = IndexReader::open(dir, true);
+            // check if index corrupted by same method
+            if (!commit(index_status::loading)) {
+                throw LuceneException();
+            }
         } catch (const LuceneException& e) {
             spdlog::warn("The index is corrupted: {}", volatile_index_directory_);
             if (writer_) writer_->close();

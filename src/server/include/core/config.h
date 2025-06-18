@@ -19,7 +19,13 @@ struct event_handler_config {
     std::vector<std::string> blacklist_paths;
     std::vector<std::string> indexing_paths;
     std::map<std::string, std::string> file_type_mapping;
+    std::map<std::string, std::string> file_type_mapping_original;
+    int commit_volatile_index_timeout;
+    int commit_persistent_index_timeout;
 };
+
+void print_event_handler_config(const event_handler_config &config);
+
 
 #define LOG_LEVEL_KEY "log_level"
 
@@ -44,6 +50,8 @@ private:
     std::vector<std::string> indexing_paths_;
     std::map<std::string, std::string> file_type_mapping_;
     std::string log_level_;
+    int commit_volatile_index_timeout_;
+    int commit_persistent_index_timeout_;
 
     void* dbus_connection_;
     std::string resource_path_;
