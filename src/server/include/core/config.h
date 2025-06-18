@@ -61,4 +61,11 @@ private:
 
 bool is_path_in_blacklist(const std::string& path, const std::vector<std::string>& blacklist_paths);
 
+#define APP_RESTART_CODE 1
+#define APP_QUIT_CODE 0
+
+void set_app_restart(bool restart);
+
+int get_app_ret_code();
+
 #endif // CORE_CONFIG_H 

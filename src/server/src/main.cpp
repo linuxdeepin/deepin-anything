@@ -40,18 +40,20 @@ void setup_kernel_module_alive_check(QTimer &timer) {
     struct stat st_begin;
     if (lstat(path.c_str(), &st_begin) != 0) {
         spdlog::error("Check {} failed: {}", path, strerror(errno));
-        exit(1);
+        exit(APP_QUIT_CODE);
     }
 
     QObject::connect(&timer, &QTimer::timeout, [path, st_begin]() {
         struct stat st_current;
+        // when system reboot, the file may be deleted before we quit
+        // so we not quit or restart, we wait stop command from systemd or the file appear again
         if (lstat(path.c_str(), &st_current) != 0) {
-            spdlog::error("Check {} failed: {}", path, strerror(errno));
-            qApp->quit();
+            return;
         }
 
         if (st_current.st_ino != st_begin.st_ino) {
-            spdlog::info("File {} inode changed", path);
+            spdlog::info("File {} inode changed, restart", path);
+            set_app_restart(true);
             qApp->quit();
         }
     });
@@ -63,7 +65,7 @@ int main(int argc, char* argv[]) {
     QCoreApplication app(argc, argv);
 
     if (!can_user_login())
-        exit(0);
+        exit(APP_QUIT_CODE);
 
     spdlog::info("Anything daemon starting...");
     spdlog::info("Qt version: {}", qVersion());
@@ -91,7 +93,8 @@ int main(int argc, char* argv[]) {
 
     // Process the interrupt signal
     auto signalHandler = [&app](int sig) {
-        spdlog::info("Interrupt signal ({}) received.", sig);
+        spdlog::info("Interrupt signal ({}) received, quit", sig);
+        set_app_restart(false);
         app.quit();
     };
     set_signal_handler(SIGINT, signalHandler);
@@ -101,7 +104,7 @@ int main(int argc, char* argv[]) {
     setup_kernel_module_alive_check(timer);
 
     listenser.async_listen();
-    int ret = app.exec();
+    app.exec();
 
     spdlog::info("Performing cleanup tasks...");
     listenser.stop_listening();
@@ -109,5 +112,5 @@ int main(int argc, char* argv[]) {
     handler.terminate_processing();
 
     spdlog::info("Anything daemon stopped.");
-    return ret;
+    return get_app_ret_code();
 }
