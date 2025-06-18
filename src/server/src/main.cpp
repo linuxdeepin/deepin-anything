@@ -74,7 +74,9 @@ int main(int argc, char* argv[]) {
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [thread %t] %v");
 
     event_listenser listenser;
-    default_event_handler handler(config.make_event_handler_config());
+    auto event_handler_config = config.make_event_handler_config();
+    print_event_handler_config(*event_handler_config);
+    default_event_handler handler(event_handler_config);
     listenser.set_handler([&handler](fs_event *event) {
         handler.handle(event);
     });

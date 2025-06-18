@@ -12,21 +12,31 @@
 #include <sstream>
 #include <gio/gio.h>
 
-void print_config(const std::vector<std::string>& blacklist_paths,
-                  const std::vector<std::string>& indexing_paths,
-                  const std::map<std::string, std::string>& file_type_mapping) {
+#define COMMIT_VOLATILE_INDEX_TIMEOUT_DEFAULT 2
+#define COMMIT_VOLATILE_INDEX_TIMEOUT_MIN 1
+#define COMMIT_VOLATILE_INDEX_TIMEOUT_MAX 60
+#define COMMIT_PERSISTENT_INDEX_TIMEOUT_DEFAULT 600
+#define COMMIT_PERSISTENT_INDEX_TIMEOUT_MIN 60
+#define COMMIT_PERSISTENT_INDEX_TIMEOUT_MAX 3600
+
+void print_event_handler_config(const event_handler_config &config) {
+    spdlog::info("Persistent index dir: {}", config.persistent_index_dir);
+    spdlog::info("Volatile index dir: {}", config.volatile_index_dir);
+    spdlog::info("Thread pool size: {}", config.thread_pool_size);
     spdlog::info("Blacklist paths:");
-    for (const auto& path : blacklist_paths) {
+    for (const auto& path : config.blacklist_paths) {
         spdlog::info("  {}", path);
     }
     spdlog::info("Indexing paths:");
-    for (const auto& path : indexing_paths) {
+    for (const auto& path : config.indexing_paths) {
         spdlog::info("  {}", path);
     }
     spdlog::info("File type mapping:");
-    for (const auto& [file_type, file_exts] : file_type_mapping) {
+    for (const auto& [file_type, file_exts] : config.file_type_mapping_original) {
         spdlog::info("  {} : {}", file_type, file_exts);
     }
+    spdlog::info("Commit volatile index timeout: {}", config.commit_volatile_index_timeout);
+    spdlog::info("Commit persistent index timeout: {}", config.commit_persistent_index_timeout);
 }
 
 // 获取dconfig资源路径
@@ -142,6 +152,23 @@ std::string get_config_string(GDBusConnection *connection, const std::string& re
     return config_value;
 }
 
+int64_t get_config_int64(GDBusConnection *connection, const std::string& resource_path, const std::string& key) {
+    GVariant *result = nullptr;
+    int64_t config_value = 0;
+
+    result = get_config_value(connection, resource_path, key);
+    if (result) {
+        GVariant *val = nullptr;
+        g_variant_get(result, "(v)", &val);
+        g_variant_get(val, "x", &config_value);
+        g_variant_unref(val);
+        g_variant_unref(result);
+    }
+
+    return config_value;
+}
+
+
 bool replace_home_dir(std::string& path) {
     auto home = g_get_home_dir();
     size_t pos = path.find("$HOME");
@@ -219,6 +246,17 @@ Config::Config()
 
     log_level_ = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, LOG_LEVEL_KEY);
 
+    commit_volatile_index_timeout_ = get_config_int64((GDBusConnection*)dbus_connection_, resource_path_, "commit_volatile_index_timeout");
+    commit_persistent_index_timeout_ = get_config_int64((GDBusConnection*)dbus_connection_, resource_path_, "commit_persistent_index_timeout");
+    if (commit_volatile_index_timeout_ < COMMIT_VOLATILE_INDEX_TIMEOUT_MIN ||
+        commit_volatile_index_timeout_ > COMMIT_VOLATILE_INDEX_TIMEOUT_MAX) {
+        commit_volatile_index_timeout_ = COMMIT_VOLATILE_INDEX_TIMEOUT_DEFAULT;
+    }
+    if (commit_persistent_index_timeout_ < COMMIT_PERSISTENT_INDEX_TIMEOUT_MIN ||
+        commit_persistent_index_timeout_ > COMMIT_PERSISTENT_INDEX_TIMEOUT_MAX) {
+        commit_persistent_index_timeout_ = COMMIT_PERSISTENT_INDEX_TIMEOUT_DEFAULT;
+    }
+
     // Replace $HOME with actual home directory path
     for (auto& path : blacklist_paths_) {
         replace_home_dir(path);
@@ -234,8 +272,6 @@ Config::Config()
             continue;
         }
     }
-
-    print_config(blacklist_paths_, indexing_paths_, file_type_mapping_);
 
     subscription_id_ = g_dbus_connection_signal_subscribe((GDBusConnection*)dbus_connection_,
                                                         "org.desktopspec.ConfigManager",            // sender
@@ -264,7 +300,7 @@ std::shared_ptr<event_handler_config> Config::make_event_handler_config()
     config->thread_pool_size = get_thread_pool_size_from_env(free_threads);
     config->blacklist_paths = blacklist_paths_;
     config->indexing_paths = indexing_paths_;
-    config->file_type_mapping = file_type_mapping_;
+    config->file_type_mapping_original = file_type_mapping_;
     for (const auto& [file_type, file_exts] : file_type_mapping_) {
         std::stringstream ss(file_exts);
         std::string item;
@@ -272,6 +308,8 @@ std::shared_ptr<event_handler_config> Config::make_event_handler_config()
             config->file_type_mapping[item] = file_type;
         }
     }
+    config->commit_volatile_index_timeout = commit_volatile_index_timeout_;
+    config->commit_persistent_index_timeout = commit_persistent_index_timeout_;
 
     return config;
 }

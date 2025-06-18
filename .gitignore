@@ -96,3 +96,7 @@ debian/deepin-anything-dkms.prerm.debhelper
 debian/deepin-anything-server.postinst.debhelper
 debian/deepin-anything-server.postrm.debhelper
 debian/deepin-anything-server.prerm.debhelper
+
+# AI
+.cursor/
+.specstory/

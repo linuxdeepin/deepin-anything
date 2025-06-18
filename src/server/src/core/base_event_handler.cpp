@@ -12,9 +12,6 @@
 
 #include <QCoreApplication>
 
-#define COMMIT_VOLATILE_INDEX_TIMEOUT 10
-#define COMMIT_PERSISTENT_INDEX_TIMEOUT 600
-
 base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> config)
     : config_(config),
       index_manager_(config->persistent_index_dir, config->volatile_index_dir, config->file_type_mapping),
@@ -25,8 +22,8 @@ base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> con
       delay_mode_(true/*index_manager_.indexed()*/),
       index_dirty_(false),
       volatile_index_dirty_(false),
-      commit_volatile_index_timeout_(COMMIT_VOLATILE_INDEX_TIMEOUT),
-      commit_persistent_index_timeout_(COMMIT_PERSISTENT_INDEX_TIMEOUT),
+      commit_volatile_index_timeout_(config->commit_volatile_index_timeout),
+      commit_persistent_index_timeout_(config->commit_persistent_index_timeout),
       index_status_(anything::index_status::loading) {
     index_dirty_ = index_manager_.refresh_indexes(config_->blacklist_paths);
 }
@@ -218,7 +215,7 @@ void base_event_handler::timer_worker(int64_t interval) {
                     spdlog::info("Failed to commit index, quit");
                     qApp->quit();
                 }
-                commit_volatile_index_timeout_ = 10;
+                commit_volatile_index_timeout_ = config_->commit_volatile_index_timeout;
                 index_dirty_ = false;
                 volatile_index_dirty_ = true;
             }
@@ -228,7 +225,7 @@ void base_event_handler::timer_worker(int64_t interval) {
                 --commit_persistent_index_timeout_;
             if (commit_persistent_index_timeout_ == 0 && jobs_.empty()) {
                 index_manager_.persist_index();
-                commit_persistent_index_timeout_ = 600;
+                commit_persistent_index_timeout_ = config_->commit_persistent_index_timeout;
                 volatile_index_dirty_ = false;
             }
         }
