@@ -6,6 +6,8 @@
 #include "logdefine.h"
 
 #include <QFile>
+#include <QFileInfo>
+#include <sys/stat.h>
 
 extern "C" {
 #include <libmount.h>
@@ -105,6 +107,20 @@ QString MountCacher::findMountPointByPath(const QString &path, bool hardreal)
 {
     QString result;
     QString result_path = path;
+
+    // 检查 path 是否为符号链接，如果是且与父目录在同一设备上，则使用父目录路径
+    // 这是为了避免 mnt_get_mountpoint() 跟随符号链接
+    // 因为如果符号链接指向其他设备上的文件, 则会直接返回输入路径, 但这不是我们期望的挂载点
+    struct stat path_stat, parent_stat;
+    if (lstat(QFile::encodeName(path).constData(), &path_stat) == 0 &&
+        S_ISLNK(path_stat.st_mode)) {
+        QString parentPath = QFileInfo(path).absolutePath();
+        // 检查符号链接与父目录是否在同一设备上
+        if (lstat(QFile::encodeName(parentPath).constData(), &parent_stat) == 0 &&
+            path_stat.st_dev == parent_stat.st_dev) {
+            result_path = parentPath;
+        }
+    }
 
     Q_FOREVER {
         QByteArray checkpath = QFile::encodeName(result_path);
