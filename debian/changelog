@@ -1,3 +1,13 @@
+deepin-anything (7.0.20) unstable; urgency=medium
+
+  * feat: Add configurable index commit timeouts
+  * chore: Remove deepin-anything-dkms dependency
+  * fix: Fix anything repeatedly restart when shutdown
+  * feat: Add wildcard search functionality
+  * fix: Improve blacklist path checking logic
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 19 Jun 2025 13:40:32 +0800
+
 deepin-anything (7.0.19) unstable; urgency=medium
 
   * feat: Adapt kernel module for LOONGARCH architecture
