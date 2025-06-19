@@ -93,6 +93,7 @@ file_record make_file_record(const std::filesystem::path& p,
 }
 
 #define FILE_NAME_FIELD L"file_name"
+#define FILE_NAME_LOWER_FIELD L"file_name_lower"
 #define FULL_PATH_FIELD L"full_path"
 #define FILE_TYPE_FIELD L"file_type"
 #define FILE_EXT_FIELD L"file_ext"
@@ -108,6 +109,9 @@ DocumentPtr create_document(const file_record& record) {
     doc->add(newLucene<Field>(FILE_NAME_FIELD,
         StringUtils::toLower(StringUtils::toUnicode(record.file_name)),
         Field::STORE_YES, Field::INDEX_ANALYZED));
+    doc->add(newLucene<Field>(FILE_NAME_LOWER_FIELD,
+        StringUtils::toLower(StringUtils::toUnicode(record.file_name)),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
     // Full path with exact match; parser is not needed for deleting and exact searching, which improves perferemce.
     doc->add(newLucene<Field>(FULL_PATH_FIELD,
         StringUtils::toUnicode(record.full_path),
@@ -145,7 +149,7 @@ DocumentPtr create_document(const file_record& record) {
 }
 
 
-#define INDEX_VERSION L"1"
+#define INDEX_VERSION L"2"
 #define INVALID_INDEX_VERSION L"0"
 #define INDEX_VERSION_FIELD L"index_version"
 
