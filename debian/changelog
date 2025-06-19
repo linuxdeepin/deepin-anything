@@ -1,3 +1,10 @@
+deepin-anything (6.2.10) unstable; urgency=medium
+
+  * fix: Fix fail to register dbus service
+  * fix: Fix fail to update index for symbolic links
+
+ -- wangrong <wangr@wangrong>  Thu, 19 Jun 2025 20:29:48 +0800
+
 deepin-anything (6.2.9) unstable; urgency=medium
 
   * fix: Remove unnecessary own permission from DBus policy
