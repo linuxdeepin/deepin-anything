@@ -338,8 +338,28 @@ std::string Config::get_log_level()
 bool is_path_in_blacklist(const std::string& path, const std::vector<std::string>& blacklist_paths)
 {
     for (const auto& blacklisted_path : blacklist_paths) {
-        if (path.find(blacklisted_path) != std::string::npos) {
-            return true;
+        // 检查 blacklisted_path 是否是 path 的一个组件
+        size_t last_pos = 0;
+        while (true) {
+            size_t pos = path.find(blacklisted_path, last_pos);
+            if (pos != std::string::npos) {
+                // 检查前面是否是路径分隔符或开头
+                bool is_start = (pos == 0);
+                bool has_separator_before = (pos > 0 && (path[pos - 1] == '/' || path[pos - 1] == '\\'));
+
+                // 检查后面是否是路径分隔符或结尾
+                size_t end_pos = pos + blacklisted_path.length();
+                bool is_end = (end_pos == path.length());
+                bool has_separator_after = (end_pos < path.length() && (path[end_pos] == '/' || path[end_pos] == '\\'));
+
+                if ((is_start || has_separator_before) && (is_end || has_separator_after)) {
+                    return true;
+                }
+
+                last_pos = pos + 1;
+            } else {
+                break;
+            }
         }
     }
     return false;
