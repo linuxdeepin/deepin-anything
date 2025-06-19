@@ -41,7 +41,10 @@ bool Searcher::initialize(const std::string& index_path) {
     }
 }
 
-std::vector<std::string> Searcher::search(const std::string& path, const std::string& query, int max_results) {
+std::vector<std::string> Searcher::search(const std::string& path,
+                                          const std::string& query,
+                                          int max_results,
+                                          bool wildcard_query) {
     std::vector<std::string> results;
     
     if (!searcher) {
@@ -50,12 +53,20 @@ std::vector<std::string> Searcher::search(const std::string& path, const std::st
     }
 
     try {
-        // 创建查询解析器
-        AnalyzerPtr analyzer = newLucene<ChineseAnalyzer>();
-        QueryParserPtr parser = newLucene<QueryParser>(LuceneVersion::LUCENE_CURRENT, L"file_name", analyzer);
-        
-        // 解析查询
-        QueryPtr query_ptr = parser->parse(StringUtils::toLower(StringUtils::toUnicode(query.c_str())));
+        QueryPtr query_ptr;
+        String query_string = StringUtils::toLower(StringUtils::toUnicode(query.c_str()));
+
+        if (wildcard_query) {
+            TermPtr term = newLucene<Term>(L"file_name_lower", query_string);
+            query_ptr = newLucene<WildcardQuery>(term);
+        } else {
+            // 创建查询解析器
+            AnalyzerPtr analyzer = newLucene<ChineseAnalyzer>();
+            QueryParserPtr parser = newLucene<QueryParser>(LuceneVersion::LUCENE_CURRENT, L"file_name", analyzer);
+
+            // 解析查询
+            query_ptr = parser->parse(query_string);
+        }
         
         // 执行搜索
         if (max_results == 0) {

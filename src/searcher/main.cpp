@@ -10,11 +10,13 @@
 #include <unistd.h>
 
 void printUsage(const char* programName) {
-    std::cout << "Usage: " << programName << " [-i index_path] [path] <search_query>" << std::endl;
+    std::cout << "Usage: " << programName << " [-i index_path] [-w] [path] <search_query>" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << "  -i index_path  Specify the index path (default: " << std::string(g_get_user_runtime_dir()) << "/deepin-anything-server)" << std::endl;
+    std::cout << "  -w             Enable wildcard search" << std::endl;
     std::cout << "Examples:" << std::endl;
     std::cout << "  " << programName << " -i /path/to/index /home \"txt\"" << std::endl;
+    std::cout << "  " << programName << " -w /home \"*.txt\"" << std::endl;
     std::cout << "  " << programName << " /home \"txt\"" << std::endl;
     std::cout << "  " << programName << " \"txt\" (searches in /)" << std::endl;
 }
@@ -24,13 +26,17 @@ int main(int argc, char* argv[]) {
     const char* index_path = default_index_path.c_str();
     const char* search_path = "/";
     const char* query = nullptr;
+    bool wildcard_query = false;
     int opt;
 
     // 处理命令行选项
-    while ((opt = getopt(argc, argv, "i:")) != -1) {
+    while ((opt = getopt(argc, argv, "i:w")) != -1) {
         switch (opt) {
             case 'i':
                 index_path = optarg;
+                break;
+            case 'w':
+                wildcard_query = true;
                 break;
             default:
                 printUsage(argv[0]);
@@ -63,7 +69,7 @@ int main(int argc, char* argv[]) {
     }
 
     // 执行搜索
-    auto results = searcher.search(search_path, query);
+    auto results = searcher.search(search_path, query, 0, wildcard_query);
 
     // 输出结果
     if (results.empty()) {

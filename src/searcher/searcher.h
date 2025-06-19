@@ -22,7 +22,7 @@ public:
     bool initialize(const std::string& index_path);
     
     // 执行搜索
-    std::vector<std::string> search(const std::string& path, const std::string& query, int max_results = 0);
+    std::vector<std::string> search(const std::string& path, const std::string& query, int max_results = 0, bool wildcard_query = false);
 
 private:
     // Lucene 相关成员
