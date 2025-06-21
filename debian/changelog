@@ -1,3 +1,9 @@
+deepin-anything (7.0.21) unstable; urgency=medium
+
+  * fix: Fix anything repeatedly restart when shutdown
+
+ -- wangrong <wangrong@uniontech.com>  Sat, 21 Jun 2025 23:38:08 +0800
+
 deepin-anything (7.0.20) unstable; urgency=medium
 
   * feat: Add configurable index commit timeouts
