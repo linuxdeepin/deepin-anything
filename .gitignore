@@ -100,3 +100,4 @@ debian/deepin-anything-server.prerm.debhelper
 # AI
 .cursor/
 .specstory/
+.cursorindexingignore

@@ -1,3 +1,10 @@
+deepin-anything (7.0.22) unstable; urgency=medium
+
+  * feat: Adapt to V20
+  * fix: Fix index updates not saved after a timeout
+
+ -- wangrong <wangrong@uniontech.com>  Tue, 24 Jun 2025 19:21:09 +0800
+
 deepin-anything (7.0.21) unstable; urgency=medium
 
   * fix: Fix anything repeatedly restart when shutdown
