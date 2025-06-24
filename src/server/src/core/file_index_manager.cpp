@@ -557,10 +557,8 @@ static const char * const status_json_template = R"({
 )";
 
 void file_index_manager::save_index_status(index_status status) {
-    auto now = std::chrono::system_clock::now();
-    auto now_time_t = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&now_time_t), "%Y-%m-%dT%H:%M:%S");
+    g_autoptr(GDateTime) now = g_date_time_new_now_local();
+    g_autofree char *time_str = g_date_time_format(now, "%Y-%m-%dT%H:%M:%S");
 
     std::string status_str;
     switch (status) {
@@ -583,7 +581,7 @@ void file_index_manager::save_index_status(index_status status) {
 
     char status_json[1024];
     int written = snprintf(status_json, sizeof(status_json), status_json_template,
-             ss.str().c_str(),
+             time_str,
              status_str.c_str(),
              StringUtils::toUTF8(INDEX_VERSION).c_str());
     if (written < 0 || written >= (int)sizeof(status_json)) {

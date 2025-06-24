@@ -155,12 +155,22 @@ std::string get_config_string(GDBusConnection *connection, const std::string& re
 int64_t get_config_int64(GDBusConnection *connection, const std::string& resource_path, const std::string& key) {
     GVariant *result = nullptr;
     int64_t config_value = 0;
+    int64_t config_value_int64 = 0;
+    double config_value_double = 0;
 
     result = get_config_value(connection, resource_path, key);
     if (result) {
         GVariant *val = nullptr;
         g_variant_get(result, "(v)", &val);
-        g_variant_get(val, "x", &config_value);
+        if (g_variant_is_of_type(val, G_VARIANT_TYPE_INT64)) {
+            g_variant_get(val, "x", &config_value_int64);
+            config_value = config_value_int64;
+        } else if (g_variant_is_of_type(val, G_VARIANT_TYPE_DOUBLE)) {
+            g_variant_get(val, "d", &config_value_double);
+            config_value = static_cast<int64_t>(config_value_double);
+        } else {
+            spdlog::error("Invalid config value type for key: {}", key);
+        }
         g_variant_unref(val);
         g_variant_unref(result);
     }

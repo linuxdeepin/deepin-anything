@@ -12,6 +12,7 @@
 #include <glib.h>
 #include <libmount.h>
 #include <fcntl.h>
+#include <errno.h>
 
 char *format_time(int64_t modify_time)
 {

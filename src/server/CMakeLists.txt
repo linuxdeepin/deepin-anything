@@ -80,7 +80,8 @@ install(TARGETS ${PROJECT_NAME}
 
 install(PROGRAMS deepin-anything-server DESTINATION bin)
 install(FILES deepin-anything-daemon.service DESTINATION lib/systemd/user)
-install(FILES deepin-anything-server.service DESTINATION lib/systemd/system)
+# installed by debhelper
+# install(FILES deepin-anything-server.service DESTINATION lib/systemd/system)
 
 # Install dconfig meta file
 install(FILES ${CMAKE_SOURCE_DIR}/assets/org.deepin.anything.json DESTINATION share/dsg/configs/org.deepin.anything)

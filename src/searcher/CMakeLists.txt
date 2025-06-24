@@ -9,6 +9,8 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LUCENE REQUIRED liblucene++)
 pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
+find_package(Threads REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system)
 
 # Add executable
 add_executable(deepin-anything-searcher
@@ -31,6 +33,8 @@ target_link_libraries(deepin-anything-searcher
     ${GLIB_LIBRARIES}
     ${LUCENE_LIBRARIES}
     ${LUCENE_CONTRIB_LIBRARIES}
+    Threads::Threads
+    ${Boost_LIBRARIES}
 )
 
 # Install
