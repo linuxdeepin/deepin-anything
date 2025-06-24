@@ -210,7 +210,7 @@ void base_event_handler::timer_worker(int64_t interval) {
             // Commit volatile index
             if (index_dirty_ && commit_volatile_index_timeout_ > 0)
                 --commit_volatile_index_timeout_;
-            if (commit_volatile_index_timeout_ == 0 && jobs_.empty()) {
+            if (commit_volatile_index_timeout_ == 0 && jobs_.empty() && !pool_.busy()) {
                 if (!index_manager_.commit(index_status_)) {
                     spdlog::info("Failed to commit index, restart");
                     set_app_restart(true);
@@ -224,7 +224,7 @@ void base_event_handler::timer_worker(int64_t interval) {
             // Commit persistent index
             if (volatile_index_dirty_ && commit_persistent_index_timeout_ > 0)
                 --commit_persistent_index_timeout_;
-            if (commit_persistent_index_timeout_ == 0 && jobs_.empty()) {
+            if (commit_persistent_index_timeout_ == 0 && jobs_.empty() && !pool_.busy()) {
                 index_manager_.persist_index();
                 commit_persistent_index_timeout_ = config_->commit_persistent_index_timeout;
                 volatile_index_dirty_ = false;
