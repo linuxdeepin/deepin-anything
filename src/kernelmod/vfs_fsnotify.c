@@ -26,8 +26,6 @@
 extern char vfs_unnamed_devices[MAX_MINOR+1];
 static int (*vfs_changed_entry)(struct vfs_event *event);
 
-static struct mnt_namespace *target_mnt_ns;
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0)
 #define filename_type const unsigned char
 #define filename_str(filename) (filename)
@@ -39,33 +37,6 @@ static struct mnt_namespace *target_mnt_ns;
 #endif
 
 
-static inline int init_mnt_ns(void)
-{
-    /*
-     * workaround the addr is 0xFFF...FF(value: -1) for this case by unkown reason: upgrade kernel
-     * image to 5.10 and update this dkms module at the same time.
-     * this nsproxy's addr fill 'F' while load this module at first time and then tainted. Add value
-     * checking to workaround this issue.
-     */
-    if ((struct nsproxy*)-1 == current->nsproxy) {
-        mpr_err("current->nsproxy value is -1, return\n");
-        return -EINVAL;
-    }
-
-    if (0 == current->nsproxy || 0 == current->nsproxy->mnt_ns) {
-        mpr_err("init_mnt_ns fail\n");
-        return -EINVAL;
-    }
-
-    target_mnt_ns = current->nsproxy->mnt_ns;
-    return 0;
-}
-
-static inline int is_mnt_ns_valid(void)
-{
-    return target_mnt_ns && current->nsproxy && current->nsproxy->mnt_ns == target_mnt_ns;
-}
-
 static void on_mount(const unsigned char *dir_name)
 {
 #ifdef QUERY_DEV_ON_MOUNT
@@ -73,9 +44,6 @@ static void on_mount(const unsigned char *dir_name)
 #endif
     struct vfs_event *event = 0;
     dev_t dev = 0;
-
-    if (!is_mnt_ns_valid())
-        return;
 
     /*
      * On a system with audit enabled, when a privileged user mounts the fuse
@@ -117,9 +85,6 @@ static void on_mount(const unsigned char *dir_name)
 static void on_unmount(const unsigned char *dir_name)
 {
     struct vfs_event *event;
-
-    if (!is_mnt_ns_valid())
-        return;
 
     if (unlikely(strlen(dir_name) >= sizeof(event->buf))){
         mpr_info("on_unmount, mountpoint is too long, %s\n", dir_name);
@@ -238,7 +203,7 @@ static void fsnotify_broadcast_listener(struct inode *to_tell, __u32 mask, const
     filename_type *file_name, u32 cookie)
 {
     if (!to_tell || FSNOTIFY_EVENT_INODE != data_is || !filename_str(file_name)
-        || IS_INVALID_DEVICE(to_tell->i_sb->s_dev) || !(mask & TARGET_EVENT) || !is_mnt_ns_valid())
+        || IS_INVALID_DEVICE(to_tell->i_sb->s_dev) || !(mask & TARGET_EVENT))
         return;
 
     fsnotify_event_handler(to_tell, mask, filename_str(file_name), cookie);
@@ -250,7 +215,7 @@ static void fsnotify_parent_broadcast_listener(const struct path *path,
     struct dentry *parent = NULL;
     struct name_snapshot name;
 
-    if (IS_INVALID_DEVICE(dentry->d_sb->s_dev) || !(mask & TARGET_EVENT) || !is_mnt_ns_valid())
+    if (IS_INVALID_DEVICE(dentry->d_sb->s_dev) || !(mask & TARGET_EVENT))
         return;
 
     if (!p_inode) {
@@ -270,10 +235,6 @@ static void fsnotify_parent_broadcast_listener(const struct path *path,
 int init_vfs_fsnotify(void *vfs_changed_func)
 {
     int ret;
-
-    ret = init_mnt_ns();
-    if (ret)
-        return ret;
 
     vfs_changed_entry = vfs_changed_func;
     ret = fsnotify_reg_listener(fsnotify_broadcast_listener, fsnotify_parent_broadcast_listener);

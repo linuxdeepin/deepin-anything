@@ -36,35 +36,6 @@ static atomic_t event_sync_cookie = ATOMIC_INIT(0);
 
 #define DECL_CMN_KRP(fn) _DECL_CMN_KRP(fn, fn)
 
-static struct mnt_namespace *target_mnt_ns;
-
-static inline int init_mnt_ns(void)
-{
-    /*
-     * workaround the addr is 0xFFF...FF(value: -1) for this case by unkown reason: upgrade kernel
-     * image to 5.10 and update this dkms module at the same time.
-     * this nsproxy's addr fill 'F' while load this module at first time and then tainted. Add value
-     * checking to workaround this issue.
-     */
-    if ((struct nsproxy*)-1 == current->nsproxy) {
-        mpr_err("current->nsproxy value is -1, return\n");
-        return -EINVAL;
-    }
-
-    if (0 == current->nsproxy || 0 == current->nsproxy->mnt_ns) {
-        mpr_err("init_mnt_ns fail\n");
-        return -EINVAL;
-    }
-
-    target_mnt_ns = current->nsproxy->mnt_ns;
-    return 0;
-}
-
-static inline int is_mnt_ns_valid(void)
-{
-    return target_mnt_ns && current->nsproxy && current->nsproxy->mnt_ns == target_mnt_ns;
-}
-
 struct do_mount_args {
     char dir_name[NAME_MAX];
 };
@@ -82,8 +53,6 @@ static int on_do_mount_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
      *  const char *type_page, unsigned long flags, void *data_page)
      */
     struct do_mount_args *args = (struct do_mount_args *)ri->data;
-    if (!is_mnt_ns_valid())
-        return 1;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
     dir_name = (const char *)get_arg(regs, 2);
@@ -191,8 +160,6 @@ static int on_sys_umount_ent(struct kretprobe_instance *ri, struct pt_regs *regs
 {
     const char *dir_name;
     struct sys_umount_args *args = (struct sys_umount_args *)ri->data;
-    if (!is_mnt_ns_valid())
-        return 1;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
     //char __user* dir_name, int flags
@@ -329,7 +296,7 @@ static int common_vfs_ent(struct vfs_event **event, struct dentry *de)
 {
     if (de == 0 || de->d_sb == 0)
         return 1;
-    if (IS_INVALID_DEVICE(de->d_sb->s_dev) || !is_mnt_ns_valid())
+    if (IS_INVALID_DEVICE(de->d_sb->s_dev))
         return 1;
 
     *event = vfs_event_alloc_atomic();
@@ -437,7 +404,7 @@ static int on_vfs_rename_ent(struct kretprobe_instance *ri, struct pt_regs *regs
 
     if (de_old == 0 || de_old->d_sb == 0 || de_new == 0)
         return 1;
-    if (IS_INVALID_DEVICE(de_old->d_sb->s_dev) || !is_mnt_ns_valid())
+    if (IS_INVALID_DEVICE(de_old->d_sb->s_dev))
         return 1;
 
     fe = &((struct vfs_rename_args *)ri->data)->fe;
@@ -513,10 +480,6 @@ static struct kretprobe *vfs_krps[] = {&do_mount_krp, &sys_umount_krp, &vfs_crea
 int init_vfs_kretprobes(void *vfs_changed_func)
 {
     int ret;
-
-    ret = init_mnt_ns();
-    if (ret)
-        return ret;
 
     vfs_changed_entry = vfs_changed_func;
 
