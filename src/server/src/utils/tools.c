@@ -29,7 +29,7 @@ char *format_time(int64_t modify_time)
 char *format_size(int64_t size)
 {
     if (size < 1000)
-        return g_strdup_printf("%ld B", size);
+        return g_strdup_printf("%" G_GINT64_FORMAT " B", size);
 
     return g_format_size(size);
 }
