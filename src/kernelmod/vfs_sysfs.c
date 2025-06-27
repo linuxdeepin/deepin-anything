@@ -14,7 +14,12 @@
 
 static struct kobject *vfs_monitor;
 
+/* unnamed devices monitor enable bit map */
+/* vfs_unnamed_devices[N] = 1 means the device with number 0:N is monitor enabled */
 char vfs_unnamed_devices[MAX_MINOR+1];
+/* trace event process info mask */
+/* trace_event_mask & (1 << ACT_DEL_FILE) means the file delete event is trace enabled */
+unsigned int trace_event_mask;
 
 #define MAX_INPUT_MINOR (MAX_MINOR+1)
 
@@ -85,6 +90,31 @@ static ssize_t vfs_unnamed_devices_store(struct kobject *kobj,
 static struct kobj_attribute vfs_unnamed_devices_attribute =
     __ATTR(vfs_unnamed_devices, 0660, vfs_unnamed_devices_show, (void *)vfs_unnamed_devices_store);
 
+static ssize_t trace_event_mask_show(struct kobject *kobj,
+                            struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%u\n", trace_event_mask);
+}
+
+static ssize_t trace_event_mask_store(struct kobject *kobj,
+                                struct kobj_attribute *attr, char *buf,
+                                size_t count)
+{
+    unsigned int mask;
+    int ret;
+
+    ret = sscanf(buf, "%u", &mask);
+    if (ret != 1)
+        return -EINVAL;
+
+    trace_event_mask = mask;
+
+    return count;
+}
+
+static struct kobj_attribute trace_event_mask_attribute =
+    __ATTR(trace_event_mask, 0660, trace_event_mask_show, (void *)trace_event_mask_store);
+
 int vfs_init_sysfs(void)
 {
     int error = 0;
@@ -98,13 +128,30 @@ int vfs_init_sysfs(void)
     if (error) {
         mpr_info("failed to create the vfs_unnamed_devices file "
                 "in /sys/kernel/vfs_monitor\n");
+        goto err_unnamed_devices;
     }
 
+    error = sysfs_create_file(vfs_monitor,
+        &trace_event_mask_attribute.attr);
+    if (error) {
+        mpr_info("failed to create the trace_event_mask file "
+                "in /sys/kernel/vfs_monitor\n");
+        goto err_trace_event_mask;
+    }
+
+    return 0;
+
+err_trace_event_mask:
+    sysfs_remove_file(vfs_monitor, &vfs_unnamed_devices_attribute.attr);
+err_unnamed_devices:
+    kobject_put(vfs_monitor);
     return error;
 }
 
 void vfs_exit_sysfs(void)
 {
+    sysfs_remove_file(vfs_monitor, &trace_event_mask_attribute.attr);
+    sysfs_remove_file(vfs_monitor, &vfs_unnamed_devices_attribute.attr);
     kobject_put(vfs_monitor);
 }
 

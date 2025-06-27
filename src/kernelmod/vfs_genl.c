@@ -17,9 +17,11 @@
 /* multicast group */
 enum vfsmonitor_multicast_groups {
     VFSMONITOR_MCG_DENTRY,
+    VFSMONITOR_MCG_PROCESS_INFO,
 };
 static const struct genl_multicast_group vfsmonitor_mcgs[] = {
     [VFSMONITOR_MCG_DENTRY] = { .name = VFSMONITOR_MCG_DENTRY_NAME, },
+    [VFSMONITOR_MCG_PROCESS_INFO] = { .name = VFSMONITOR_MCG_PROCESS_INFO_NAME, },
 };
 
 /* family definition */
@@ -81,6 +83,62 @@ int vfs_notify_dentry_event(struct vfs_event *event)
 failure:
     kfree_skb(msg);
     return rc;
+}
+
+int vfs_notify_proc_info(struct proc_info *info)
+{
+    int rc;
+    struct sk_buff *msg;
+    void *msg_head;
+
+    /* alloc msg */
+    msg = genlmsg_new(NLMSG_GOODSIZE, GFP_ATOMIC);
+    if (!msg)
+        return -ENOMEM;
+
+    /* construct msg */
+    /* create the message headers */
+    msg_head = genlmsg_put(msg, 0, 0, &vfsmonitor_gnl_family, GFP_ATOMIC, VFSMONITOR_C_NOTIFY_PROCESS_INFO);
+    if (!msg_head) {
+        rc = -ENOMEM;
+        goto failure;
+    }
+    /* add attributes */
+    rc = nla_put_u32(msg, VFSMONITOR_A_UID, info->uid);
+    if (rc != 0)
+        goto failure;
+    rc = nla_put_s32(msg, VFSMONITOR_A_TGID, info->tgid);
+    if (rc != 0)
+        goto failure;
+    rc = nla_put_string(msg, VFSMONITOR_A_PATH, info->path);
+    if (rc != 0)
+        goto failure;
+
+    /* finalize the message */
+    genlmsg_end(msg, msg_head);
+
+    /* send msg */
+    genlmsg_multicast(&vfsmonitor_gnl_family, msg, 0, VFSMONITOR_MCG_PROCESS_INFO, GFP_ATOMIC);
+
+    return 0;
+
+failure:
+    kfree_skb(msg);
+    return rc;
+}
+
+int vfs_notify_vfs_event(struct vfs_event *event)
+{
+    int rc;
+
+    rc = vfs_notify_dentry_event(event);
+    if (rc)
+        return rc;
+
+    if (event->proc_info && event->proc_info->tgid != 0)
+        return vfs_notify_proc_info(event->proc_info);
+
+    return 0;
 }
 
 int init_vfs_genl(void)

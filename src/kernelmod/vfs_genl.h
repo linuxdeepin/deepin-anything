@@ -17,6 +17,8 @@ enum {
     VFSMONITOR_A_MAJOR,
     VFSMONITOR_A_MINOR,
     VFSMONITOR_A_PATH,
+    VFSMONITOR_A_UID,
+    VFSMONITOR_A_TGID,
     __VFSMONITOR_A_MAX,
 };
 #define VFSMONITOR_A_MAX (__VFSMONITOR_A_MAX - 1)
@@ -29,6 +31,8 @@ static struct nla_policy vfsmonitor_genl_policy[VFSMONITOR_A_MAX + 1] = {
     [VFSMONITOR_A_MAJOR] = { .type = NLA_U16 },
     [VFSMONITOR_A_MINOR] = { .type = NLA_U8 },
     [VFSMONITOR_A_PATH] = { .type = NLA_NUL_STRING, .maxlen = 4096 },
+    [VFSMONITOR_A_UID] = { .type = NLA_U32 },
+    [VFSMONITOR_A_TGID] = { .type = NLA_S32 },
 };
 #endif
 
@@ -36,11 +40,13 @@ static struct nla_policy vfsmonitor_genl_policy[VFSMONITOR_A_MAX + 1] = {
 enum {
     VFSMONITOR_C_UNSPEC,
     VFSMONITOR_C_NOTIFY,
+    VFSMONITOR_C_NOTIFY_PROCESS_INFO,
     __VFSMONITOR_C_MAX,
 };
 #define VFSMONITOR_C_MAX (__VFSMONITOR_C_MAX - 1)
 
 /* multicast group */
 #define VFSMONITOR_MCG_DENTRY_NAME VFSMONITOR_FAMILY_NAME "_de"
+#define VFSMONITOR_MCG_PROCESS_INFO_NAME VFSMONITOR_FAMILY_NAME "_pi"
 
 #endif

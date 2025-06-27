@@ -10,6 +10,6 @@
 
 int init_vfs_genl(void);
 void cleanup_vfs_genl(void);
-int vfs_notify_dentry_event(struct vfs_event *event);
+int vfs_notify_vfs_event(struct vfs_event *event);
 
 #endif
