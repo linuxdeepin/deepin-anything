@@ -68,6 +68,14 @@ int main(int argc, char* argv[]) {
         exit(APP_QUIT_CODE);
 
     spdlog::info("Anything daemon starting...");
+    // 打印版本号（如果在编译时定义了的话）
+#ifdef DEEPIN_ANYTHING_VERSION
+    spdlog::info("Deepin Anything version: {}", DEEPIN_ANYTHING_VERSION);
+#endif
+    // 打印commit号（如果在编译时定义了的话）
+#ifdef DEEPIN_ANYTHING_COMMIT_HASH
+    spdlog::info("Deepin Anything commit: {}", DEEPIN_ANYTHING_COMMIT_HASH);
+#endif
     spdlog::info("Qt version: {}", qVersion());
 
     Config config;

@@ -10,6 +10,51 @@ project(
     LANGUAGES CXX
 )
 
+# ---------------------------------------------------------------------------------------
+# Parse version from debian/changelog
+# ---------------------------------------------------------------------------------------
+if(EXISTS "${CMAKE_SOURCE_DIR}/debian/changelog")
+    file(READ "${CMAKE_SOURCE_DIR}/debian/changelog" CHANGELOG_CONTENT)
+    string(REGEX MATCH "deepin-anything \\(([^)]+)\\)" VERSION_MATCH "${CHANGELOG_CONTENT}")
+    if(VERSION_MATCH)
+        string(REGEX REPLACE "deepin-anything \\(([^)]+)\\)" "\\1" DEEPIN_ANYTHING_VERSION "${VERSION_MATCH}")
+        message(STATUS "Found version from debian/changelog: ${DEEPIN_ANYTHING_VERSION}")
+        # Define the version macro
+        add_compile_definitions(DEEPIN_ANYTHING_VERSION="${DEEPIN_ANYTHING_VERSION}")
+    else()
+        message(WARNING "Failed to parse version from debian/changelog")
+    endif()
+else()
+    message(WARNING "debian/changelog not found, version macro will not be defined")
+endif()
+
+# ---------------------------------------------------------------------------------------
+# Get git commit hash
+# ---------------------------------------------------------------------------------------
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE DEEPIN_ANYTHING_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    if(DEEPIN_ANYTHING_COMMIT_HASH)
+        message(STATUS "Found git commit hash: ${DEEPIN_ANYTHING_COMMIT_HASH}")
+        # Define the commit hash macro
+        add_compile_definitions(DEEPIN_ANYTHING_COMMIT_HASH="${DEEPIN_ANYTHING_COMMIT_HASH}")
+    else()
+        message(WARNING "Failed to get git commit hash")
+    endif()
+else()
+    if(NOT GIT_FOUND)
+        message(WARNING "Git not found, commit hash macro will not be defined")
+    else()
+        message(WARNING ".git directory not found, commit hash macro will not be defined")
+    endif()
+endif()
+
 # Find the dependencies
 find_package(QT NAMES Qt6 Qt5 CONFIG REQUIRED COMPONENTS Core)
 find_package(Qt${QT_VERSION_MAJOR} CONFIG REQUIRED Core)
