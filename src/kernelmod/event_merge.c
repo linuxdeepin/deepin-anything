@@ -19,6 +19,8 @@ static DEFINE_SPINLOCK(sl_vfs_events);
 static int events_number;
 static int quit;
 
+extern int disable_event_merge;
+
 // #define mpr_log(fmt, ...) pr_info("vfs_monitor: " fmt, ##__VA_ARGS__)
 #define mpr_log(fmt, ...) ;
 
@@ -327,6 +329,12 @@ static int do_event_merge(struct vfs_event *event)
 
     /* disable timer softirq*/
     spin_lock_bh(&sl_vfs_events);
+    if (disable_event_merge && events_number == 0) {
+        spin_unlock_bh(&sl_vfs_events);
+        vfs_changed_entry(event);
+        vfs_event_free(event);
+        return 0;
+    }
     /* ren_to event pairing */
     if (ACT_RENAME_TO_FILE == event->action) {
         list_for_each_entry(e, &vfs_events, list) {

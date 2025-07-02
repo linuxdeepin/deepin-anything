@@ -20,6 +20,7 @@ char vfs_unnamed_devices[MAX_MINOR+1];
 /* trace event process info mask */
 /* trace_event_mask & (1 << ACT_DEL_FILE) means the file delete event is trace enabled */
 unsigned int trace_event_mask;
+int disable_event_merge;
 
 #define MAX_INPUT_MINOR (MAX_MINOR+1)
 
@@ -115,6 +116,30 @@ static ssize_t trace_event_mask_store(struct kobject *kobj,
 static struct kobj_attribute trace_event_mask_attribute =
     __ATTR(trace_event_mask, 0660, trace_event_mask_show, (void *)trace_event_mask_store);
 
+static ssize_t disable_event_merge_show(struct kobject *kobj,
+                            struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", disable_event_merge);
+}
+
+static ssize_t disable_event_merge_store(struct kobject *kobj,
+                                struct kobj_attribute *attr, char *buf,
+                                size_t count)
+{
+    int ret, disable;
+
+    ret = sscanf(buf, "%d", &disable);
+    if (ret != 1)
+        return -EINVAL;
+
+    disable_event_merge = disable ? 1 : 0;
+
+    return count;
+}
+
+static struct kobj_attribute disable_event_merge_attribute =
+    __ATTR(disable_event_merge, 0660, disable_event_merge_show, (void *)disable_event_merge_store);
+
 int vfs_init_sysfs(void)
 {
     int error = 0;
@@ -139,8 +164,18 @@ int vfs_init_sysfs(void)
         goto err_trace_event_mask;
     }
 
+    error = sysfs_create_file(vfs_monitor,
+        &disable_event_merge_attribute.attr);
+    if (error) {
+        mpr_info("failed to create the disable_event_merge file "
+                "in /sys/kernel/vfs_monitor\n");
+        goto err_disable_event_merge;
+    }
+
     return 0;
 
+err_disable_event_merge:
+    sysfs_remove_file(vfs_monitor, &trace_event_mask_attribute.attr);
 err_trace_event_mask:
     sysfs_remove_file(vfs_monitor, &vfs_unnamed_devices_attribute.attr);
 err_unnamed_devices:
@@ -150,6 +185,7 @@ err_unnamed_devices:
 
 void vfs_exit_sysfs(void)
 {
+    sysfs_remove_file(vfs_monitor, &disable_event_merge_attribute.attr);
     sysfs_remove_file(vfs_monitor, &trace_event_mask_attribute.attr);
     sysfs_remove_file(vfs_monitor, &vfs_unnamed_devices_attribute.attr);
     kobject_put(vfs_monitor);
