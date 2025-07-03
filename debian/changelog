@@ -1,3 +1,16 @@
+deepin-anything (7.0.23) unstable; urgency=medium
+
+  * feat: Fix compile error and add support to kernel 6.15
+  * fix: Fix fail to receive file events on a new mount namespace
+  * fix: Fix fail to build on i386
+  * feat: Add version and commit hash logging
+  * feat: Support trace process for specific event type
+  * feat: Add sysfs switch to disable event merging
+  * refactor: Adjust the processing logic of directory rename events
+  * fix: Fix kernel module build fail on 4.19 kernel
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 03 Jul 2025 18:52:03 +0800
+
 deepin-anything (7.0.22) unstable; urgency=medium
 
   * feat: Adapt to V20
