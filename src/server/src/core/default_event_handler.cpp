@@ -288,19 +288,10 @@ void default_event_handler::filter_event(fs_event *fs_event) {
             convert_event_path_to_origin_path(event.src, *src_indexing_item);
             if (!isDstBlocked) {
                 convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
+            } else {
+                event.dst.clear();
             }
-            size_t event_src_len = event.src.length();
-            auto src_subitems = traverse_directory(event.src);
-            src_subitems.emplace_back(event.src);
-            for (auto const& src : src_subitems) {
-                if (isDstBlocked) {
-                    remove_index_delay(std::move(src));
-                } else {
-                    std::string dst = src;
-                    dst.replace(0, event_src_len, event.dst);
-                    update_index_delay(std::move(src), std::move(dst));
-                }
-            }
+            recursive_update_index_delay(std::move(event.src), std::move(event.dst));
         }
     }
 }

@@ -7,6 +7,7 @@
 #define ANYTHING_BASE_EVENT_HANDLER_H_
 
 #include <filesystem>
+#include <glib.h>
 
 #include "common/anything_fwd.hpp"
 #include "common/fs_event.h"
@@ -18,7 +19,7 @@
 ANYTHING_NAMESPACE_BEGIN
 
 enum class index_job_type : char {
-    add, remove, update, scan
+    add, remove, update, scan, recursive_update
 };
 
 struct index_job {
@@ -67,6 +68,7 @@ protected:
     void remove_index_delay(std::string path);
     void update_index_delay(std::string src, std::string dst);
     void scan_index_delay(std::string path);
+    void recursive_update_index_delay(std::string src, std::string dst);
 
     std::vector<std::string> traverse_directory(const std::string& path);
 
@@ -101,6 +103,8 @@ private:
 
     std::vector<std::string> index_dirs_;
     std::mutex index_dirs_mtx_;
+
+    gint event_process_thread_count_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_

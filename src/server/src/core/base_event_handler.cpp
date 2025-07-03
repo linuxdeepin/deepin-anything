@@ -16,7 +16,7 @@ base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> con
     : config_(config),
       index_manager_(config->persistent_index_dir, config->volatile_index_dir, config->file_type_mapping),
       batch_size_(200),
-      pool_(config->thread_pool_size),
+      pool_(1),
       stop_timer_(false),
       timer_(std::thread(&base_event_handler::timer_worker, this, 1000)),
       delay_mode_(true/*index_manager_.indexed()*/),
@@ -24,7 +24,8 @@ base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> con
       volatile_index_dirty_(false),
       commit_volatile_index_timeout_(config->commit_volatile_index_timeout),
       commit_persistent_index_timeout_(config->commit_persistent_index_timeout),
-      index_status_(anything::index_status::loading) {
+      index_status_(anything::index_status::loading),
+      event_process_thread_count_(0) {
     index_dirty_ = index_manager_.refresh_indexes(config_->blacklist_paths);
 }
 
@@ -144,6 +145,10 @@ void base_event_handler::scan_index_delay(std::string path) {
     jobs_push(std::move(path), anything::index_job_type::scan);
 }
 
+void base_event_handler::recursive_update_index_delay(std::string src, std::string dst) {
+    jobs_push(std::move(src), anything::index_job_type::recursive_update, std::move(dst));
+}
+
 void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number) {
     std::vector<anything::index_job> processing_jobs;
     processing_jobs.insert(
@@ -152,9 +157,11 @@ void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::s
         std::make_move_iterator(jobs.begin() + number));
     jobs.erase(jobs.begin(), jobs.begin() + number);
     pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
+        g_atomic_int_inc(&this->event_process_thread_count_);
         for (const auto& job : processing_jobs) {
             eat_job(job);
         }
+        g_atomic_int_dec_and_test(&this->event_process_thread_count_);
     });
 }
 
@@ -170,6 +177,24 @@ void base_event_handler::eat_job(const anything::index_job& job) {
     } else if (job.type == anything::index_job_type::scan) {
         for (auto&& path : anything::disk_scanner::scan(job.src, config_->blacklist_paths)) {
             index_manager_.add_index(std::move(path));
+        }
+    } else if (job.type == anything::index_job_type::recursive_update) {
+        if (job.dst) {
+            auto src_subitems = traverse_directory(job.src);
+            src_subitems.emplace_back(job.src);
+
+            if (job.dst->empty()) {
+                for (auto const& src : src_subitems) {
+                    index_manager_.remove_index(src);
+                }
+            } else {
+                size_t event_src_len = job.src.length();
+                for (auto const& src : src_subitems) {
+                    std::string dst = src;
+                    dst.replace(0, event_src_len, *job.dst);
+                    index_manager_.update_index(src, dst);
+                }
+            }
         }
     }
 }
@@ -210,7 +235,8 @@ void base_event_handler::timer_worker(int64_t interval) {
             // Commit volatile index
             if (index_dirty_ && commit_volatile_index_timeout_ > 0)
                 --commit_volatile_index_timeout_;
-            if (commit_volatile_index_timeout_ == 0 && jobs_.empty() && !pool_.busy()) {
+            if (commit_volatile_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
+                g_atomic_int_get(&event_process_thread_count_) == 0) {
                 if (!index_manager_.commit(index_status_)) {
                     spdlog::info("Failed to commit index, restart");
                     set_app_restart(true);
@@ -224,7 +250,8 @@ void base_event_handler::timer_worker(int64_t interval) {
             // Commit persistent index
             if (volatile_index_dirty_ && commit_persistent_index_timeout_ > 0)
                 --commit_persistent_index_timeout_;
-            if (commit_persistent_index_timeout_ == 0 && jobs_.empty() && !pool_.busy()) {
+            if (commit_persistent_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
+                g_atomic_int_get(&event_process_thread_count_) == 0) {
                 index_manager_.persist_index();
                 commit_persistent_index_timeout_ = config_->commit_persistent_index_timeout;
                 volatile_index_dirty_ = false;

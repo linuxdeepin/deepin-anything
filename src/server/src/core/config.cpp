@@ -22,7 +22,6 @@
 void print_event_handler_config(const event_handler_config &config) {
     spdlog::info("Persistent index dir: {}", config.persistent_index_dir);
     spdlog::info("Volatile index dir: {}", config.volatile_index_dir);
-    spdlog::info("Thread pool size: {}", config.thread_pool_size);
     spdlog::info("Blacklist paths:");
     for (const auto& path : config.blacklist_paths) {
         spdlog::info("  {}", path);
@@ -305,9 +304,6 @@ std::shared_ptr<event_handler_config> Config::make_event_handler_config()
     auto config = std::make_shared<event_handler_config>();
     config->persistent_index_dir = std::string(g_get_user_cache_dir()) + "/deepin-anything-server";
     config->volatile_index_dir = std::string(g_get_user_runtime_dir()) + "/deepin-anything-server";
-    // 3 primary threads: event receiving thread, event filter thread, timer thread
-    std::size_t free_threads = std::max(std::thread::hardware_concurrency() - 3, 1U);
-    config->thread_pool_size = get_thread_pool_size_from_env(free_threads);
     config->blacklist_paths = blacklist_paths_;
     config->indexing_paths = indexing_paths_;
     config->file_type_mapping_original = file_type_mapping_;

@@ -15,7 +15,6 @@
 struct event_handler_config {
     std::string persistent_index_dir;
     std::string volatile_index_dir;
-    std::size_t thread_pool_size;
     std::vector<std::string> blacklist_paths;
     std::vector<std::string> indexing_paths;
     std::map<std::string, std::string> file_type_mapping;
