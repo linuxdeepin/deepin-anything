@@ -150,7 +150,6 @@ DocumentPtr create_document(const file_record& record) {
 
 
 #define INDEX_VERSION L"2"
-#define INVALID_INDEX_VERSION L"0"
 #define INDEX_VERSION_FIELD L"index_version"
 
 file_index_manager::file_index_manager(const std::string& persistent_index_dir,
@@ -424,13 +423,8 @@ bool file_index_manager::refresh_indexes(const std::vector<std::string>& blackli
 void file_index_manager::set_index_invalid()
 {
     try {
-        set_index_version();
-
-        DocumentPtr doc = newLucene<Document>();
-        doc->add(newLucene<Field>(INDEX_VERSION_FIELD, INVALID_INDEX_VERSION, Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-        writer_->updateDocument(newLucene<Term>(INDEX_VERSION_FIELD, INDEX_VERSION), doc);
-    } catch (const LuceneException& e) {
-        spdlog::error("Failed to set index invalid: {}", StringUtils::toUTF8(e.getError()));
+        std::ofstream invalid_index_file(volatile_index_directory_ + "/invalid_index");
+        invalid_index_file.close();
     } catch (const std::exception& e) {
         spdlog::error("Failed to set index invalid: {}", e.what());
     }
@@ -495,6 +489,13 @@ void file_index_manager::check_index_version() {
     std::error_code ec;
     if (!std::filesystem::exists(volatile_index_directory_, ec)) {
         spdlog::info("Index directory does not exist: {}", volatile_index_directory_);
+        return;
+    }
+
+    // 检查是否是无效索引
+    if (std::filesystem::exists(volatile_index_directory_ + "/invalid_index", ec)) {
+        spdlog::warn("The index is invalid: {}, remove it", volatile_index_directory_);
+        std::filesystem::remove_all(volatile_index_directory_);
         return;
     }
 
