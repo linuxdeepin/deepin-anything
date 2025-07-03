@@ -3,14 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <linux/fs.h>
-#include <linux/init.h>
-#include <linux/kobject.h>
-#include <linux/module.h>
-#include <linux/string.h>
-#include <linux/mm.h>
-#include <linux/cred.h>
-#include <linux/slab.h>
 #include <linux/file.h>
+#include <linux/sched/mm.h>
+#include <linux/cred.h>
 #include "vfs_trace_process.h"
 #include "event.h"
 #include "vfs_change_consts.h"
