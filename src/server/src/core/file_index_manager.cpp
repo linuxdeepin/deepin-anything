@@ -211,40 +211,55 @@ file_index_manager::~file_index_manager() {
     }
 }
 
-void file_index_manager::add_index(const std::string& path) {
+bool file_index_manager::add_index(const std::string& path) {
+    bool ret = false;
+
     try {
         auto doc = create_document(make_file_record(path, pinyin_processor_, file_type_mapping_));
         writer_->updateDocument(newLucene<Term>(FULL_PATH_FIELD, StringUtils::toUnicode(path)), doc);
         spdlog::debug("Indexed {}", path);
+        ret = true;
     } catch (const LuceneException& e) {
         spdlog::error("Failed to index {}: {}", path, StringUtils::toUTF8(e.getError()));
     } catch (const std::exception& e) {
         spdlog::error("Failed to index {}: {}", path, e.what());
     }
+
+    return ret;
 }
 
-void file_index_manager::remove_index(const std::string& path) {
+bool file_index_manager::remove_index(const std::string& path) {
+    bool ret = false;
+
     try {
         TermPtr pterm = newLucene<Term>(FULL_PATH_FIELD, StringUtils::toUnicode(path));
         writer_->deleteDocuments(pterm);
         spdlog::debug("Removed index: {}", path);
+        ret = true;
     } catch (const LuceneException& e) {
         spdlog::error("Failed to remove index {}: {}", path, StringUtils::toUTF8(e.getError()));
     } catch (const std::exception& e) {
         spdlog::error("Failed to remove index {}: {}", path, e.what());
     }
+
+    return ret;
 }
 
-void file_index_manager::update_index(const std::string& old_path, const std::string& new_path) {
+bool file_index_manager::update_index(const std::string& old_path, const std::string& new_path) {
+    bool ret = false;
+
     try {
         auto doc = create_document(make_file_record(new_path, pinyin_processor_, file_type_mapping_));
         writer_->updateDocument(newLucene<Term>(FULL_PATH_FIELD, StringUtils::toUnicode(old_path)), doc);
         spdlog::debug("Renamed: {} --> {}", old_path, new_path);
+        ret = true;
     } catch (const LuceneException& e) {
         spdlog::error("Failed to rename index {} to {}: {}", old_path, new_path, StringUtils::toUTF8(e.getError()));
     } catch (const std::exception& e) {
         spdlog::error("Failed to rename index {} to {}: {}", old_path, new_path, e.what());
     }
+
+    return ret;
 }
 
 bool check_index_corrupted(const std::string& index_directory) {
@@ -327,8 +342,11 @@ std::string file_index_manager::index_directory() const {
     return persistent_index_directory_;
 }
 
-std::vector<std::string> file_index_manager::traverse_directory(const std::string& path, bool nrt) {
+std::vector<std::string> file_index_manager::traverse_directory(const std::string& path, bool nrt, bool &success) {
+    success = false;
+
     if (path.empty()) {
+        success = true;
         return {};
     }
 
@@ -362,9 +380,11 @@ std::vector<std::string> file_index_manager::traverse_directory(const std::strin
             results.push_back(StringUtils::toUTF8(doc->get(FULL_PATH_FIELD)));
         }
 
+        success = true;
         return results;
     } catch (const LuceneException& e) {
         spdlog::error("Failed to traverse directory {}: {}", path, StringUtils::toUTF8(e.getError()));
+        success = false;
         return {};
     }
 }
