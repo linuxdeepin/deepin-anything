@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
         if (key == LOG_LEVEL_KEY) {
             spdlog::set_level(spdlog::level::from_str(config.get_log_level()));
         } else {
-            handler.notify_config_changed();
+            handler.set_index_invalid_and_restart();
         }
     });
 

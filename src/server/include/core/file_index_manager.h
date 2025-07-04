@@ -32,16 +32,16 @@ public:
 
     /// @brief Add a path to the index.
     /// @param path The full path to be added.
-    void add_index(const std::string& path);
+    bool add_index(const std::string& path);
 
     /// @brief Remove the path from the index.
     /// @param path The full path to be removed.
-    void remove_index(const std::string& path);
+    bool remove_index(const std::string& path);
 
     /// @brief Removes the old path and inserts the new path into the index.
     /// @param old_path The existing path to be removed from the index.
     /// @param new_path The new path to be added to the index.
-    void update_index(const std::string& old_path, const std::string& new_path);
+    bool update_index(const std::string& old_path, const std::string& new_path);
 
     /// Commit all changes to the index
     bool commit(index_status status);
@@ -63,7 +63,7 @@ public:
     /// Return the cache directory of the index.
     std::string index_directory() const;
 
-    std::vector<std::string> traverse_directory(const std::string& path, bool nrt);
+    std::vector<std::string> traverse_directory(const std::string& path, bool nrt, bool &success);
 
     /**
      * Check if the given file path is already indexed using an exact match search.

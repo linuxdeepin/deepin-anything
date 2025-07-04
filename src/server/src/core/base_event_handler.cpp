@@ -166,36 +166,61 @@ void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::s
 }
 
 void base_event_handler::eat_job(const anything::index_job& job) {
-    if (job.type == anything::index_job_type::add) {
-        index_manager_.add_index(job.src);
-    } else if (job.type == anything::index_job_type::remove) {
-        index_manager_.remove_index(job.src);
-    } else if (job.type == anything::index_job_type::update) {
-        if (job.dst) {
-            index_manager_.update_index(job.src, *job.dst);
-        }
-    } else if (job.type == anything::index_job_type::scan) {
-        for (auto&& path : anything::disk_scanner::scan(job.src, config_->blacklist_paths)) {
-            index_manager_.add_index(std::move(path));
-        }
-    } else if (job.type == anything::index_job_type::recursive_update) {
-        if (job.dst) {
-            auto src_subitems = traverse_directory(job.src);
-            src_subitems.emplace_back(job.src);
+    bool ret = false;
 
-            if (job.dst->empty()) {
-                for (auto const& src : src_subitems) {
-                    index_manager_.remove_index(src);
-                }
-            } else {
-                size_t event_src_len = job.src.length();
-                for (auto const& src : src_subitems) {
-                    std::string dst = src;
-                    dst.replace(0, event_src_len, *job.dst);
-                    index_manager_.update_index(src, dst);
+    switch (job.type) {
+        case anything::index_job_type::add:
+            ret = index_manager_.add_index(job.src);
+            break;
+        case anything::index_job_type::remove:
+            ret = index_manager_.remove_index(job.src);
+            break;
+        case anything::index_job_type::update:
+            if (job.dst) {
+                ret = index_manager_.update_index(job.src, *job.dst);
+            }
+            break;
+        case anything::index_job_type::scan:
+            for (auto&& path : anything::disk_scanner::scan(job.src, config_->blacklist_paths)) {
+                ret = index_manager_.add_index(std::move(path));
+                if (!ret)
+                    break;
+            }
+            break;
+        case anything::index_job_type::recursive_update:
+            if (job.dst) {
+                auto src_subitems = index_manager_.traverse_directory(job.src, true, ret);
+                if (!ret)
+                    break;
+
+                src_subitems.emplace_back(job.src);
+
+                if (job.dst->empty()) {
+                    for (auto const& src : src_subitems) {
+                        ret = index_manager_.remove_index(src);
+                        if (!ret)
+                            break;
+                    }
+                } else {
+                    size_t event_src_len = job.src.length();
+                    for (auto const& src : src_subitems) {
+                        std::string dst = src;
+                        dst.replace(0, event_src_len, *job.dst);
+                        ret = index_manager_.update_index(src, dst);
+                        if (!ret)
+                            break;
+                    }
                 }
             }
-        }
+            break;
+        default:
+            spdlog::error("Invalid job type: {}", static_cast<int>(job.type));
+            break;
+    }
+
+    if (!ret) {
+        spdlog::info("Failed to process job");
+        set_index_invalid_and_restart();
     }
 }
 
@@ -238,9 +263,8 @@ void base_event_handler::timer_worker(int64_t interval) {
             if (commit_volatile_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
                 g_atomic_int_get(&event_process_thread_count_) == 0) {
                 if (!index_manager_.commit(index_status_)) {
-                    spdlog::info("Failed to commit index, restart");
-                    set_app_restart(true);
-                    qApp->quit();
+                    spdlog::info("Failed to commit index");
+                    set_index_invalid_and_restart();
                 }
                 commit_volatile_index_timeout_ = config_->commit_volatile_index_timeout;
                 index_dirty_ = false;
@@ -307,9 +331,8 @@ void base_event_handler::timer_worker(int64_t interval) {
 
             index_status_ = anything::index_status::monitoring;
             if (!index_manager_.commit(index_status_)) {
-                spdlog::info("Failed to commit index, restart");
-                set_app_restart(true);
-                qApp->quit();
+                spdlog::info("Failed to commit index");
+                set_index_invalid_and_restart();
             }
         }
 
@@ -317,11 +340,7 @@ void base_event_handler::timer_worker(int64_t interval) {
     }
 }
 
-std::vector<std::string> base_event_handler::traverse_directory(const std::string& path) {
-    return index_manager_.traverse_directory(path, true);
-}
-
-void base_event_handler::notify_config_changed() {
+void base_event_handler::set_index_invalid_and_restart() {
     spdlog::info("Set index invalid and restart");
 
     index_manager_.set_index_invalid();
