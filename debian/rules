@@ -1,5 +1,6 @@
 #!/usr/bin/make -f
 
+export DH_VERBOSE=1
 DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 
 %:
@@ -12,5 +13,11 @@ override_dh_auto_configure:
 
 override_dh_installinit:
 	true
+
+override_dh_systemd_enable:
+	dh_systemd_enable -pdeepin-anything-server deepin-anything-server.service
+
+override_dh_systemd_start:
+	dh_systemd_start -pdeepin-anything-server deepin-anything-server.service
 
 override_dh_auto_clean:

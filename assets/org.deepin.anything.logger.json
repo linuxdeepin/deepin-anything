@@ -1,0 +1,72 @@
+{
+    "magic": "dsg.config.meta",
+    "version": "1.0",
+    "contents": {
+        "log_events": {
+            "value": true,
+            "serial": 0,
+            "flags":["global"],
+            "name": "Log Events",
+            "name[zh_CN]": "记录事件",
+            "description": "Log Events",
+            "description[zh_CN]":"记录事件",
+            "permissions": "readwrite",
+            "visibility": "public"
+        },
+        "log_events_type": {
+            "value": ["file-deleted", "folder-deleted"],
+            "serial": 0,
+            "flags":["global"],
+            "name": "Log Events Type",
+            "name[zh_CN]": "记录事件类型",
+            "description": "Log Events Type",
+            "description[zh_CN]": "记录事件类型",
+            "permissions": "readwrite",
+            "visibility": "public"
+        },
+        "log_file_count": {
+            "value": 10,
+            "serial": 0,
+            "flags":["global"],
+            "name": "Log File Count",
+            "name[zh_CN]": "日志文件数量",
+            "description": "Log File Count",
+            "description[zh_CN]": "日志文件数量",
+            "permissions": "readwrite",
+            "visibility": "public"
+        },
+        "log_file_size": {
+            "value": 50,
+            "serial": 0,
+            "flags":["global"],
+            "name": "Log File Size (MiB)",
+            "name[zh_CN]": "日志文件大小 (MiB)",
+            "description": "Log File Size (MiB)",
+            "description[zh_CN]": "日志文件大小 (MiB)",
+            "permissions": "readwrite",
+            "visibility": "public"
+        },
+        "print_debug_log": {
+            "value": false,
+            "serial": 0,
+            "flags":["global"],
+            "name": "Print Debug Log",
+            "name[zh_CN]": "打印调试日志",
+            "description": "Print Debug Log",
+            "description[zh_CN]": "打印调试日志",
+            "permissions": "readwrite",
+            "visibility": "public"
+        },
+        "disable_event_merge": {
+            "value": false,
+            "serial": 0,
+            "flags":["global"],
+            "name": "Disable Event Merge",
+            "name[zh_CN]": "禁用事件合并",
+            "description": "Disable Event Merge",
+            "description[zh_CN]": "禁用事件合并",
+            "permissions": "readwrite",
+            "visibility": "public"
+        }
+    }
+}
