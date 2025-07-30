@@ -1,3 +1,4 @@
 /usr/bin
 /usr/lib/systemd/user/deepin-anything-daemon.service
+/usr/lib/systemd/system/deepin-anything-logger.service
 /usr/share

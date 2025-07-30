@@ -28,7 +28,7 @@ public:
         while (tokenStream->incrementToken()) {
             callback(tokenStream->getAttribute<TermAttribute>()->term());
         }
-    };
+    }
 };
 
 class AnythingAnalyzerSavedStreams : public LuceneObject {
