@@ -5,7 +5,7 @@ After=udisks2.service
 [Service]
 User=root
 Group=root
-ExecStart=/usr/bin/deepin-anything-server
+ExecStart=/usr/libexec/deepin-anything-server
 ExecStartPre=modprobe vfs_monitor
 ExecStopPost=rmmod vfs_monitor
 Restart=always

@@ -34,9 +34,7 @@ target_link_libraries(deepin-anything-logger PRIVATE
     ${GNL_LIBRARIES}
 )
 
-install(TARGETS deepin-anything-logger
-    DESTINATION bin
-)
+install(TARGETS deepin-anything-logger DESTINATION libexec)
 
 # Install dconfig meta file
 install(FILES ${CMAKE_SOURCE_DIR}/assets/org.deepin.anything.logger.json DESTINATION share/dsg/configs/org.deepin.anything)
