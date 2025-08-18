@@ -3,7 +3,7 @@ Description=Deepin anything daemon service
 After=udisks2.service
 
 [Service]
-ExecStart=/usr/bin/deepin-anything-daemon
+ExecStart=/usr/libexec/deepin-anything-daemon
 Restart=on-failure
 RestartSec=30
 

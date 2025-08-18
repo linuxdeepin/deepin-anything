@@ -4,7 +4,7 @@ Description=Deepin anything logger service
 [Service]
 User=root
 Group=root
-ExecStart=/usr/bin/deepin-anything-logger
+ExecStart=/usr/libexec/deepin-anything-logger
 Restart=on-failure
 RestartSec=30
 

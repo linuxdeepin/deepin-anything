@@ -119,14 +119,9 @@ target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror -Wextra)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 configure_file ("${PROJECT_NAME}.pc.in" "${PROJECT_NAME}.pc" @ONLY)
-install(TARGETS ${PROJECT_NAME}
-    COMPONENT linapp
-    RUNTIME DESTINATION bin
-    LIBRARY DESTINATION lib
-    DESTINATION lib
-)
+install(TARGETS ${PROJECT_NAME} DESTINATION libexec)
 
-install(PROGRAMS deepin-anything-server DESTINATION bin)
+install(PROGRAMS deepin-anything-server DESTINATION libexec)
 install(FILES deepin-anything-daemon.service DESTINATION lib/systemd/user)
 # installed by debhelper
 # install(FILES deepin-anything-server.service DESTINATION lib/systemd/system)
