@@ -301,9 +301,10 @@ Config::~Config() {
 
 std::shared_ptr<event_handler_config> Config::make_event_handler_config()
 {
+
     auto config = std::make_shared<event_handler_config>();
     config->persistent_index_dir = std::string(g_get_user_cache_dir()) + "/deepin-anything-server";
-    config->volatile_index_dir = std::string(g_get_user_runtime_dir()) + "/deepin-anything-server";
+    config->volatile_index_dir = config->persistent_index_dir;
     config->blacklist_paths = blacklist_paths_;
     config->indexing_paths = indexing_paths_;
     config->file_type_mapping_original = file_type_mapping_;
