@@ -16,8 +16,8 @@ find_package(Boost REQUIRED COMPONENTS system)
 add_executable(deepin-anything-searcher
     main.cpp
     searcher.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../server/src/analyzers/chineseanalyzer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../server/src/analyzers/chinesetokenizer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/src/analyzers/chineseanalyzer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/src/analyzers/chinesetokenizer.cpp
 )
 
 # Include directories
@@ -25,7 +25,7 @@ target_include_directories(deepin-anything-searcher PRIVATE
     ${GLIB_INCLUDE_DIRS}
     ${LUCENE_INCLUDE_DIRS}
     ${LUCENE_CONTRIB_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../server/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/include
 )
 
 # Link libraries
