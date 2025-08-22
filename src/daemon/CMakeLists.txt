@@ -120,6 +120,7 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 configure_file ("${PROJECT_NAME}.pc.in" "${PROJECT_NAME}.pc" @ONLY)
 install(TARGETS ${PROJECT_NAME} DESTINATION libexec)
+install(FILES deepin-anything-daemon.service DESTINATION lib/systemd/user)
 
 # Install dconfig meta file
 install(FILES ${CMAKE_SOURCE_DIR}/assets/org.deepin.anything.json DESTINATION share/dsg/configs/org.deepin.anything)
