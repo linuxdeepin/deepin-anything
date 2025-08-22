@@ -154,7 +154,7 @@ void default_event_handler::handle(fs_event *event) {
 bool default_event_handler::convert_fs_event(fs_event *event, fs_event_with_full_path *event_with_full_path) {
     // Update partition event
     if (event->act == ACT_MOUNT || event->act == ACT_UNMOUNT) {
-        spdlog::info("{}: {}", (event->act == ACT_MOUNT ? "Mount a device" : "Unmount a device"), event->src);
+        spdlog::debug("{}: {}", (event->act == ACT_MOUNT ? "Mount a device" : "Unmount a device"), event->src);
         refresh_mount_status();
         return true;
     }

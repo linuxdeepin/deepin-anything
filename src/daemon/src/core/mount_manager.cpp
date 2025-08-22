@@ -32,30 +32,23 @@ bool mount_manager::update() {
     }
 
     std::string line;
-    std::unordered_set<std::string> dlnfs_devs;
+    mounts_.clear();
     while (std::getline(file_mountinfo, line)) {
         auto mountinfo = string_helper::split(line, " ");
         auto major_minor = string_helper::split(mountinfo[to_underlying(mountinfo_field::major_minor)], ":");
         unsigned int major = std::stoul(major_minor[0]);
         unsigned int minor = std::stoul(major_minor[1]);
-        if (major == 0 && mountinfo[to_underlying(mountinfo_field::file_system_type)] != "fuse.dlnfs")
-            continue;
 
         if (mountinfo[to_underlying(mountinfo_field::root)] == "/") {
             // only record the first mount point of the device
             if (mounts_.find(MKDEV(major, minor)) != mounts_.end())
                 continue;
 
-            std::cout << mountinfo[to_underlying(mountinfo_field::mount_point)] << "\n";
-            // mounts_.emplace(MKDEV(major, minor), mountinfo[to_underlying(mountinfo_field::mount_point)]);
             mounts_[MKDEV(major, minor)] = mountinfo[to_underlying(mountinfo_field::mount_point)];
-            if (major == 0 && mountinfo[to_underlying(mountinfo_field::file_system_type)] == "fuse.dlnfs")
-                dlnfs_devs.insert(major_minor[1]);
         }
     }
 
-    std::cout << "-------------------------------\n";
-    return update_vfs_unnamed_device(dlnfs_devs);
+    return true;
 }
 
 bool mount_manager::contains_device(unsigned int key) const {
