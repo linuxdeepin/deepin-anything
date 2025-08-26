@@ -56,22 +56,6 @@ void base_event_handler::set_batch_size(std::size_t size) {
     batch_size_ = size;
 }
 
-bool base_event_handler::ignored_event(const std::string& path, bool ignored) {
-    if (anything::string_helper::ends_with(path, ".longname"))
-        return true; // 长文件名记录文件，直接忽略
-    
-    // 没有标记忽略前一条，则检查是否长文件目录
-    if (!ignored) {
-        // 向上找到一个当前文件的挂载点且匹配文件系统类型
-        if (mnt_manager_.path_match_type(path, "fuse.dlnfs")) {
-            // 长文件目录，标记此条事件被忽略
-            return true;
-        }
-    }
-
-    return false;
-}
-
 void base_event_handler::insert_pending_paths(
     std::vector<std::string> paths) {
     if (delay_mode_) {
@@ -111,18 +95,6 @@ void base_event_handler::set_index_dirs(const std::vector<std::string> &paths) {
 
 std::size_t base_event_handler::pending_paths_count() const {
     return pending_paths_.size();
-}
-
-void base_event_handler::refresh_mount_status() {
-    mnt_manager_.update();
-}
-
-bool base_event_handler::device_available(unsigned int device_id) const {
-    return mnt_manager_.contains_device(device_id);
-}
-
-std::string base_event_handler::fetch_mount_point_for_device(unsigned int device_id) const {
-    return mnt_manager_.get_mount_point(device_id);
 }
 
 std::string base_event_handler::get_index_directory() const {

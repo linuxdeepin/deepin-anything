@@ -10,6 +10,7 @@
 #include <vector>
 #include <glib.h>
 #include "core/base_event_handler.h"
+#include "core/mount_info.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -21,6 +22,7 @@ struct indexing_item {
 
 struct fs_event_with_full_path {
     uint8_t     act;
+    dev_t       device_id;
     std::string src;
     std::string dst;
 };
@@ -28,7 +30,8 @@ struct fs_event_with_full_path {
 class default_event_handler : public base_event_handler {
 public:
     explicit default_event_handler(std::shared_ptr<event_handler_config> config);
-    
+    virtual ~default_event_handler();
+
     void handle(fs_event *event) override;
 
     bool is_under_indexing_path(const std::string& path, indexing_item *&indexing_item);
@@ -53,6 +56,8 @@ private:
 
     GAsyncQueue* event_queue_;
     GThread* event_filter_thread_;
+
+    MountInfo *mount_info_;
 };
 
 ANYTHING_NAMESPACE_END
