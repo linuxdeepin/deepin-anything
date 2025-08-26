@@ -173,7 +173,7 @@ int main (G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
 {
     setlocale (LC_ALL, "");
 
-    g_auto(GStrv) fstypes = g_strsplit("overlay,btrfs", ",", 0);
+    g_auto(GStrv) fstypes = g_strsplit("overlay,btrfs,fuse.dlnfs,ulnfs", ",", 0);
     mounts_changed(NULL, fstypes);
 
     GMainLoop *loop = g_main_loop_new (NULL, FALSE);

@@ -12,7 +12,6 @@
 #include "common/anything_fwd.hpp"
 #include "common/fs_event.h"
 #include "core/file_index_manager.h"
-#include "core/mount_manager.h"
 #include "core/thread_pool.h"
 #include "core/config.h"
 
@@ -48,19 +47,11 @@ public:
 protected:
     void set_batch_size(std::size_t size);
 
-    bool ignored_event(const std::string& path, bool ignored);
-
     void insert_pending_paths(std::vector<std::string> paths);
     void insert_index_directory(const std::string &dir);
     void set_index_dirs(const std::vector<std::string> &paths);
 
     std::size_t pending_paths_count() const;
-
-    void refresh_mount_status();
-
-    bool device_available(unsigned int device_id) const;
-
-    std::string fetch_mount_point_for_device(unsigned int device_id) const;
 
     std::string get_index_directory() const;
 
@@ -80,7 +71,6 @@ private:
 
 private:
     std::shared_ptr<event_handler_config> config_;
-    anything::mount_manager mnt_manager_;
     anything::file_index_manager index_manager_;
     std::size_t batch_size_;
     std::vector<std::string> pending_paths_;

@@ -8,6 +8,7 @@
 #include <cstdlib> // std::getenv
 #include <glib.h>
 #include <gmodule.h>
+#include <sys/sysmacros.h>
 
 #include "utils/log.h"
 #include "utils/string_helper.h"
@@ -120,8 +121,15 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
     }
     set_index_dirs(indexing_paths);
 
-    // Initialize mount cache
-    refresh_mount_status();
+    mount_info_ = mount_info_new();
+    g_autofree gchar *dump = mount_info_dump(mount_info_);
+    // remove the last "\n"
+    dump[strlen(dump) - 1] = '\0';
+    spdlog::info("{}", dump);
+}
+
+default_event_handler::~default_event_handler() {
+    mount_info_free(mount_info_);
 }
 
 bool default_event_handler::is_under_indexing_path(const std::string& path, indexing_item *&indexing_item) {
@@ -155,20 +163,21 @@ bool default_event_handler::convert_fs_event(fs_event *event, fs_event_with_full
     // Update partition event
     if (event->act == ACT_MOUNT || event->act == ACT_UNMOUNT) {
         spdlog::debug("{}: {}", (event->act == ACT_MOUNT ? "Mount a device" : "Unmount a device"), event->src);
-        refresh_mount_status();
+        mount_info_update(mount_info_);
         return true;
     }
 
     std::string root;
     if (event->act < ACT_MOUNT) {
-        unsigned int device_id = MKDEV(event->major, event->minor);
-        if (!device_available(device_id)) {
-            spdlog::warn("Unknown device: {}, dev: {}:{}, path: {}, cookie: {}",
+        event_with_full_path->device_id = makedev(event->major, event->minor);
+
+        const char *mount_point = mount_info_get_device_mount_point(mount_info_, event_with_full_path->device_id);
+        if (!mount_point) {
+            spdlog::debug("Unknown device: {}, dev: {}:{}, path: {}, cookie: {}",
                 +event->act, event->major, +event->minor, event->src, event->cookie);
             return true;
         }
-
-        root = fetch_mount_point_for_device(device_id);
+        root = mount_point;
         if (root == "/")
             root.clear();
     }
@@ -221,6 +230,27 @@ bool default_event_handler::convert_fs_event(fs_event *event, fs_event_with_full
     return false;
 }
 
+bool is_lowerfs_event(MountInfo *mount_info, fs_event_with_full_path *event) {
+    if (!mount_info_exist_lowerfs(mount_info)) {
+        return false;
+    }
+
+    const char* event_file_path = event->dst.empty() ? event->src.c_str() : event->dst.c_str();
+
+    const GList *child_mount_points = mount_info_get_child_mount_points(mount_info, event->device_id);
+    if (child_mount_points) {
+        for (const GList *iter = child_mount_points; iter != NULL; iter = iter->next) {
+            if (string_helper::starts_with(event_file_path, (const gchar *)iter->data)) {
+                spdlog::debug("{}:{} {} is under the child mount point: {}",
+                    major(event->device_id), minor(event->device_id), event_file_path, (gchar *)iter->data);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 void default_event_handler::filter_event(fs_event *fs_event) {
     [[maybe_unused]] const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
 
@@ -241,58 +271,58 @@ void default_event_handler::filter_event(fs_event *fs_event) {
         return;
     }
 
-    bool ignored = false;
-    ignored = ignored_event(event.dst.empty() ? event.src : event.dst, ignored);
-    if (!ignored) {
-        if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
-            event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
-            // Do not check for the existence of files; we trust the kernel module.
-            convert_event_path_to_origin_path(event.src, *src_indexing_item);
-            add_index_delay(std::move(event.src));
-        } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
+    if (is_lowerfs_event(mount_info_, &event)) {
+        return;
+    }
+
+    if (event.act == ACT_NEW_FILE || event.act == ACT_NEW_SYMLINK ||
+        event.act == ACT_NEW_LINK || event.act == ACT_NEW_FOLDER) {
+        // Do not check for the existence of files; we trust the kernel module.
+        convert_event_path_to_origin_path(event.src, *src_indexing_item);
+        add_index_delay(std::move(event.src));
+    } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
+        convert_event_path_to_origin_path(event.src, *src_indexing_item);
+        remove_index_delay(std::move(event.src));
+    } else if (event.act == ACT_RENAME_FILE) {
+        bool isSrcBlocked = is_event_path_blocked(event.src, src_indexing_item);
+        bool isDstBlocked = is_event_path_blocked(event.dst, dst_indexing_item);
+
+        if (isSrcBlocked && isDstBlocked) {
+            return;
+        } else if (isSrcBlocked) {
+            convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
+            add_index_delay(std::move(event.dst));
+        } else if (isDstBlocked) {
             convert_event_path_to_origin_path(event.src, *src_indexing_item);
             remove_index_delay(std::move(event.src));
-        } else if (event.act == ACT_RENAME_FILE) {
-            bool isSrcBlocked = is_event_path_blocked(event.src, src_indexing_item);
-            bool isDstBlocked = is_event_path_blocked(event.dst, dst_indexing_item);
-
-            if (isSrcBlocked && isDstBlocked) {
-                return;
-            } else if (isSrcBlocked) {
-                convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
-                add_index_delay(std::move(event.dst));
-            } else if (isDstBlocked) {
-                convert_event_path_to_origin_path(event.src, *src_indexing_item);
-                remove_index_delay(std::move(event.src));
-            } else {
-                convert_event_path_to_origin_path(event.src, *src_indexing_item);
-                convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
-                update_index_delay(std::move(event.src), std::move(event.dst));
-            }
-        } else if (event.act == ACT_RENAME_FOLDER) {
-            // Rename all files/folders in this folder(including this folder)
-            bool isSrcBlocked = is_event_path_blocked(event.src, src_indexing_item);
-            bool isDstBlocked = is_event_path_blocked(event.dst, dst_indexing_item);
-
-            if (isSrcBlocked && isDstBlocked) {
-                return;
-            }
-
-            if (isSrcBlocked) {
-                convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
-                add_index_delay(event.dst);
-                scan_index_delay(std::move(event.dst));
-                return;
-            }
-
+        } else {
             convert_event_path_to_origin_path(event.src, *src_indexing_item);
-            if (!isDstBlocked) {
-                convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
-            } else {
-                event.dst.clear();
-            }
-            recursive_update_index_delay(std::move(event.src), std::move(event.dst));
+            convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
+            update_index_delay(std::move(event.src), std::move(event.dst));
         }
+    } else if (event.act == ACT_RENAME_FOLDER) {
+        // Rename all files/folders in this folder(including this folder)
+        bool isSrcBlocked = is_event_path_blocked(event.src, src_indexing_item);
+        bool isDstBlocked = is_event_path_blocked(event.dst, dst_indexing_item);
+
+        if (isSrcBlocked && isDstBlocked) {
+            return;
+        }
+
+        if (isSrcBlocked) {
+            convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
+            add_index_delay(event.dst);
+            scan_index_delay(std::move(event.dst));
+            return;
+        }
+
+        convert_event_path_to_origin_path(event.src, *src_indexing_item);
+        if (!isDstBlocked) {
+            convert_event_path_to_origin_path(event.dst, *dst_indexing_item);
+        } else {
+            event.dst.clear();
+        }
+        recursive_update_index_delay(std::move(event.src), std::move(event.dst));
     }
 }
 
