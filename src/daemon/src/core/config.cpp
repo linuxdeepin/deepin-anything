@@ -270,6 +270,17 @@ Config::Config()
     for (auto& path : blacklist_paths_) {
         replace_home_dir(path);
     }
+    // ensure .cache is in blacklist to filter index update event
+    bool is_cache_in_blacklist = false;
+    for (auto& path : blacklist_paths_) {
+        if (path == ".cache") {
+            is_cache_in_blacklist = true;
+            break;
+        }
+    }
+    if (!is_cache_in_blacklist) {
+        blacklist_paths_.push_back(".cache");
+    }
 
     for (auto& path : indexing_paths_) {
         if (replace_home_dir(path)) {
