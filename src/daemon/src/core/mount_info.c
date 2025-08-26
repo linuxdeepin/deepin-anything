@@ -71,16 +71,23 @@ is_mount_chain_all_root(GHashTable *root_mount_tree, struct libmnt_fs *fs)
         return FALSE;
     }
 
+    // check if the mount point is root
+    if (g_strcmp0(mnt_fs_get_target(fs), "/") == 0) {
+        return TRUE;
+    }
+
     // check if all parent mount points are root
-    for (int mount_id = mnt_fs_get_parent_id(fs); mount_id != 1;) {
-        MountRecord *record = g_hash_table_lookup(root_mount_tree, GINT_TO_POINTER(mount_id));
+    int parent_mount_id = mnt_fs_get_parent_id(fs);
+    while (TRUE) {
+        MountRecord *record = g_hash_table_lookup(root_mount_tree, GINT_TO_POINTER(parent_mount_id));
         if (!record) {
             return FALSE;
         }
-        mount_id = record->parent_mount_id;
+        if (g_strcmp0(record->mount_point, "/") == 0) {
+            return TRUE;
+        }
+        parent_mount_id = record->parent_mount_id;
     }
-
-    return TRUE;
 }
 
 static void 
