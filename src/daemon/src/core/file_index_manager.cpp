@@ -98,6 +98,7 @@ file_record make_file_record(const std::filesystem::path& p,
 #define FILE_TYPE_FIELD L"file_type"
 #define FILE_EXT_FIELD L"file_ext"
 #define MODIFY_TIME_FIELD L"modify_time"
+#define MODIFY_TIME_STR_FIELD L"modify_time_str"
 #define FILE_SIZE_FIELD L"file_size"
 #define FILE_SIZE_STR_FIELD L"file_size_str"
 #define PINYIN_FIELD L"pinyin"
@@ -124,7 +125,7 @@ DocumentPtr create_document(const file_record& record) {
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
 
     char *formatted_time = format_time(record.modify_time);
-    doc->add(newLucene<Field>(MODIFY_TIME_FIELD,
+    doc->add(newLucene<Field>(MODIFY_TIME_STR_FIELD,
         StringUtils::toUnicode(formatted_time),
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
     g_free(formatted_time);
