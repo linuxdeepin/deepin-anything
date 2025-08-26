@@ -1,3 +1,18 @@
+deepin-anything (7.0.25) unstable; urgency=medium
+
+  * refactor: Update installation paths for deepin-anything services
+  * fix: Fix insufficient index storage space
+  * refactor: Remove deepin-anything server and related service files
+  * refactor: Adjust project structure
+  * feat: Add deepin-anything-server service
+  * refactor: Allow handle file events from all devices
+  * feat: Adapt to long file name system
+  * feat: Add formatted modify time field to file records
+  * feat: Ensure .cache in blacklist
+  * feat: Enhance mount chain validation logic
+
+ -- wangrong <wangrong@uniontech.com>  Tue, 26 Aug 2025 21:10:14 +0800
+
 deepin-anything (7.0.24) unstable; urgency=medium
 
   * refactor: Use marker file to handle invalid index
