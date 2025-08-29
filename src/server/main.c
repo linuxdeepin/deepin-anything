@@ -12,6 +12,8 @@
 
 #define MAX_MINOR 255
 
+#define VFS_UNNAMED_DEVICE_FILE "/sys/kernel/vfs_monitor/vfs_unnamed_devices"
+
 static GList *get_unnamed_device_by_fstype (GStrv fstypes)
 {
     GList *devices = NULL;
@@ -57,13 +59,12 @@ out:
 
 static void write_vfs_unnamed_device(const char *str)
 {
-    FILE *file = fopen("/sys/kernel/vfs_monitor/vfs_unnamed_devices", "w");
+    FILE *file = fopen(VFS_UNNAMED_DEVICE_FILE, "w");
     if (!file)
         return;
 
     fwrite(str, strlen(str), 1, file);
     fclose(file);
-    g_message("write_vfs_unnamed_device: %s", str);
 }
 
 static GList *read_vfs_unnamed_device(GError **error)
@@ -71,7 +72,7 @@ static GList *read_vfs_unnamed_device(GError **error)
     GList *devices = NULL;
 
     g_autofree char *content = NULL;
-    if (!g_file_get_contents("/sys/kernel/vfs_monitor/vfs_unnamed_devices", &content, NULL, error)) {
+    if (!g_file_get_contents(VFS_UNNAMED_DEVICE_FILE, &content, NULL, error)) {
         return NULL;
     }
 
