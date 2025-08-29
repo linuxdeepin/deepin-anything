@@ -92,6 +92,7 @@ std::vector<std::string> Searcher::search(const std::string& path,
                     << "<\\>" << StringUtils::toUTF8(doc->get(L"modify_time_str"))
                     << "<\\>" << StringUtils::toUTF8(doc->get(L"file_size_str"))
                     << "<\\>" << StringUtils::toUTF8(doc->get(L"pinyin"))
+                    << "<\\>" << StringUtils::toUTF8(doc->get(L"pinyin_acronym"))
                     << "<\\>" << StringUtils::toUTF8(doc->get(L"is_hidden"));
                 std::string result = ss.str();
                 results.push_back(result);

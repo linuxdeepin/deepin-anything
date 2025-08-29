@@ -22,7 +22,7 @@ public:
 
     void load_pinyin_dict(const std::string& filename);
 
-    std::string convert_to_pinyin(const std::string& sentence);
+    void convert_to_pinyin(const std::string& sentence, std::string& pinyin_full, std::string& pinyin_acronym);
 
 private:
     unsigned int hex_to_dec(const std::string& hex_str);

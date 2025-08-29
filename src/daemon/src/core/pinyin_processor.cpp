@@ -46,7 +46,7 @@ void pinyin_processor::load_pinyin_dict(const std::string& filename) {
     }
 }
 
-std::string pinyin_processor::convert_to_pinyin(const std::string& sentence) {
+void pinyin_processor::convert_to_pinyin(const std::string& sentence, std::string& pinyin_full, std::string& pinyin_acronym) {
     auto results = split_utf8_characters(sentence);
     std::string new_sentence;
     std::string pinyin_temp;
@@ -108,9 +108,9 @@ std::string pinyin_processor::convert_to_pinyin(const std::string& sentence) {
 
     new_sentence += " " + pinyin_acronym_english;
     new_sentence += " " + pinyin_english;
-    // return new_sentence;
-    // 只返回全拼拼音，比如 “文件.txt” 只返回 “wenjian.txt”
-    return pinyin_english;
+
+    pinyin_full = std::move(pinyin_english);
+    pinyin_acronym = std::move(pinyin_acronym_english);
 }
 
 unsigned int pinyin_processor::hex_to_dec(const std::string& hex_str) {

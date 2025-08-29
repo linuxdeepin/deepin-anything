@@ -37,6 +37,7 @@ using namespace Lucene;
 struct file_record {
     std::string file_name;
     std::string file_name_pinyin;
+    std::string file_name_pinyin_acronym;
     std::string full_path;
     std::string file_type;
     std::string file_ext;
@@ -55,7 +56,8 @@ file_record make_file_record(const std::filesystem::path& p,
                              const std::map<std::string, std::string> &file_type_mapping) {
     file_record ret = {
         .file_name       = p.filename().string(),
-        .file_name_pinyin = pinyin_processor.convert_to_pinyin(p.filename().string()),
+        .file_name_pinyin = "",
+        .file_name_pinyin_acronym = "",
         .full_path       = p.string(),
         .file_type       = "other",
         .file_ext        = p.extension().string(),
@@ -63,6 +65,7 @@ file_record make_file_record(const std::filesystem::path& p,
         .file_size       = 0,
         .is_hidden       = false,
     };
+    pinyin_processor.convert_to_pinyin(ret.file_name, ret.file_name_pinyin, ret.file_name_pinyin_acronym);
 
     if (ret.file_ext.size() > 1) {
         ret.file_ext = ret.file_ext.substr(1);
@@ -73,7 +76,8 @@ file_record make_file_record(const std::filesystem::path& p,
     struct stat statbuf;
     if (lstat(ret.full_path.c_str(), &statbuf) != 0) {
         auto err = errno;
-        spdlog::warn("stat fail: {} {}", ret.full_path, strerror(err));
+        // The error is usually that the file does not exist, mainly because the index is not updated in time.
+        spdlog::debug("stat fail: {} {}", ret.full_path, strerror(err));
         return ret;
     } else {
         ret.modify_time = statbuf.st_mtim.tv_sec;
@@ -102,6 +106,7 @@ file_record make_file_record(const std::filesystem::path& p,
 #define FILE_SIZE_FIELD L"file_size"
 #define FILE_SIZE_STR_FIELD L"file_size_str"
 #define PINYIN_FIELD L"pinyin"
+#define PINYIN_ACRONYM_FIELD L"pinyin_acronym"
 #define IS_HIDDEN_FIELD L"is_hidden"
 
 DocumentPtr create_document(const file_record& record) {
@@ -141,6 +146,9 @@ DocumentPtr create_document(const file_record& record) {
     doc->add(newLucene<Field>(PINYIN_FIELD,
         StringUtils::toUnicode(record.file_name_pinyin),
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+    doc->add(newLucene<Field>(PINYIN_ACRONYM_FIELD,
+        StringUtils::toUnicode(record.file_name_pinyin_acronym),
+        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
 
     doc->add(newLucene<Field>(IS_HIDDEN_FIELD,
         (record.is_hidden ? L"Y" : L"N"),
@@ -150,7 +158,7 @@ DocumentPtr create_document(const file_record& record) {
 }
 
 
-#define INDEX_VERSION L"2"
+#define INDEX_VERSION L"3"
 #define INDEX_VERSION_FIELD L"index_version"
 
 file_index_manager::file_index_manager(const std::string& persistent_index_dir,
