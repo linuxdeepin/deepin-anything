@@ -487,24 +487,48 @@ void file_index_manager::try_refresh_reader(bool nrt) {
     }
 }
 
+static void create_index_entry_point(const std::string &volatile_index_directory) {
+    std::error_code ec;
+    std::string index_entry_point = std::string(g_get_user_runtime_dir()) + "/deepin-anything-server";
+
+    if (volatile_index_directory == index_entry_point)
+        return;
+
+    // remove index entry point if exists
+    // symlink is removed, not its target
+    std::filesystem::remove_all(index_entry_point, ec);
+
+    // create volatile index directory if not exists
+    ec.clear();
+    bool volatile_index_directory_exists = std::filesystem::exists(volatile_index_directory, ec);
+    if (ec) {
+        spdlog::error("Failed to check volatile index directory: {}, quit", ec.message());
+        exit(APP_QUIT_CODE);
+    }
+    if (!volatile_index_directory_exists) {
+        ec.clear();
+        std::filesystem::create_directory(volatile_index_directory, ec);
+        if (ec) {
+            spdlog::error("Failed to create volatile index directory: {}, quit", ec.message());
+            exit(APP_QUIT_CODE);
+        }
+    }
+
+    // create symbolic links for index entry point
+    ec.clear();
+    std::filesystem::create_directory_symlink(volatile_index_directory, index_entry_point, ec);
+    if (ec) {
+        spdlog::error("Failed to create symbolic link from {} to {}: {}, quit",
+            index_entry_point, volatile_index_directory, ec.message());
+        exit(APP_QUIT_CODE);
+    }
+}
+
 void file_index_manager::prepare_index() {
     spdlog::info("Preparing index...");
     std::error_code ec;
 
-    std::string index_entry_point = std::string(g_get_user_runtime_dir()) + "/deepin-anything-server";
-
-    if (volatile_index_directory_ != index_entry_point) {
-        // create symbolic links for index entry point
-        if (std::filesystem::exists(index_entry_point)) {
-            std::filesystem::remove_all(index_entry_point);
-        }
-        std::filesystem::create_directory_symlink(volatile_index_directory_, index_entry_point, ec);
-        if (ec) {
-            spdlog::error("Failed to create symbolic link from {} to {}: {}, quit",
-                index_entry_point, volatile_index_directory_, ec.message());
-            exit(APP_QUIT_CODE);
-        }
-    }
+    create_index_entry_point(volatile_index_directory_);
 
     if (persistent_index_directory_ == volatile_index_directory_) {
         spdlog::info("Persistent index directory is the same as volatile index directory, skip prepare");
