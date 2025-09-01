@@ -111,6 +111,14 @@ void pinyin_processor::convert_to_pinyin(const std::string& sentence, std::strin
 
     pinyin_full = std::move(pinyin_english);
     pinyin_acronym = std::move(pinyin_acronym_english);
+
+    // remove space in pinyin_full and pinyin_acronym
+    pinyin_full.erase(std::remove_if(pinyin_full.begin(), pinyin_full.end(), [](unsigned char c) {
+        return std::isspace(c);
+    }), pinyin_full.end());
+    pinyin_acronym.erase(std::remove_if(pinyin_acronym.begin(), pinyin_acronym.end(), [](unsigned char c) {
+        return std::isspace(c);
+    }), pinyin_acronym.end());
 }
 
 unsigned int pinyin_processor::hex_to_dec(const std::string& hex_str) {
