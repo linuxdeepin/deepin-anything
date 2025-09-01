@@ -144,11 +144,11 @@ DocumentPtr create_document(const file_record& record) {
     doc->add(newLucene<NumericField>(MODIFY_TIME_FIELD)->setLongValue(record.modify_time));
     doc->add(newLucene<NumericField>(FILE_SIZE_FIELD)->setLongValue(record.file_size));
     doc->add(newLucene<Field>(PINYIN_FIELD,
-        StringUtils::toUnicode(record.file_name_pinyin),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+        StringUtils::toLower(StringUtils::toUnicode(record.file_name_pinyin)),
+        Field::STORE_YES, Field::INDEX_ANALYZED));
     doc->add(newLucene<Field>(PINYIN_ACRONYM_FIELD,
-        StringUtils::toUnicode(record.file_name_pinyin_acronym),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
+        StringUtils::toLower(StringUtils::toUnicode(record.file_name_pinyin_acronym)),
+        Field::STORE_YES, Field::INDEX_ANALYZED));
 
     doc->add(newLucene<Field>(IS_HIDDEN_FIELD,
         (record.is_hidden ? L"Y" : L"N"),
