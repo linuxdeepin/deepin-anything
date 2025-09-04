@@ -18,7 +18,6 @@ base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> con
       batch_size_(200),
       pool_(1),
       stop_timer_(false),
-      timer_(std::thread(&base_event_handler::timer_worker, this, 1000)),
       delay_mode_(true/*index_manager_.indexed()*/),
       index_dirty_(false),
       volatile_index_dirty_(false),
@@ -27,6 +26,9 @@ base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> con
       index_status_(anything::index_status::loading),
       event_process_thread_count_(0) {
     index_dirty_ = index_manager_.refresh_indexes(config_->blacklist_paths);
+
+    // The timer thread is started only after all initialization is completed
+    timer_ = std::thread(&base_event_handler::timer_worker, this, 1000);
 }
 
 base_event_handler::~base_event_handler() {
