@@ -1,3 +1,9 @@
+deepin-anything (7.0.27) unstable; urgency=medium
+
+  * fix: Fix deepin-anything-daemon core dump for uninitialized index_status_
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 04 Sep 2025 16:48:50 +0800
+
 deepin-anything (7.0.26) unstable; urgency=medium
 
   * feat: Add pinyin acronym to file index
