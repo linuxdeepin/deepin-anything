@@ -18,7 +18,7 @@
 ANYTHING_NAMESPACE_BEGIN
 
 enum class index_job_type : char {
-    add, remove, update, scan, recursive_update
+    add, remove, update, scan, recursive_update, init_scan
 };
 
 struct index_job {
@@ -40,6 +40,8 @@ public:
 
     virtual void handle(anything::fs_event *event) = 0;
 
+    virtual void start_handle_init_scan(const std::string &path) = 0;
+
     void terminate_processing();
 
     void set_index_invalid_and_restart();
@@ -60,6 +62,7 @@ protected:
     void update_index_delay(std::string src, std::string dst);
     void scan_index_delay(std::string path);
     void recursive_update_index_delay(std::string src, std::string dst);
+    void init_scan_index_delay(std::string path);
 
 private:
     void eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number);
@@ -68,6 +71,8 @@ private:
     void jobs_push(std::string src, anything::index_job_type type, std::optional<std::string> dst = std::nullopt);
 
     void timer_worker(int64_t interval);
+
+    bool scan_directory(const std::string& dir_path, std::function<bool(const std::string&)> handler);
 
 private:
     std::shared_ptr<event_handler_config> config_;
@@ -93,6 +98,8 @@ private:
     std::mutex index_dirs_mtx_;
 
     gint event_process_thread_count_;
+
+    std::atomic<bool> stop_scan_directory_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_

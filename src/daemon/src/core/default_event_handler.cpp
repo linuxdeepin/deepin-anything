@@ -86,6 +86,7 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
             .origin_path = origin_path_with_slash,
             .event_path = event_path_with_slash,
             .different_path = origin_path_with_slash != event_path_with_slash,
+            .enable = false
         };
         spdlog::info("Determine the event path: {} -> {}", item.origin_path, item.event_path);
 
@@ -110,16 +111,18 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
         }
     }
 
-    // scan the indexing_items_
-    std::vector<std::string> indexing_paths;
-    for (auto& item : indexing_items_) {
-        indexing_paths.emplace_back(item.origin_path);
-        // remove the last "/"
-        if (indexing_paths.back() != "/") {
-            indexing_paths.back().pop_back();
+    // add init scan event
+    std::string scan_path_without_slash;
+    for (const auto& item : indexing_items_) {
+        scan_path_without_slash = item.origin_path;
+        if (scan_path_without_slash != "/") {
+            scan_path_without_slash.pop_back();
         }
+        add_index_delay(scan_path_without_slash);
+        init_scan_index_delay(std::move(scan_path_without_slash));
     }
-    set_index_dirs(indexing_paths);
+    // indicate init scan end
+    init_scan_index_delay("");
 
     mount_info_ = mount_info_new();
     g_autofree gchar *dump = mount_info_dump(mount_info_);
@@ -134,7 +137,7 @@ default_event_handler::~default_event_handler() {
 
 bool default_event_handler::is_under_indexing_path(const std::string& path, indexing_item *&indexing_item) {
     for (auto& item : indexing_items_) {
-        if (string_helper::starts_with(path, item.event_path)) {
+        if (item.enable && string_helper::starts_with(path, item.event_path)) {
             indexing_item = &item;
             return true;
         }
@@ -155,6 +158,22 @@ bool default_event_handler::is_event_path_blocked(const std::string& path, index
 
 void default_event_handler::handle(fs_event *event) {
     g_async_queue_push(event_queue_, event);
+}
+
+void default_event_handler::start_handle_init_scan(const std::string &path) {
+    for (auto& item : indexing_items_) {
+        if (item.enable)
+            continue;
+
+        std::string origin_path_without_slash = item.origin_path;
+        if (origin_path_without_slash != "/")
+            origin_path_without_slash.pop_back();
+
+        if (origin_path_without_slash == path) {
+            item.enable = true;
+            break;
+        }
+    }
 }
 
 // 将 fs_event 转换为 fs_event_with_full_path

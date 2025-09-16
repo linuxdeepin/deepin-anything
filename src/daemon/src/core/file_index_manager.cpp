@@ -55,12 +55,12 @@ file_record make_file_record(const std::filesystem::path& p,
                              pinyin_processor& pinyin_processor,
                              const std::map<std::string, std::string> &file_type_mapping) {
     file_record ret = {
-        .file_name       = p.filename().string(),
+        .file_name       = std::move(p.filename().string()),
         .file_name_pinyin = "",
         .file_name_pinyin_acronym = "",
-        .full_path       = p.string(),
+        .full_path       = std::move(p.string()),
         .file_type       = "other",
-        .file_ext        = p.extension().string(),
+        .file_ext        = std::move(p.extension().string()),
         .modify_time     = 0,
         .file_size       = 0,
         .is_hidden       = false,
@@ -391,7 +391,7 @@ std::vector<std::string> file_index_manager::traverse_directory(const std::strin
         results.reserve(search_results->scoreDocs.size());
         for (const auto& score_doc : search_results->scoreDocs) {
             DocumentPtr doc = searcher->doc(score_doc->doc);
-            results.push_back(StringUtils::toUTF8(doc->get(FULL_PATH_FIELD)));
+            results.push_back(std::move(StringUtils::toUTF8(doc->get(FULL_PATH_FIELD))));
         }
 
         success = true;
@@ -435,7 +435,7 @@ bool file_index_manager::refresh_indexes(const std::vector<std::string>& blackli
                 }
                 if (!std::filesystem::exists(full_path, ec) ||
                     is_path_in_blacklist(full_path.string(), blacklist_paths)) {
-                    remove_list.push_back(full_path.string());
+                    remove_list.push_back(std::move(full_path.string()));
                 }
             }
 

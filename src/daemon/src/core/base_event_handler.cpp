@@ -24,7 +24,8 @@ base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> con
       commit_volatile_index_timeout_(config->commit_volatile_index_timeout),
       commit_persistent_index_timeout_(config->commit_persistent_index_timeout),
       index_status_(anything::index_status::loading),
-      event_process_thread_count_(0) {
+      event_process_thread_count_(0),
+      stop_scan_directory_(false) {
     index_dirty_ = index_manager_.refresh_indexes(config_->blacklist_paths);
 
     // The timer thread is started only after all initialization is completed
@@ -43,7 +44,7 @@ base_event_handler::~base_event_handler() {
 
 void base_event_handler::terminate_processing() {
     stop_timer_ = true;
-    anything::disk_scanner::stop_scanning = true;
+    stop_scan_directory_ = true;
 
     if (timer_.joinable()) {
         auto thread_id = timer_.get_id();
@@ -52,6 +53,15 @@ void base_event_handler::terminate_processing() {
         oss << thread_id;
         spdlog::info("Timer thread {} has exited", oss.str());
     }
+}
+
+void base_event_handler::set_index_invalid_and_restart() {
+    spdlog::info("Set index invalid and restart");
+
+    index_manager_.set_index_invalid();
+
+    set_app_restart(true);
+    qApp->quit();
 }
 
 void base_event_handler::set_batch_size(std::size_t size) {
@@ -123,6 +133,11 @@ void base_event_handler::recursive_update_index_delay(std::string src, std::stri
     jobs_push(std::move(src), anything::index_job_type::recursive_update, std::move(dst));
 }
 
+void base_event_handler::init_scan_index_delay(std::string path) {
+    index_status_ = anything::index_status::scanning;
+    jobs_push(std::move(path), anything::index_job_type::init_scan);
+}
+
 void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number) {
     std::vector<anything::index_job> processing_jobs;
     processing_jobs.insert(
@@ -155,11 +170,9 @@ void base_event_handler::eat_job(const anything::index_job& job) {
             }
             break;
         case anything::index_job_type::scan:
-            for (auto&& path : anything::disk_scanner::scan(job.src, config_->blacklist_paths)) {
-                ret = index_manager_.add_index(std::move(path));
-                if (!ret)
-                    break;
-            }
+            ret = scan_directory(job.src, [this](const std::string& path) {
+                return index_manager_.add_index(path);
+            });
             break;
         case anything::index_job_type::recursive_update:
             if (job.dst) {
@@ -185,6 +198,23 @@ void base_event_handler::eat_job(const anything::index_job& job) {
                             break;
                     }
                 }
+            }
+            break;
+        case anything::index_job_type::init_scan:
+            if (!job.src.empty()) {
+                start_handle_init_scan(job.src);
+                ret = scan_directory(job.src, [this](const std::string& path) {
+                    if (!index_manager_.document_exists(path, true))
+                        return index_manager_.add_index(path);
+                    else
+                        return true;
+                });
+            } else {
+                // init scan end
+                index_status_ = anything::index_status::monitoring;
+                spdlog::info("Index scan completed");
+                // index commit will be triggered by timer
+                ret = true;
             }
             break;
         default:
@@ -300,7 +330,8 @@ void base_event_handler::timer_worker(int64_t interval) {
         if (index_status_ == anything::index_status::scanning &&
             pending_paths_empty &&
             idle &&
-            !pool_.busy()) {
+            !pool_.busy() &&
+            g_atomic_int_get(&event_process_thread_count_) == 0) {
             spdlog::info("Index scan completed, trigger index commit");
 
             index_status_ = anything::index_status::monitoring;
@@ -314,11 +345,31 @@ void base_event_handler::timer_worker(int64_t interval) {
     }
 }
 
-void base_event_handler::set_index_invalid_and_restart() {
-    spdlog::info("Set index invalid and restart");
+bool base_event_handler::scan_directory(const std::string& dir_path, std::function<bool(const std::string&)> handler) {
+    spdlog::info("Scanning directory {}", dir_path);
 
-    index_manager_.set_index_invalid();
+    std::error_code ec;
+    std::string path;
+    // By default, symlinks are not followed
+    std::filesystem::recursive_directory_iterator dirpos{ dir_path, std::filesystem::directory_options::skip_permission_denied };
+    for (auto it = begin(dirpos); it != end(dirpos); ++it) {
+        path = std::move(it->path().string());
+        if (is_path_in_blacklist(path, config_->blacklist_paths) ||
+            !std::filesystem::exists(it->path(), ec)) {
+                it.disable_recursion_pending();
+            continue;
+        }
 
-    set_app_restart(true);
-    qApp->quit();
+        if (!handler(path)) {
+            return false;
+        }
+
+        if (stop_scan_directory_) {
+            spdlog::info("Scanning interrupted");
+            return true;
+        }
+    }
+
+    spdlog::info("Scanning directory {} completed", dir_path);
+    return true;
 }
