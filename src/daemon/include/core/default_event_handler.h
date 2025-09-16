@@ -18,6 +18,7 @@ struct indexing_item {
     std::string origin_path;
     std::string event_path;
     bool different_path;
+    bool enable;
 };
 
 struct fs_event_with_full_path {
@@ -33,6 +34,8 @@ public:
     virtual ~default_event_handler();
 
     void handle(fs_event *event) override;
+
+    void start_handle_init_scan(const std::string &path) override;
 
     bool is_under_indexing_path(const std::string& path, indexing_item *&indexing_item);
 
