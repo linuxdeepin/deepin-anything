@@ -6,6 +6,8 @@ After=udisks2.service
 ExecStart=/usr/libexec/deepin-anything-daemon
 Restart=on-failure
 RestartSec=30
+MemoryHigh=4G
+MemoryMax=5G
 
 [Install]
 WantedBy=default.target
