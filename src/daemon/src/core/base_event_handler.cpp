@@ -33,13 +33,6 @@ base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> con
 }
 
 base_event_handler::~base_event_handler() {
-    pool_.wait_for_tasks();
-    if (!jobs_.empty()) {
-        // Eat all jobs
-        for (auto&& job : jobs_) {
-            eat_job(std::move(job));
-        }
-    }
 }
 
 void base_event_handler::terminate_processing() {
@@ -52,6 +45,14 @@ void base_event_handler::terminate_processing() {
         std::ostringstream oss;
         oss << thread_id;
         spdlog::info("Timer thread {} has exited", oss.str());
+    }
+
+    pool_.wait_for_tasks();
+    if (!jobs_.empty()) {
+        // Eat all jobs
+        for (auto&& job : jobs_) {
+            eat_job(std::move(job));
+        }
     }
 }
 
