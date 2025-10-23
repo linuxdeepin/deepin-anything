@@ -1,3 +1,9 @@
+deepin-anything (7.0.31) unstable; urgency=medium
+
+  * fix: Fix deepin-anything-daemon coredump
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 23 Oct 2025 14:27:25 +0800
+
 deepin-anything (7.0.30) unstable; urgency=medium
 
   * fix: Fix daemon is always in loading state
