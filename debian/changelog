@@ -1,3 +1,9 @@
+deepin-anything (7.0.32) unstable; urgency=medium
+
+  * fix: Fix deepin-anything-daemon coredump
+
+ -- wangrong <wangrong@uniontech.com>  Tue, 11 Nov 2025 21:09:59 +0800
+
 deepin-anything (7.0.31) unstable; urgency=medium
 
   * fix: Fix deepin-anything-daemon coredump

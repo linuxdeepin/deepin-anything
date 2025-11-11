@@ -2,6 +2,7 @@
 
 export DH_VERBOSE=1
 DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+export DEB_LDFLAGS_APPEND = -Wl,-z,now
 
 %:
 	dh $@ --parallel --with dkms,systemd

@@ -199,7 +199,7 @@ file_index_manager::file_index_manager(const std::string& persistent_index_dir,
     } catch (const LuceneException& e) {
         std::string error_msg = "Failed to initialize file_index_manager: " + StringUtils::toUTF8(e.getError());
         spdlog::critical(error_msg);
-        throw std::runtime_error(error_msg);
+        exit(APP_QUIT_CODE);
     }
 }
 
