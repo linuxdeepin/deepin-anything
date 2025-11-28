@@ -184,9 +184,10 @@ file_index_manager::file_index_manager(const std::string& persistent_index_dir,
             }
         } catch (const LuceneException& e) {
             spdlog::warn("The index is corrupted: {}", volatile_index_directory_);
+            std::error_code ec;
             if (writer_) writer_->close();
             if (reader_) reader_->close();
-            std::filesystem::remove_all(volatile_index_directory_);
+            std::filesystem::remove_all(volatile_index_directory_, ec);
 
             writer_ = newLucene<IndexWriter>(dir,
                 newLucene<ChineseAnalyzer>(),
@@ -575,7 +576,7 @@ void file_index_manager::check_index_version() {
     // 检查是否是无效索引
     if (std::filesystem::exists(volatile_index_directory_ + "/invalid_index", ec)) {
         spdlog::warn("The index is invalid: {}, remove it", volatile_index_directory_);
-        std::filesystem::remove_all(volatile_index_directory_);
+        std::filesystem::remove_all(volatile_index_directory_, ec);
         return;
     }
 
@@ -587,7 +588,7 @@ void file_index_manager::check_index_version() {
         spdlog::warn("The index is corrupted: {}", volatile_index_directory_);
         if (reader) reader->close();
         spdlog::warn("Removing the corrupted index...");
-        std::filesystem::remove_all(volatile_index_directory_);
+        std::filesystem::remove_all(volatile_index_directory_, ec);
         return;
     }
 
@@ -610,7 +611,7 @@ void file_index_manager::check_index_version() {
     } else {
         spdlog::warn("The index version is mismatched: {}", volatile_index_directory_);
         spdlog::warn("Removing the incompatible index...");
-        std::filesystem::remove_all(volatile_index_directory_);
+        std::filesystem::remove_all(volatile_index_directory_, ec);
     }
 }
 
