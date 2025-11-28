@@ -50,9 +50,10 @@ void base_event_handler::terminate_processing() {
     pool_.wait_for_tasks();
     if (!jobs_.empty()) {
         // Eat all jobs
-        for (auto&& job : jobs_) {
+        for (auto &&job : jobs_) {
             eat_job(std::move(job));
         }
+        jobs_.clear();
     }
 }
 
@@ -351,24 +352,31 @@ bool base_event_handler::scan_directory(const std::string& dir_path, std::functi
 
     std::error_code ec;
     std::string path;
-    // By default, symlinks are not followed
-    std::filesystem::recursive_directory_iterator dirpos{ dir_path, std::filesystem::directory_options::skip_permission_denied };
-    for (auto it = begin(dirpos); it != end(dirpos); ++it) {
-        path = std::move(it->path().string());
-        if (is_path_in_blacklist(path, config_->blacklist_paths) ||
-            !std::filesystem::exists(it->path(), ec)) {
-                it.disable_recursion_pending();
-            continue;
-        }
 
-        if (!handler(path)) {
-            return false;
-        }
+    try {
+        // By default, symlinks are not followed
+        std::filesystem::recursive_directory_iterator dirpos{ dir_path, std::filesystem::directory_options::skip_permission_denied };
+        for (auto it = begin(dirpos); it != end(dirpos); ++it) {
+            path = std::move(it->path().string());
+            if (is_path_in_blacklist(path, config_->blacklist_paths) ||
+                !std::filesystem::exists(it->path(), ec)) {
+                    it.disable_recursion_pending();
+                continue;
+            }
 
-        if (stop_scan_directory_) {
-            spdlog::info("Scanning interrupted");
-            return true;
+            if (!handler(path)) {
+                spdlog::error("Failed to handle path: {}", path);
+                return false;
+            }
+
+            if (stop_scan_directory_) {
+                spdlog::info("Scanning interrupted");
+                return true;
+            }
         }
+    } catch (std::filesystem::filesystem_error const& e) {
+        spdlog::error("Failed to scan directory: {}, {}, {}, {}",
+            e.what(), e.path1().string(), e.path2().string(), e.code().value());
     }
 
     spdlog::info("Scanning directory {} completed", dir_path);

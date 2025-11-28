@@ -1,3 +1,9 @@
+deepin-anything (7.0.33) unstable; urgency=medium
+
+  * feat: Improve daemon stability and resource management
+
+ -- wangrong <wangrong@uniontech.com>  Fri, 28 Nov 2025 17:02:59 +0800
+
 deepin-anything (7.0.32) unstable; urgency=medium
 
   * fix: Fix deepin-anything-daemon coredump
