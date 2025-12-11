@@ -10,7 +10,11 @@ pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LUCENE REQUIRED liblucene++)
 pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
 find_package(Threads REQUIRED)
-find_package(Boost REQUIRED COMPONENTS system)
+find_package(Boost REQUIRED)
+if (Boost_VERSION_STRING VERSION_LESS "1.89.0")
+    message(STATUS "Boost < 1.89 → using Boost::system")
+    find_package(Boost REQUIRED COMPONENTS system)
+endif()
 
 # Add executable
 add_executable(deepin-anything-searcher
