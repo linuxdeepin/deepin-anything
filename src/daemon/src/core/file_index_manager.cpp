@@ -123,23 +123,16 @@ file_record make_file_record(const std::filesystem::path& p,
  */
 static void add_ancestor_paths(DocumentPtr doc, const std::string &full_path)
 {
-    if (full_path.empty()) return;
+    if (full_path.empty() || full_path[0] != '/')
+        return;
 
     std::string current_path = full_path;
+    size_t last_slash = 1;
 
-    // 第一次处理：去掉文件名，获取该文件所在的直接父目录
-    size_t last_slash = current_path.find_last_of('/');
-    if (last_slash == std::string::npos) return;   // 只有文件名没有路径，这种情况很少见
+    while (last_slash != 0) {
+        last_slash = current_path.find_last_of('/');
+        current_path.resize(last_slash == 0 ? 1 : last_slash);
 
-    // 处理位于根目录的文件 (例如 /boot.ini)
-    if (last_slash == 0) {
-        current_path = "/";
-    } else {
-        current_path = current_path.substr(0, last_slash);
-    }
-
-    // 循环向上遍历，直到根目录
-    while (true) {
         // 添加 Field
         // 注意：
         // 1. 使用 Field::STORE_NO，因为我们只需要搜索它，不需要把这些父路径取出来显示给用户，节省空间。
@@ -148,22 +141,6 @@ static void add_ancestor_paths(DocumentPtr doc, const std::string &full_path)
                                   StringUtils::toUnicode(current_path),
                                   Field::STORE_NO,
                                   Field::INDEX_NOT_ANALYZED));
-
-        // 如果已经到了根目录，停止循环
-        if (current_path == "/" || current_path.empty()) {
-            break;
-        }
-
-        // 寻找上一级目录
-        last_slash = current_path.find_last_of('/');
-        if (last_slash == std::string::npos) break;
-
-        if (last_slash == 0) {
-            // 到达根目录
-            current_path = "/";
-        } else {
-            current_path = current_path.substr(0, last_slash);
-        }
     }
 }
 

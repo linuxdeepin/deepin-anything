@@ -53,50 +53,55 @@ std::vector<std::string> Searcher::search(const std::string& path,
     }
 
     try {
-        QueryPtr query_ptr;
+        BooleanQueryPtr finalQuery = newLucene<BooleanQuery>();
         String query_string = StringUtils::toLower(StringUtils::toUnicode(query.c_str()));
 
+        // 文件名搜索
         if (wildcard_query) {
             TermPtr term = newLucene<Term>(L"file_name_lower", query_string);
-            query_ptr = newLucene<WildcardQuery>(term);
+            QueryPtr wildcardQuery = newLucene<WildcardQuery>(term);
+            finalQuery->add(wildcardQuery, BooleanClause::MUST);
         } else {
             // 创建查询解析器
             AnalyzerPtr analyzer = newLucene<ChineseAnalyzer>();
             QueryParserPtr parser = newLucene<QueryParser>(LuceneVersion::LUCENE_CURRENT, L"file_name", analyzer);
 
             // 解析查询
-            query_ptr = parser->parse(query_string);
+            QueryPtr parserQuery = parser->parse(query_string);
+            finalQuery->add(parserQuery, BooleanClause::MUST);
         }
-        
+
+        // 搜索路径前缀过滤
+        {
+            g_autofree gchar *canonical = g_canonicalize_filename (path.c_str(), NULL);
+            TermPtr term = newLucene<Term>(L"ancestor_paths", StringUtils::toUnicode(canonical));
+            QueryPtr prefixQuery = newLucene<TermQuery>(term);
+            finalQuery->add(prefixQuery, BooleanClause::MUST);
+        }
+
         // 执行搜索
         if (max_results == 0) {
             max_results = reader->numDocs();
         }
         std::cout << "Doc num: " << reader->numDocs() << std::endl;
-        TopDocsPtr topDocs = searcher->search(query_ptr, max_results);
+        TopDocsPtr topDocs = searcher->search(finalQuery, max_results);
+        results.reserve(topDocs->totalHits);
         
         // 处理搜索结果
-        std::string path_with_slash = path;
-        if (!string_helper::ends_with(path_with_slash, "/")) {
-            path_with_slash += "/";
-        }
         for (int32_t i = 0; i < topDocs->totalHits; ++i) {
             ScoreDocPtr scoreDoc = topDocs->scoreDocs[i];
             DocumentPtr doc = searcher->doc(scoreDoc->doc);
-            std::string full_path = StringUtils::toUTF8(doc->get(L"full_path"));
-            if (string_helper::starts_with(full_path, path_with_slash)) {
-                std::stringstream ss;
-                ss << full_path
-                    << "<\\>" << StringUtils::toUTF8(doc->get(L"file_type"))
-                    << "<\\>" << StringUtils::toUTF8(doc->get(L"file_ext"))
-                    << "<\\>" << StringUtils::toUTF8(doc->get(L"modify_time_str"))
-                    << "<\\>" << StringUtils::toUTF8(doc->get(L"file_size_str"))
-                    << "<\\>" << StringUtils::toUTF8(doc->get(L"pinyin"))
-                    << "<\\>" << StringUtils::toUTF8(doc->get(L"pinyin_acronym"))
-                    << "<\\>" << StringUtils::toUTF8(doc->get(L"is_hidden"));
-                std::string result = ss.str();
-                results.push_back(result);
-            }
+            std::stringstream ss;
+            ss << StringUtils::toUTF8(doc->get(L"full_path"))
+                << "<\\>" << StringUtils::toUTF8(doc->get(L"file_type"))
+                << "<\\>" << StringUtils::toUTF8(doc->get(L"file_ext"))
+                << "<\\>" << StringUtils::toUTF8(doc->get(L"modify_time_str"))
+                << "<\\>" << StringUtils::toUTF8(doc->get(L"file_size_str"))
+                << "<\\>" << StringUtils::toUTF8(doc->get(L"pinyin"))
+                << "<\\>" << StringUtils::toUTF8(doc->get(L"pinyin_acronym"))
+                << "<\\>" << StringUtils::toUTF8(doc->get(L"is_hidden"));
+            std::string result = ss.str();
+            results.push_back(result);
         }
     } catch (const LuceneException& e) {
         std::cerr << "Search failed: " << StringUtils::toUTF8(e.getError()) << std::endl;
