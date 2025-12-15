@@ -108,6 +108,64 @@ file_record make_file_record(const std::filesystem::path& p,
 #define PINYIN_FIELD L"pinyin"
 #define PINYIN_ACRONYM_FIELD L"pinyin_acronym"
 #define IS_HIDDEN_FIELD L"is_hidden"
+#define ANCESTOR_PATHS_FIELD L"ancestor_paths"
+
+/**
+ * 辅助函数：解析文件路径，将所有父级目录作为 Term 添加到索引中。
+ *
+ * 逻辑示例：
+ * 如果 full_path 是 "/home/user/project/main.cpp"
+ * 我们会添加以下 Term 到 ANCESTOR_PATHS_FIELD:
+ * 1. "/home/user/project"
+ * 2. "/home/user"
+ * 3. "/home"
+ * 4. "/"
+ */
+static void add_ancestor_paths(DocumentPtr doc, const std::string &full_path)
+{
+    if (full_path.empty()) return;
+
+    std::string current_path = full_path;
+
+    // 第一次处理：去掉文件名，获取该文件所在的直接父目录
+    size_t last_slash = current_path.find_last_of('/');
+    if (last_slash == std::string::npos) return;   // 只有文件名没有路径，这种情况很少见
+
+    // 处理位于根目录的文件 (例如 /boot.ini)
+    if (last_slash == 0) {
+        current_path = "/";
+    } else {
+        current_path = current_path.substr(0, last_slash);
+    }
+
+    // 循环向上遍历，直到根目录
+    while (true) {
+        // 添加 Field
+        // 注意：
+        // 1. 使用 Field::STORE_NO，因为我们只需要搜索它，不需要把这些父路径取出来显示给用户，节省空间。
+        // 2. 使用 Field::INDEX_NOT_ANALYZED，确保路径作为一个整体被索引，不要被分词器拆开。
+        doc->add(newLucene<Field>(ANCESTOR_PATHS_FIELD,
+                                  StringUtils::toUnicode(current_path),
+                                  Field::STORE_NO,
+                                  Field::INDEX_NOT_ANALYZED));
+
+        // 如果已经到了根目录，停止循环
+        if (current_path == "/" || current_path.empty()) {
+            break;
+        }
+
+        // 寻找上一级目录
+        last_slash = current_path.find_last_of('/');
+        if (last_slash == std::string::npos) break;
+
+        if (last_slash == 0) {
+            // 到达根目录
+            current_path = "/";
+        } else {
+            current_path = current_path.substr(0, last_slash);
+        }
+    }
+}
 
 DocumentPtr create_document(const file_record& record) {
     DocumentPtr doc = newLucene<Document>();
@@ -154,11 +212,13 @@ DocumentPtr create_document(const file_record& record) {
         (record.is_hidden ? L"Y" : L"N"),
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
 
+    add_ancestor_paths(doc, record.full_path);
+
     return doc;
 }
 
 
-#define INDEX_VERSION L"3"
+#define INDEX_VERSION L"4"
 #define INDEX_VERSION_FIELD L"index_version"
 
 file_index_manager::file_index_manager(const std::string& persistent_index_dir,
