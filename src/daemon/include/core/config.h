@@ -45,6 +45,9 @@ public:
     std::string get_log_level();
 
 private:
+    bool update_config();
+
+private:
     std::vector<std::string> blacklist_paths_;
     std::vector<std::string> indexing_paths_;
     std::map<std::string, std::string> file_type_mapping_;

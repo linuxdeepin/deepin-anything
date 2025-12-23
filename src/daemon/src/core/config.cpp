@@ -11,6 +11,7 @@
 #include <glib.h>
 #include <sstream>
 #include <gio/gio.h>
+#include <unordered_set>
 
 #define COMMIT_VOLATILE_INDEX_TIMEOUT_DEFAULT 2
 #define COMMIT_VOLATILE_INDEX_TIMEOUT_MIN 1
@@ -224,73 +225,9 @@ Config::Config()
         exit(APP_QUIT_CODE);
     }
 
-    indexing_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path_, "indexing_paths");
-    blacklist_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path_, "blacklist_paths");
-    std::string app_file_suffix, archive_file_suffix, audio_file_suffix, doc_file_suffix, pic_file_suffix, video_file_suffix;
-    app_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "app_file_suffix");
-    archive_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "archive_file_suffix");
-    audio_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "audio_file_suffix");
-    doc_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "doc_file_suffix");
-    pic_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "pic_file_suffix");
-    video_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "video_file_suffix");
-    file_type_mapping_ = {
-        {"app",     app_file_suffix},
-        {"archive", archive_file_suffix},
-        {"audio",   audio_file_suffix},
-        {"doc",     doc_file_suffix},
-        {"pic",     pic_file_suffix},
-        {"video",   video_file_suffix},
-    };
-    if(indexing_paths_.empty() ||
-        blacklist_paths_.empty() ||
-        app_file_suffix.empty() ||
-        archive_file_suffix.empty() ||
-        audio_file_suffix.empty() ||
-        doc_file_suffix.empty() ||
-        pic_file_suffix.empty() ||
-        video_file_suffix.empty()) {
+    if (!update_config()) {
         spdlog::error("Failed to get dconfig config");
         exit(APP_QUIT_CODE);
-    }
-
-    log_level_ = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, LOG_LEVEL_KEY);
-
-    commit_volatile_index_timeout_ = get_config_int64((GDBusConnection*)dbus_connection_, resource_path_, "commit_volatile_index_timeout");
-    commit_persistent_index_timeout_ = get_config_int64((GDBusConnection*)dbus_connection_, resource_path_, "commit_persistent_index_timeout");
-    if (commit_volatile_index_timeout_ < COMMIT_VOLATILE_INDEX_TIMEOUT_MIN ||
-        commit_volatile_index_timeout_ > COMMIT_VOLATILE_INDEX_TIMEOUT_MAX) {
-        commit_volatile_index_timeout_ = COMMIT_VOLATILE_INDEX_TIMEOUT_DEFAULT;
-    }
-    if (commit_persistent_index_timeout_ < COMMIT_PERSISTENT_INDEX_TIMEOUT_MIN ||
-        commit_persistent_index_timeout_ > COMMIT_PERSISTENT_INDEX_TIMEOUT_MAX) {
-        commit_persistent_index_timeout_ = COMMIT_PERSISTENT_INDEX_TIMEOUT_DEFAULT;
-    }
-
-    // Replace $HOME with actual home directory path
-    for (auto& path : blacklist_paths_) {
-        replace_home_dir(path);
-    }
-    // ensure .cache is in blacklist to filter index update event
-    bool is_cache_in_blacklist = false;
-    for (auto& path : blacklist_paths_) {
-        if (path == ".cache") {
-            is_cache_in_blacklist = true;
-            break;
-        }
-    }
-    if (!is_cache_in_blacklist) {
-        blacklist_paths_.push_back(".cache");
-    }
-
-    for (auto& path : indexing_paths_) {
-        if (replace_home_dir(path)) {
-            continue;
-        }
-        // not allow relative path
-        if (!anything::string_helper::starts_with(path, "/")) {
-            path.insert(0, "/");
-            continue;
-        }
     }
 
     subscription_id_ = g_dbus_connection_signal_subscribe((GDBusConnection*)dbus_connection_,
@@ -312,7 +249,6 @@ Config::~Config() {
 
 std::shared_ptr<event_handler_config> Config::make_event_handler_config()
 {
-
     auto config = std::make_shared<event_handler_config>();
     config->persistent_index_dir = std::string(g_get_user_cache_dir()) + "/deepin-anything-server";
     config->volatile_index_dir = config->persistent_index_dir;
@@ -339,9 +275,7 @@ void Config::set_config_change_handler(std::function<void(std::string)> config_c
 
 void Config::notify_config_changed(const std::string &key)
 {
-    if (key == LOG_LEVEL_KEY) {
-        log_level_ = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, LOG_LEVEL_KEY);
-    }
+    update_config();
 
     if (config_change_handler_)
         config_change_handler_(key);
@@ -352,6 +286,95 @@ std::string Config::get_log_level()
     return log_level_;
 }
 
+void process_blacklist_paths(std::vector<std::string>& blacklist_paths)
+{
+    std::unordered_set<std::string> unique_paths;
+
+    for (auto& path : blacklist_paths) {
+        // remove empty string
+        if (path.empty()) continue;
+
+        // replace $HOME
+        replace_home_dir(path);
+
+        // remove empty string
+        if (path.empty()) continue;
+
+        // If it starts with '/', then canonicalize it
+        if (path[0] == '/') {
+            g_autofree gchar *canonical = g_canonicalize_filename(path.c_str(), NULL);
+            if (!canonical) continue;
+            path = canonical;
+        }
+
+        unique_paths.insert(path);
+    }
+
+    // ensure .cache is in blacklist to filter index update event
+    unique_paths.insert(".cache");
+
+    blacklist_paths.assign(unique_paths.begin(), unique_paths.end());
+}
+
+bool Config::update_config()
+{
+    indexing_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path_, "indexing_paths");
+    blacklist_paths_ = get_config_string_list((GDBusConnection*)dbus_connection_, resource_path_, "blacklist_paths");
+    std::string app_file_suffix, archive_file_suffix, audio_file_suffix, doc_file_suffix, pic_file_suffix, video_file_suffix;
+    app_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "app_file_suffix");
+    archive_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "archive_file_suffix");
+    audio_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "audio_file_suffix");
+    doc_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "doc_file_suffix");
+    pic_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "pic_file_suffix");
+    video_file_suffix = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, "video_file_suffix");
+    file_type_mapping_ = {
+        {"app",     app_file_suffix},
+        {"archive", archive_file_suffix},
+        {"audio",   audio_file_suffix},
+        {"doc",     doc_file_suffix},
+        {"pic",     pic_file_suffix},
+        {"video",   video_file_suffix},
+    };
+    if(indexing_paths_.empty() ||
+        blacklist_paths_.empty() ||
+        app_file_suffix.empty() ||
+        archive_file_suffix.empty() ||
+        audio_file_suffix.empty() ||
+        doc_file_suffix.empty() ||
+        pic_file_suffix.empty() ||
+        video_file_suffix.empty()) {
+        return false;
+    }
+
+    process_blacklist_paths(blacklist_paths_);
+
+    for (auto it = indexing_paths_.begin(); it != indexing_paths_.end(); ) {
+        replace_home_dir(*it);
+
+        // not allow relative path
+        if (!it->empty() && (*it)[0] != '/') {
+            it = indexing_paths_.erase(it);
+            continue;
+        }
+
+        ++it;
+    }
+
+    commit_volatile_index_timeout_ = get_config_int64((GDBusConnection*)dbus_connection_, resource_path_, "commit_volatile_index_timeout");
+    commit_persistent_index_timeout_ = get_config_int64((GDBusConnection*)dbus_connection_, resource_path_, "commit_persistent_index_timeout");
+    if (commit_volatile_index_timeout_ < COMMIT_VOLATILE_INDEX_TIMEOUT_MIN ||
+        commit_volatile_index_timeout_ > COMMIT_VOLATILE_INDEX_TIMEOUT_MAX) {
+        commit_volatile_index_timeout_ = COMMIT_VOLATILE_INDEX_TIMEOUT_DEFAULT;
+    }
+    if (commit_persistent_index_timeout_ < COMMIT_PERSISTENT_INDEX_TIMEOUT_MIN ||
+        commit_persistent_index_timeout_ > COMMIT_PERSISTENT_INDEX_TIMEOUT_MAX) {
+        commit_persistent_index_timeout_ = COMMIT_PERSISTENT_INDEX_TIMEOUT_DEFAULT;
+    }
+
+    log_level_ = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, LOG_LEVEL_KEY);
+
+    return true;
+}
 
 bool is_path_in_blacklist(const std::string& path, const std::vector<std::string>& blacklist_paths)
 {
