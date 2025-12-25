@@ -109,6 +109,8 @@ private:
     std::atomic<bool> stop_scan_directory_;
 
     std::mutex config_access_mtx_;
+
+    gint batch_count_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_

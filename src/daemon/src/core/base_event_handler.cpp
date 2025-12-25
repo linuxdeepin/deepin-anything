@@ -25,7 +25,8 @@ base_event_handler::base_event_handler(const event_handler_config &config)
       commit_persistent_index_timeout_(config_.commit_persistent_index_timeout),
       index_status_(anything::index_status::loading),
       event_process_thread_count_(0),
-      stop_scan_directory_(false) {
+      stop_scan_directory_(false),
+      batch_count_(0) {
     index_dirty_ = index_manager_.refresh_indexes(get_blacklist_paths(), false, true);
 
     // The timer thread is started only after all initialization is completed
@@ -162,13 +163,21 @@ void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::s
         std::make_move_iterator(jobs.begin()),
         std::make_move_iterator(jobs.begin() + number));
     jobs.erase(jobs.begin(), jobs.begin() + number);
+    g_atomic_int_inc(&batch_count_);
     pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
         g_atomic_int_inc(&this->event_process_thread_count_);
         for (const auto& job : processing_jobs) {
             eat_job(job);
         }
         g_atomic_int_dec_and_test(&this->event_process_thread_count_);
+        g_atomic_int_dec_and_test(&this->batch_count_);
     });
+
+    if ((g_atomic_int_get(&batch_count_)*(int)batch_size_) >= config_.pending_events_trigger_updating &&
+        index_status_ == anything::index_status::monitoring) {
+        index_status_ = anything::index_status::updating;
+        index_manager_.set_index_updating();
+    }
 }
 
 void base_event_handler::eat_job(const anything::index_job& job) {
@@ -287,6 +296,8 @@ void base_event_handler::timer_worker(int64_t interval) {
                 --commit_volatile_index_timeout_;
             if (commit_volatile_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
                 g_atomic_int_get(&event_process_thread_count_) == 0) {
+                if (index_status_ == anything::index_status::updating)
+                    index_status_ = anything::index_status::monitoring;
                 if (!index_manager_.commit(index_status_)) {
                     spdlog::info("Failed to commit index");
                     set_index_invalid_and_restart();
