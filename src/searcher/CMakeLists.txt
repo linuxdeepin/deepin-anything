@@ -39,6 +39,7 @@ target_link_libraries(deepin-anything-searcher
     ${LUCENE_CONTRIB_LIBRARIES}
     Threads::Threads
     ${Boost_LIBRARIES}
+    stdc++fs
 )
 
 # Install
