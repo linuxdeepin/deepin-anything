@@ -72,6 +72,13 @@ bool base_event_handler::handle_config_change(const std::string &key, const even
     if (key == "blacklist_paths") {
         set_blacklist_paths(new_config.blacklist_paths);
         return true;
+    } else if (key == "pending_events_trigger_updating") {
+        // 简单数据类型更新不加锁
+        spdlog::info("pending_events_trigger_updating updated: {} -> {}",
+                     config_.pending_events_trigger_updating,
+                     new_config.pending_events_trigger_updating);
+        config_.pending_events_trigger_updating = new_config.pending_events_trigger_updating;
+        return true;
     } else {
         spdlog::info("Dynamic updates of config are not supported: {}", key);
         return false;
