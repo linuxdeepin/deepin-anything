@@ -30,13 +30,18 @@ struct fs_event_with_full_path {
 
 class default_event_handler : public base_event_handler {
 public:
-    explicit default_event_handler(std::shared_ptr<event_handler_config> config);
+    explicit default_event_handler(const event_handler_config &config);
     virtual ~default_event_handler();
 
     void handle(fs_event *event) override;
 
     void start_handle_init_scan(const std::string &path) override;
 
+    void terminate_filter();
+
+    bool handle_config_change(const std::string &key, const event_handler_config &new_config) override;
+
+private:
     bool is_under_indexing_path(const std::string& path, indexing_item *&indexing_item);
 
     void convert_event_path_to_origin_path(std::string& path, const indexing_item& item);
@@ -47,13 +52,20 @@ public:
 
     bool convert_fs_event(fs_event *event, fs_event_with_full_path *event_with_full_path);
 
-    void terminate_filter();
-
     static void* event_filter_thread_func(void* data);
+
+    void handle_config_event();
+
+    bool handle_blacklist_paths_change(const event_handler_config &old_config, const event_handler_config &new_config);
 
 private:
     std::unordered_map<uint32_t, std::string> rename_from_;
-    std::shared_ptr<event_handler_config> config_;
+    // config_ 使用情况
+    // 1. 主线程中实例化时使用
+    // 2. 主线程中调用 handle_config_change() 时使用
+    // 3. 没有在 event_filter 线程中使用
+    // 所以不存在多线程使用的情况
+    event_handler_config config_;
     std::vector<indexing_item> indexing_items_;
     std::vector<std::string> event_path_blocked_list_;
 
@@ -61,6 +73,8 @@ private:
     GThread* event_filter_thread_;
 
     MountInfo *mount_info_;
+
+    GAsyncQueue* config_event_queue_;
 };
 
 ANYTHING_NAMESPACE_END

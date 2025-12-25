@@ -247,23 +247,23 @@ Config::~Config() {
     g_object_unref(dbus_connection_);
 }
 
-std::shared_ptr<event_handler_config> Config::make_event_handler_config()
+event_handler_config Config::make_event_handler_config()
 {
-    auto config = std::make_shared<event_handler_config>();
-    config->persistent_index_dir = std::string(g_get_user_cache_dir()) + "/deepin-anything-server";
-    config->volatile_index_dir = config->persistent_index_dir;
-    config->blacklist_paths = blacklist_paths_;
-    config->indexing_paths = indexing_paths_;
-    config->file_type_mapping_original = file_type_mapping_;
+    event_handler_config config;
+    config.persistent_index_dir = std::string(g_get_user_cache_dir()) + "/deepin-anything-server";
+    config.volatile_index_dir = config.persistent_index_dir;
+    config.blacklist_paths = blacklist_paths_;
+    config.indexing_paths = indexing_paths_;
+    config.file_type_mapping_original = file_type_mapping_;
     for (const auto& [file_type, file_exts] : file_type_mapping_) {
         std::stringstream ss(file_exts);
         std::string item;
         while (std::getline(ss, item, ';')) {
-            config->file_type_mapping[item] = file_type;
+            config.file_type_mapping[item] = file_type;
         }
     }
-    config->commit_volatile_index_timeout = commit_volatile_index_timeout_;
-    config->commit_persistent_index_timeout = commit_persistent_index_timeout_;
+    config.commit_volatile_index_timeout = commit_volatile_index_timeout_;
+    config.commit_persistent_index_timeout = commit_persistent_index_timeout_;
 
     return config;
 }

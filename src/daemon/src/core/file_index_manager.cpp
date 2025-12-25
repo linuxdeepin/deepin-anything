@@ -453,25 +453,36 @@ bool file_index_manager::document_exists(const std::string &path, bool only_chec
     return termDocs->next();
 }
 
-bool file_index_manager::refresh_indexes(const std::vector<std::string>& blacklist_paths) {
+bool file_index_manager::refresh_indexes(const std::vector<std::string>& blacklist_paths, bool nrt, bool check_exist) {
     bool index_changed = false;
     try {
-        std::error_code ec;
         spdlog::info("Refreshing file indexes...");
-        try_refresh_reader();
-        auto query = newLucene<Lucene::MatchAllDocsQuery>();
-        auto num_docs = reader_->numDocs();
+
+        SearcherPtr searcher;
+        int32_t num_docs;
+        if (nrt) {
+            try_refresh_reader(true);
+            searcher = nrt_searcher_;
+            num_docs = nrt_reader_->numDocs();
+        } else {
+            try_refresh_reader();
+            searcher = searcher_;
+            num_docs = reader_->numDocs();
+        }
+
         if (num_docs > 0) {
-            auto search_results = searcher_->search(query, num_docs);
+            auto query = newLucene<Lucene::MatchAllDocsQuery>();
+            auto search_results = searcher->search(query, num_docs);
             std::vector<std::string> remove_list;
+            std::error_code ec;
             for (const auto& score_doc : search_results->scoreDocs) {
-                DocumentPtr doc = searcher_->doc(score_doc->doc);
+                DocumentPtr doc = searcher->doc(score_doc->doc);
                 std::filesystem::path full_path(doc->get(FULL_PATH_FIELD));
                 if (full_path.empty()) {
                     // doc is metadata, not a file
                     continue;
                 }
-                if (!std::filesystem::exists(full_path, ec) ||
+                if ((check_exist && !std::filesystem::exists(full_path, ec)) ||
                     is_path_in_blacklist(full_path.string(), blacklist_paths)) {
                     remove_list.push_back(std::move(full_path.string()));
                 }

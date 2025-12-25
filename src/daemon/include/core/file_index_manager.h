@@ -72,7 +72,7 @@ public:
      */
     bool document_exists(const std::string& path, bool only_check_initial_index = false);
 
-    bool refresh_indexes(const std::vector<std::string>& blacklist_paths);
+    bool refresh_indexes(const std::vector<std::string>& blacklist_paths, bool nrt, bool check_exist);
 
     void set_index_invalid();
 private:

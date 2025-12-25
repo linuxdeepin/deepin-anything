@@ -6,6 +6,7 @@
 #include "core/default_event_handler.h"
 
 #include <cstdlib> // std::getenv
+#include <unordered_set>
 #include <glib.h>
 #include <gmodule.h>
 #include <sys/sysmacros.h>
@@ -20,6 +21,33 @@
 ANYTHING_NAMESPACE_BEGIN
 
 #define ACT_TERMINATE 100
+
+#define ACT_BLACKLIST_ADD_ABSOLUTE_PATH 120
+#define ACT_BLACKLIST_DEL_ABSOLUTE_PATH 121
+#define ACT_BLACKLIST_ADD_OTHER         122
+#define ACT_CONFIG_EVENT_END            130
+
+
+static std::string determine_blacklist_path(const char *path)
+{
+    std::string ret;
+
+    // process_blacklist_paths ensure no empty path
+    if (path[0] != '/') {
+        ret = path;
+    } else {
+        if (g_file_test(path, G_FILE_TEST_EXISTS)) {
+            g_autofree char *event_path = get_full_path(path);
+            if (event_path) {
+                ret = event_path;
+            }
+        }
+    }
+
+    spdlog::info("Determine blacklist path: \"{}\" -> \"{}\"", path, ret);
+
+    return ret;
+}
 
 // 检查 event_path 与 indexing_items_ 中的 event_path 是否冲突
 bool is_event_path_conflict_with_indexing_items(const std::string& event_path,
@@ -65,14 +93,15 @@ std::string get_event_path(const std::string& origin_path, const std::vector<ind
 }
 
 // /data 和非 data 需要保持一致，最好有一种方式能够获取当前的状态
-default_event_handler::default_event_handler(std::shared_ptr<event_handler_config> config)
+default_event_handler::default_event_handler(const event_handler_config &config)
     : base_event_handler(config), config_(config) {
     event_queue_ = g_async_queue_new();
     event_filter_thread_ = g_thread_new("event_filter", event_filter_thread_func, this);
+    config_event_queue_ = g_async_queue_new();
 
     // init indexing_items_
     spdlog::info("processing indexing_paths...");
-    for (auto& origin_path : config_->indexing_paths) {
+    for (auto& origin_path : config_.indexing_paths) {
         std::string event_path_with_slash = get_event_path(origin_path, indexing_items_);
         if (event_path_with_slash.empty()) {
             continue;
@@ -95,20 +124,11 @@ default_event_handler::default_event_handler(std::shared_ptr<event_handler_confi
 
     // init event_path_blocked_list_
     spdlog::info("processing blacklist_paths...");
-    for (auto& path : config_->blacklist_paths) {
-        std::error_code ec;
-        if (!anything::string_helper::starts_with(path, "/") || !std::filesystem::exists(path, ec)) {
-            event_path_blocked_list_.emplace_back(path);
-        } else {
-            char *event_path = get_full_path(path.c_str());
-            if (event_path == nullptr) {
-                spdlog::error("Failed to get event path: {}", path);
-                continue;
-            }
-            event_path_blocked_list_.emplace_back(std::string(event_path));
-            g_free(event_path);
-            spdlog::info("Determine the event path: {} -> {}", path, event_path_blocked_list_.back());
-        }
+    for (auto& path : config_.blacklist_paths) {
+        std::string event_path = determine_blacklist_path(path.c_str());
+        if (event_path.empty())
+            continue;
+        event_path_blocked_list_.emplace_back(event_path);
     }
 
     // add init scan event
@@ -352,12 +372,18 @@ void default_event_handler::terminate_filter() {
     g_thread_join(event_filter_thread_);
     spdlog::info("Event filter thread terminated");
     g_async_queue_unref(event_queue_);
+    g_async_queue_unref(config_event_queue_);
 }
 
 void* default_event_handler::event_filter_thread_func(void* data) {
     auto handler = static_cast<default_event_handler*>(data);
     while (true) {
-        fs_event* event = (fs_event*)g_async_queue_pop(handler->event_queue_);
+        // If no file event is processed within 3 seconds, check the config event.
+        fs_event* event = (fs_event*)g_async_queue_timeout_pop(handler->event_queue_, 3 * 1000 * 1000);
+        if (!event) {
+            handler->handle_config_event();
+            continue;
+        }
         if (event->act == ACT_TERMINATE) {
             g_slice_free(fs_event, event);
             break;
@@ -367,6 +393,180 @@ void* default_event_handler::event_filter_thread_func(void* data) {
     }
 
     return NULL;
+}
+
+static void get_string_list_diff(const std::vector<std::string> &olds,
+                                 const std::vector<std::string> &news,
+                                 std::vector<std::string> *adds,
+                                 std::vector<std::string> *dels)
+{
+    if (adds) {
+        adds->clear();
+        std::unordered_set<std::string> old_set(olds.begin(), olds.end());
+        for (const auto& s : news) {
+            if (old_set.find(s) == old_set.end()) {
+                adds->push_back(s);
+            }
+        }
+    }
+
+    if (dels) {
+        dels->clear();
+        std::unordered_set<std::string> new_set(news.begin(), news.end());
+        for (const auto& s : olds) {
+            if (new_set.find(s) == new_set.end()) {
+                dels->push_back(s);
+            }
+        }
+    }
+}
+
+static bool is_all_absolute_path(const std::vector<std::string> &paths)
+{
+    for (const auto& path : paths) {
+        // process_blacklist_paths ensure no empty path
+        if (path[0] != '/') {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void push_config_event(GAsyncQueue *queue, uint8_t act, const char* path)
+{
+    fs_event* event = g_slice_new(fs_event);
+
+    event->act = act;
+    strncpy(event->src, path, MAX_PATH_LEN-1);
+    if (event->src[MAX_PATH_LEN-2] != '\0') {
+        spdlog::warn("File path is too long: {}", path);
+        g_slice_free(fs_event, event);
+        return;
+    }
+
+    g_async_queue_push(queue, event);
+}
+
+bool default_event_handler::handle_blacklist_paths_change(const event_handler_config &old_config, const event_handler_config &new_config)
+{
+    std::vector<std::string> adds, dels;
+    get_string_list_diff(old_config.blacklist_paths,
+                         new_config.blacklist_paths,
+                         &adds,
+                         &dels);
+
+    if (!dels.empty() && !is_all_absolute_path(dels)) {
+        spdlog::info("Found non-absolute paths were removed from the blacklist");
+        return false;
+    }
+
+    if (!adds.empty()) {
+        uint8_t act = is_all_absolute_path(adds) ? ACT_BLACKLIST_ADD_ABSOLUTE_PATH : ACT_BLACKLIST_ADD_OTHER;
+        for (const auto& path : adds) {
+            push_config_event(config_event_queue_, act, path.c_str());
+        }
+    }
+
+    if (!dels.empty()) {
+        for (const auto& path : dels) {
+            push_config_event(config_event_queue_, ACT_BLACKLIST_DEL_ABSOLUTE_PATH, path.c_str());
+        }
+    }
+
+    // indicate the end of the events
+    if (!adds.empty() || !dels.empty()) {
+        push_config_event(config_event_queue_, ACT_CONFIG_EVENT_END, "");
+    } else {
+        spdlog::info("No valid config updates found");
+    }
+
+    return true;
+}
+
+bool default_event_handler::handle_config_change(const std::string &key, const event_handler_config &new_config)
+{
+    if (!base_event_handler::handle_config_change(key, new_config))
+        return false;
+
+    bool handled = (key == "blacklist_paths" && handle_blacklist_paths_change(config_, new_config));
+
+    if (handled)
+        config_ = new_config;
+
+    return handled;
+}
+
+void default_event_handler::handle_config_event()
+{
+    bool do_refresh_index = false;
+    bool run = true;
+
+    if (g_async_queue_length(config_event_queue_) <= 0)
+        return;
+
+    spdlog::info("Handling config events...");
+
+    while (run) {
+        fs_event* event = (fs_event*)g_async_queue_pop(config_event_queue_);
+
+        if (event->act == ACT_BLACKLIST_ADD_ABSOLUTE_PATH) {
+            // add black list path
+            std::string path = determine_blacklist_path(event->src);
+            if (!path.empty()) {
+                event_path_blocked_list_.emplace_back(path);
+
+                // del index under the path
+                recursive_update_index_delay(event->src, "");
+                spdlog::info("Handled config event: ACT_BLACKLIST_ADD_ABSOLUTE_PATH, {}", event->src);
+            } else {
+                spdlog::info("Skipped config event: ACT_BLACKLIST_ADD_ABSOLUTE_PATH, {}", event->src);
+            }
+        } else if (event->act == ACT_BLACKLIST_DEL_ABSOLUTE_PATH) {
+            // del black list path
+            std::string path = determine_blacklist_path(event->src);
+            if (!path.empty()) {
+                for (auto it = event_path_blocked_list_.begin(); it != event_path_blocked_list_.end(); ++it) {
+                    if (*it == path) {
+                        event_path_blocked_list_.erase(it);
+                        break;
+                    }
+                }
+
+                // scan index under the path
+                add_index_delay(event->src);
+                scan_index_delay(event->src);
+                spdlog::info("Handled config event: ACT_BLACKLIST_DEL_ABSOLUTE_PATH, {}", event->src);
+            } else {
+                spdlog::info("Skipped config event: ACT_BLACKLIST_DEL_ABSOLUTE_PATH, {}", event->src);
+            }
+
+        } else if (event->act == ACT_BLACKLIST_ADD_OTHER) {
+            // add black list path
+            std::string path = determine_blacklist_path(event->src);
+            if (!path.empty()) {
+                event_path_blocked_list_.emplace_back(path);
+
+                // do refresh at last
+                do_refresh_index = true;
+                spdlog::info("Handled config event: ACT_BLACKLIST_ADD_OTHER, {}", event->src);
+            } else {
+                spdlog::info("Skipped config event: ACT_BLACKLIST_ADD_OTHER, {}", event->src);
+            }
+        } else {
+            // ACT_CONFIG_EVENT_END
+            run = false;
+            spdlog::info("Handled config event: ACT_CONFIG_EVENT_END");
+        }
+
+        g_slice_free(fs_event, event);
+    }
+
+    if (do_refresh_index) {
+        refresh_indexes();
+        spdlog::info("Refreshed indexes");
+    }
+
+    spdlog::info("Handled config events");
 }
 
 ANYTHING_NAMESPACE_END
