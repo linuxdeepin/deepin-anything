@@ -488,7 +488,8 @@ bool default_event_handler::handle_config_change(const std::string &key, const e
     if (!base_event_handler::handle_config_change(key, new_config))
         return false;
 
-    bool handled = (key == "blacklist_paths" && handle_blacklist_paths_change(config_, new_config));
+    bool handled = (key == "blacklist_paths" && handle_blacklist_paths_change(config_, new_config)) ||
+                   key == "pending_events_trigger_updating"; // 不需额外处理
 
     if (handled)
         config_ = new_config;
