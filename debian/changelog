@@ -1,3 +1,15 @@
+deepin-anything (7.0.35) unstable; urgency=medium
+
+  * refactor: Refactor and improve configuration loading and path handling
+  * feat: Implement dynamic config change handling for blacklist paths
+  * feat: Add config item commit_persistent_index_timeout
+  * feat: Add updating index status for batch event processing
+  * feat: Support pending_events_trigger_updating dynamic update
+  * feat: Implement dynamic search strategy with fallback to filesystem scan
+  * feat: Enhance systemd service sandboxing for logger and server
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 25 Dec 2025 21:25:05 +0800
+
 deepin-anything (7.0.34) unstable; urgency=medium
 
   * feat: Add ancestor_paths field for lucene document
