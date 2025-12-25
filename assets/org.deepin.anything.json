@@ -122,6 +122,17 @@
             "description[zh_CN]": "提交持久化索引超时时间",
             "permissions": "readwrite",
             "visibility": "public"
+        },
+        "pending_events_trigger_updating": {
+            "value": 5000,
+            "serial": 0,
+            "flags": [],
+            "name": "Number of events that trigger updating",
+            "name[zh_CN]": "触发 updating 的事件数",
+            "description": "Number of events that trigger updating",
+            "description[zh_CN]": "触发 updating 的事件数",
+            "permissions": "readwrite",
+            "visibility": "public"
         }
     }
 }

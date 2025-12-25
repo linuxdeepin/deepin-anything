@@ -20,6 +20,10 @@
 #define COMMIT_PERSISTENT_INDEX_TIMEOUT_MIN 60
 #define COMMIT_PERSISTENT_INDEX_TIMEOUT_MAX 3600
 
+#define PENDING_EVENTS_TRIGGER_UPDATING_DEFAULT (5 * 1000)
+#define PENDING_EVENTS_TRIGGER_UPDATING_MIN 200
+#define PENDING_EVENTS_TRIGGER_UPDATING_MAX (100 * 1000)
+
 void print_event_handler_config(const event_handler_config &config) {
     spdlog::info("Persistent index dir: {}", config.persistent_index_dir);
     spdlog::info("Volatile index dir: {}", config.volatile_index_dir);
@@ -37,6 +41,7 @@ void print_event_handler_config(const event_handler_config &config) {
     }
     spdlog::info("Commit volatile index timeout: {}", config.commit_volatile_index_timeout);
     spdlog::info("Commit persistent index timeout: {}", config.commit_persistent_index_timeout);
+    spdlog::info("Number of events that trigger updating: {}", config.pending_events_trigger_updating);
 }
 
 // 获取dconfig资源路径
@@ -264,6 +269,7 @@ event_handler_config Config::make_event_handler_config()
     }
     config.commit_volatile_index_timeout = commit_volatile_index_timeout_;
     config.commit_persistent_index_timeout = commit_persistent_index_timeout_;
+    config.pending_events_trigger_updating = pending_events_trigger_updating_;
 
     return config;
 }
@@ -369,6 +375,12 @@ bool Config::update_config()
     if (commit_persistent_index_timeout_ < COMMIT_PERSISTENT_INDEX_TIMEOUT_MIN ||
         commit_persistent_index_timeout_ > COMMIT_PERSISTENT_INDEX_TIMEOUT_MAX) {
         commit_persistent_index_timeout_ = COMMIT_PERSISTENT_INDEX_TIMEOUT_DEFAULT;
+    }
+
+    pending_events_trigger_updating_ = get_config_int64((GDBusConnection*)dbus_connection_, resource_path_, "pending_events_trigger_updating");
+    if (pending_events_trigger_updating_ < PENDING_EVENTS_TRIGGER_UPDATING_MIN ||
+        pending_events_trigger_updating_ > PENDING_EVENTS_TRIGGER_UPDATING_MAX) {
+        pending_events_trigger_updating_ = PENDING_EVENTS_TRIGGER_UPDATING_DEFAULT;
     }
 
     log_level_ = get_config_string((GDBusConnection*)dbus_connection_, resource_path_, LOG_LEVEL_KEY);
