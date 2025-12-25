@@ -12,21 +12,21 @@
 
 #include <QCoreApplication>
 
-base_event_handler::base_event_handler(std::shared_ptr<event_handler_config> config)
+base_event_handler::base_event_handler(const event_handler_config &config)
     : config_(config),
-      index_manager_(config->persistent_index_dir, config->volatile_index_dir, config->file_type_mapping),
+      index_manager_(config_.persistent_index_dir, config_.volatile_index_dir, config_.file_type_mapping),
       batch_size_(200),
       pool_(1),
       stop_timer_(false),
       delay_mode_(true/*index_manager_.indexed()*/),
       index_dirty_(false),
       volatile_index_dirty_(false),
-      commit_volatile_index_timeout_(config->commit_volatile_index_timeout),
-      commit_persistent_index_timeout_(config->commit_persistent_index_timeout),
+      commit_volatile_index_timeout_(config_.commit_volatile_index_timeout),
+      commit_persistent_index_timeout_(config_.commit_persistent_index_timeout),
       index_status_(anything::index_status::loading),
       event_process_thread_count_(0),
       stop_scan_directory_(false) {
-    index_dirty_ = index_manager_.refresh_indexes(config_->blacklist_paths);
+    index_dirty_ = index_manager_.refresh_indexes(get_blacklist_paths(), false, true);
 
     // The timer thread is started only after all initialization is completed
     timer_ = std::thread(&base_event_handler::timer_worker, this, 1000);
@@ -66,6 +66,17 @@ void base_event_handler::set_index_invalid_and_restart() {
     qApp->quit();
 }
 
+bool base_event_handler::handle_config_change(const std::string &key, const event_handler_config &new_config)
+{
+    if (key == "blacklist_paths") {
+        set_blacklist_paths(new_config.blacklist_paths);
+        return true;
+    } else {
+        spdlog::info("Dynamic updates of config are not supported: {}", key);
+        return false;
+    }
+}
+
 void base_event_handler::set_batch_size(std::size_t size) {
     batch_size_ = size;
 }
@@ -86,7 +97,7 @@ void base_event_handler::insert_pending_paths(
 
 void base_event_handler::insert_index_directory(const std::string &dir) {
     pool_.enqueue_detach([this, dir]() {
-        this->insert_pending_paths(anything::disk_scanner::scan(dir, config_->blacklist_paths));
+        this->insert_pending_paths(anything::disk_scanner::scan(dir, get_blacklist_paths()));
 
         {
             std::lock_guard<std::mutex> lock(index_dirs_mtx_);
@@ -138,6 +149,10 @@ void base_event_handler::recursive_update_index_delay(std::string src, std::stri
 void base_event_handler::init_scan_index_delay(std::string path) {
     index_status_ = anything::index_status::scanning;
     jobs_push(std::move(path), anything::index_job_type::init_scan);
+}
+
+void base_event_handler::refresh_indexes() {
+    jobs_push("", anything::index_job_type::refresh);
 }
 
 void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number) {
@@ -219,6 +234,10 @@ void base_event_handler::eat_job(const anything::index_job& job) {
                 ret = true;
             }
             break;
+        case anything::index_job_type::refresh:
+            index_manager_.refresh_indexes(get_blacklist_paths(), true, false);
+            ret = true;
+            break;
         default:
             spdlog::error("Invalid job type: {}", static_cast<int>(job.type));
             break;
@@ -272,7 +291,7 @@ void base_event_handler::timer_worker(int64_t interval) {
                     spdlog::info("Failed to commit index");
                     set_index_invalid_and_restart();
                 }
-                commit_volatile_index_timeout_ = config_->commit_volatile_index_timeout;
+                commit_volatile_index_timeout_ = config_.commit_volatile_index_timeout;
                 index_dirty_ = false;
                 volatile_index_dirty_ = true;
             }
@@ -283,7 +302,7 @@ void base_event_handler::timer_worker(int64_t interval) {
             if (commit_persistent_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
                 g_atomic_int_get(&event_process_thread_count_) == 0) {
                 index_manager_.persist_index();
-                commit_persistent_index_timeout_ = config_->commit_persistent_index_timeout;
+                commit_persistent_index_timeout_ = config_.commit_persistent_index_timeout;
                 volatile_index_dirty_ = false;
             }
         }
@@ -356,9 +375,10 @@ bool base_event_handler::scan_directory(const std::string& dir_path, std::functi
     try {
         // By default, symlinks are not followed
         std::filesystem::recursive_directory_iterator dirpos{ dir_path, std::filesystem::directory_options::skip_permission_denied };
+        std::vector<std::string> blacklist_paths = get_blacklist_paths();
         for (auto it = begin(dirpos); it != end(dirpos); ++it) {
             path = std::move(it->path().string());
-            if (is_path_in_blacklist(path, config_->blacklist_paths) ||
+            if (is_path_in_blacklist(path, blacklist_paths) ||
                 !std::filesystem::exists(it->path(), ec)) {
                     it.disable_recursion_pending();
                 continue;
@@ -381,4 +401,18 @@ bool base_event_handler::scan_directory(const std::string& dir_path, std::functi
 
     spdlog::info("Scanning directory {} completed", dir_path);
     return true;
+}
+
+std::vector<std::string> base_event_handler::get_blacklist_paths()
+{
+    std::lock_guard<std::mutex> lock(config_access_mtx_);
+
+    return config_.blacklist_paths;
+}
+
+void base_event_handler::set_blacklist_paths(const std::vector<std::string> &paths)
+{
+    std::lock_guard<std::mutex> lock(config_access_mtx_);
+
+    config_.blacklist_paths = paths;
 }

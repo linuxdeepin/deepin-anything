@@ -84,16 +84,25 @@ int main(int argc, char* argv[]) {
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [thread %t] %v");
 
     event_listenser listenser;
-    auto event_handler_config = config.make_event_handler_config();
-    print_event_handler_config(*event_handler_config);
+    event_handler_config event_handler_config = config.make_event_handler_config();
+    print_event_handler_config(event_handler_config);
     default_event_handler handler(event_handler_config);
     listenser.set_handler([&handler](fs_event *event) {
         handler.handle(event);
     });
     config.set_config_change_handler([&handler, &config](std::string key) {
         spdlog::info("Config changed: {}", key);
+
         if (key == LOG_LEVEL_KEY) {
             spdlog::set_level(spdlog::level::from_str(config.get_log_level()));
+            return;
+        }
+
+        auto new_config = config.make_event_handler_config();
+        bool handled = handler.handle_config_change(key, new_config);
+
+        if (handled) {
+            spdlog::info("Config changes have been processed.");
         } else {
             handler.set_index_invalid_and_restart();
         }

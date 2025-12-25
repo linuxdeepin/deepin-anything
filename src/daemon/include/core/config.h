@@ -37,7 +37,7 @@ public:
     Config(const Config&) = delete;
     Config& operator=(const Config&) = delete;
 
-    std::shared_ptr<event_handler_config> make_event_handler_config();
+    event_handler_config make_event_handler_config();
 
     void set_config_change_handler(std::function<void(std::string)> config_change_handler);
     void notify_config_changed(const std::string &key);

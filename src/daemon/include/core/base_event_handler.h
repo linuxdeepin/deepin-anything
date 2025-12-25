@@ -18,7 +18,7 @@
 ANYTHING_NAMESPACE_BEGIN
 
 enum class index_job_type : char {
-    add, remove, update, scan, recursive_update, init_scan
+    add, remove, update, scan, recursive_update, init_scan, refresh
 };
 
 struct index_job {
@@ -35,7 +35,7 @@ ANYTHING_NAMESPACE_END
 class base_event_handler
 {
 public:
-    base_event_handler(std::shared_ptr<event_handler_config> config);
+    base_event_handler(const event_handler_config &config);
     virtual ~base_event_handler();
 
     virtual void handle(anything::fs_event *event) = 0;
@@ -45,6 +45,8 @@ public:
     void terminate_processing();
 
     void set_index_invalid_and_restart();
+
+    virtual bool handle_config_change(const std::string &key, const event_handler_config &new_config);
 
 protected:
     void set_batch_size(std::size_t size);
@@ -63,6 +65,7 @@ protected:
     void scan_index_delay(std::string path);
     void recursive_update_index_delay(std::string src, std::string dst);
     void init_scan_index_delay(std::string path);
+    void refresh_indexes();
 
 private:
     void eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number);
@@ -74,8 +77,12 @@ private:
 
     bool scan_directory(const std::string& dir_path, std::function<bool(const std::string&)> handler);
 
+    // 防止竞态条件
+    std::vector<std::string> get_blacklist_paths();
+    void set_blacklist_paths(const std::vector<std::string> &paths);
+
 private:
-    std::shared_ptr<event_handler_config> config_;
+    event_handler_config config_;
     anything::file_index_manager index_manager_;
     std::size_t batch_size_;
     std::vector<std::string> pending_paths_;
@@ -100,6 +107,8 @@ private:
     gint event_process_thread_count_;
 
     std::atomic<bool> stop_scan_directory_;
+
+    std::mutex config_access_mtx_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_
