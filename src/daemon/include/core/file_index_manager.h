@@ -20,6 +20,7 @@ enum class index_status {
     loading,
     scanning,
     monitoring,
+    updating,
     closed,
 };
 
@@ -75,6 +76,9 @@ public:
     bool refresh_indexes(const std::vector<std::string>& blacklist_paths, bool nrt, bool check_exist);
 
     void set_index_invalid();
+
+    void set_index_updating();
+
 private:
     /// Refresh the index reader if there are changes
     void try_refresh_reader(bool nrt = false);

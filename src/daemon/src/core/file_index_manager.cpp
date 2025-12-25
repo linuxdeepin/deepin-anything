@@ -513,6 +513,11 @@ void file_index_manager::set_index_invalid()
     }
 }
 
+void file_index_manager::set_index_updating()
+{
+    save_index_status(index_status::updating);
+}
+
 void file_index_manager::try_refresh_reader(bool nrt) {
     std::lock_guard<std::mutex> lock(reader_mtx_);
     if (nrt) {
@@ -700,6 +705,9 @@ void file_index_manager::save_index_status(index_status status) {
             break;
         case index_status::monitoring:
             status_str = "monitoring";
+            break;
+        case index_status::updating:
+            status_str = "updating";
             break;
         case index_status::closed:
             status_str = "closed";
