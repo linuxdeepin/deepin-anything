@@ -21,6 +21,7 @@ struct event_handler_config {
     std::map<std::string, std::string> file_type_mapping_original;
     int commit_volatile_index_timeout;
     int commit_persistent_index_timeout;
+    int pending_events_trigger_updating;
 };
 
 void print_event_handler_config(const event_handler_config &config);
@@ -54,6 +55,7 @@ private:
     std::string log_level_;
     int commit_volatile_index_timeout_;
     int commit_persistent_index_timeout_;
+    int pending_events_trigger_updating_;
 
     void* dbus_connection_;
     std::string resource_path_;
