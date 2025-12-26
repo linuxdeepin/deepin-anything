@@ -1,3 +1,9 @@
+deepin-anything (6.2.11) unstable; urgency=medium
+
+  * fix: Remove deepin-anything user and group
+
+ -- wangrong <wangrong@uniontech.com>  Fri, 26 Dec 2025 15:41:41 +0800
+
 deepin-anything (6.2.10) unstable; urgency=medium
 
   * fix: Fix fail to register dbus service
