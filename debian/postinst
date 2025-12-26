@@ -1,6 +1,16 @@
 #!/bin/sh -e
 
-getent group deepin-anything >/dev/null || /usr/sbin/groupadd --system deepin-anything || true
-getent passwd deepin-anything >/dev/null || /usr/sbin/useradd --system -c "deepin-anything User" \
-        -d /var/lib/deepin-anything -m -g deepin-anything -s /usr/sbin/nologin \
-        -G deepin-anything deepin-anything || true
+# 检查当前动作是否为配置阶段 (configure)
+if [ "$1" = "configure" ]; then
+    # 1. 删除用户
+    if getent passwd deepin-anything >/dev/null; then
+        echo "Removing system user deepin-anything..."
+        userdel deepin-anything || true
+    fi
+
+    # 2. 删除用户组
+    if getent group deepin-anything >/dev/null; then
+        echo "Removing system group deepin-anything..."
+        groupdel deepin-anything || true
+    fi
+fi
