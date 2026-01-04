@@ -42,6 +42,8 @@ target_link_libraries(deepin-anything-searcher
     stdc++fs
 )
 
+target_link_options(deepin-anything-searcher PRIVATE -pie)
+
 # Install
 install(TARGETS deepin-anything-searcher
     RUNTIME DESTINATION bin
