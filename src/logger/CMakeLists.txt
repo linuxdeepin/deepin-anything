@@ -34,6 +34,8 @@ target_link_libraries(deepin-anything-logger PRIVATE
     ${GNL_LIBRARIES}
 )
 
+target_link_options(deepin-anything-logger PRIVATE -pie)
+
 install(TARGETS deepin-anything-logger DESTINATION libexec)
 
 # Install dconfig meta file

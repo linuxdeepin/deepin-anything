@@ -122,6 +122,8 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror -Wextra)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
+target_link_options(${PROJECT_NAME} PRIVATE -pie)
+
 configure_file ("${PROJECT_NAME}.pc.in" "${PROJECT_NAME}.pc" @ONLY)
 install(TARGETS ${PROJECT_NAME} DESTINATION libexec)
 install(FILES deepin-anything-daemon.service DESTINATION lib/systemd/user)

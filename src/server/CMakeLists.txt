@@ -24,6 +24,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${MOUNT_LIBRARIES}
 )
 
+target_link_options(${PROJECT_NAME} PRIVATE -pie)
+
 install(TARGETS ${PROJECT_NAME} DESTINATION libexec)
 # installed by debhelper
 # install(FILES deepin-anything-server.service DESTINATION lib/systemd/system)
