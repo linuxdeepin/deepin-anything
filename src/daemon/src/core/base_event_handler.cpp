@@ -17,7 +17,7 @@ base_event_handler::base_event_handler(const event_handler_config &config)
       index_manager_(config_.persistent_index_dir, config_.volatile_index_dir, config_.file_type_mapping),
       batch_size_(200),
       pool_(1),
-      stop_timer_(false),
+      cancellable_(g_cancellable_new()),
       delay_mode_(true/*index_manager_.indexed()*/),
       index_dirty_(false),
       volatile_index_dirty_(false),
@@ -34,10 +34,11 @@ base_event_handler::base_event_handler(const event_handler_config &config)
 }
 
 base_event_handler::~base_event_handler() {
+    g_object_unref(cancellable_);
 }
 
 void base_event_handler::terminate_processing() {
-    stop_timer_ = true;
+    g_cancellable_cancel(cancellable_);
     stop_scan_directory_ = true;
 
     if (timer_.joinable()) {
@@ -276,19 +277,53 @@ void base_event_handler::jobs_push(std::string src,
     }
 }
 
+// Returns: TRUE if the cancellable was cancelled, FALSE if it timed out.
+static gboolean
+cancellable_wait(GCancellable *cancellable, int cancellable_fd, gint timeout_ms)
+{
+    if (g_cancellable_is_cancelled(cancellable)) {
+        return TRUE;
+    }
+
+    if (cancellable_fd == -1) {
+        if (timeout_ms >= 0) {
+            g_usleep(timeout_ms * 1000);
+        }
+        return g_cancellable_is_cancelled(cancellable);
+    }
+
+    GPollFD pfd;
+    pfd.fd = cancellable_fd;
+    pfd.events = G_IO_IN;
+    pfd.revents = 0;
+
+    int ret = g_poll(&pfd, 1, timeout_ms);
+
+    if (ret > 0) {
+        // cancel event
+        if (pfd.revents & G_IO_IN) {
+            return TRUE;
+        }
+    } else if (ret == 0) {
+        // timeout
+        ;
+    } else {
+        // error
+        if (timeout_ms >= 0) {
+            g_usleep(timeout_ms * 1000);
+        }
+    } 
+    
+    return g_cancellable_is_cancelled(cancellable);
+}
+
 void base_event_handler::timer_worker(int64_t interval) {
     // When pending_batch_size is small, CPU usage is low, but total indexing time is longer.
     // When pending_batch_size is large, CPU usage is high, but total indexing time is shorter.
     constexpr std::size_t pending_batch_size = 20000;
-    while(!stop_timer_) {
-        // {
-        //     std::lock_guard<std::mutex> lock(jobs_mtx_);
-        //     if (!jobs_.empty()) {
-        //         eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
-        //     }
-        // }
-        // std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+    int cancellable_fd = g_cancellable_get_fd(cancellable_);
 
+    while(!cancellable_wait(cancellable_, cancellable_fd, (gint)interval)) {
         bool idle = false;
         {
             std::lock_guard<std::mutex> lock(jobs_mtx_);
@@ -379,9 +414,9 @@ void base_event_handler::timer_worker(int64_t interval) {
                 set_index_invalid_and_restart();
             }
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(interval));
     }
+
+    g_cancellable_release_fd(cancellable_);
 }
 
 bool base_event_handler::scan_directory(const std::string& dir_path, std::function<bool(const std::string&)> handler) {

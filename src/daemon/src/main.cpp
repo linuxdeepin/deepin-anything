@@ -5,11 +5,12 @@
 
 #include <unistd.h>
 #include <pwd.h>
-#include <QCoreApplication>
-#include <QTimer>
 
 #include "anything.hpp"
 #include "core/config.h"
+
+#include <QTimer>
+#include <QCoreApplication>
 
 using namespace anything;
 
