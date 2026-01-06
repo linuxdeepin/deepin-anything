@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <glib.h>
+#include <gio/gio.h>
 
 #include "common/anything_fwd.hpp"
 #include "common/fs_event.h"
@@ -88,7 +89,7 @@ private:
     std::vector<std::string> pending_paths_;
     std::vector<anything::index_job> jobs_;
     anything::thread_pool pool_;
-    std::atomic<bool> stop_timer_;
+    GCancellable *cancellable_;
     std::mutex jobs_mtx_;
     std::mutex pending_mtx_;
     std::thread timer_;

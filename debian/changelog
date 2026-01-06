@@ -1,3 +1,10 @@
+deepin-anything (7.0.36) unstable; urgency=medium
+
+  * fix: Fix sw64 gcc not support pie by default
+  * refactor: use GCancellable for timer cancellation
+
+ -- wangrong <wangrong@uniontech.com>  Tue, 06 Jan 2026 13:20:26 +0800
+
 deepin-anything (7.0.35) unstable; urgency=medium
 
   * refactor: Refactor and improve configuration loading and path handling
