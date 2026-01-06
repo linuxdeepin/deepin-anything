@@ -309,6 +309,7 @@ cancellable_wait(GCancellable *cancellable, int cancellable_fd, gint timeout_ms)
         ;
     } else {
         // error
+        spdlog::warn("g_poll() returned an error: %s", g_strerror(errno));
         if (timeout_ms >= 0) {
             g_usleep(timeout_ms * 1000);
         }
@@ -416,7 +417,9 @@ void base_event_handler::timer_worker(int64_t interval) {
         }
     }
 
-    g_cancellable_release_fd(cancellable_);
+    if (cancellable_fd != -1) {
+        g_cancellable_release_fd(cancellable_);
+    }
 }
 
 bool base_event_handler::scan_directory(const std::string& dir_path, std::function<bool(const std::string&)> handler) {
