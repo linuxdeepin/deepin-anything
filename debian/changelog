@@ -1,3 +1,9 @@
+deepin-anything (7.0.37) unstable; urgency=medium
+
+  * fix: Disable ProtectHome to check mount info
+
+ -- wangrong <wangrong@uniontech.com>  Tue, 20 Jan 2026 10:45:03 +0800
+
 deepin-anything (7.0.36) unstable; urgency=medium
 
   * fix: Fix sw64 gcc not support pie by default
