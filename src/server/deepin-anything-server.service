@@ -18,7 +18,8 @@ NoNewPrivileges=true
 OOMScoreAdjust=-500
 Nice=-5
 ProtectSystem=full
-ProtectHome=true
+# need to check the actual mount info
+# ProtectHome=true
 InaccessiblePaths=-/etc/shadow
 InaccessiblePaths=-/etc/pam.d/
 InaccessiblePaths=-/etc/NetworkManager/system-connections/
