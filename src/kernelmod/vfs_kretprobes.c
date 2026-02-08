@@ -38,7 +38,7 @@ static atomic_t event_sync_cookie = ATOMIC_INIT(0);
 
 static struct mnt_namespace *target_mnt_ns;
 
-static inline int init_mnt_ns(void)
+static inline int init_mnt_ns_data(void)
 {
     /*
      * workaround the addr is 0xFFF...FF(value: -1) for this case by unkown reason: upgrade kernel
@@ -52,7 +52,7 @@ static inline int init_mnt_ns(void)
     }
 
     if (0 == current->nsproxy || 0 == current->nsproxy->mnt_ns) {
-        mpr_err("init_mnt_ns fail\n");
+        mpr_err("init_mnt_ns_data fail\n");
         return -EINVAL;
     }
 
@@ -510,7 +510,7 @@ int init_vfs_kretprobes(void *vfs_changed_func)
 {
     int ret;
 
-    ret = init_mnt_ns();
+    ret = init_mnt_ns_data();
     if (ret)
         return ret;
 
