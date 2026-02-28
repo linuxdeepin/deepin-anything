@@ -14,7 +14,7 @@
             "visibility": "public"
         },
         "blacklist_paths": {
-            "value": [".git", ".svn", ".cache", ".config", ".local/share/Trash", ".avfs"],
+            "value": [],
             "serial": 0,
             "flags":[],
             "name": "Blacklist Paths",

@@ -316,8 +316,11 @@ void process_blacklist_paths(std::vector<std::string>& blacklist_paths)
         unique_paths.insert(path);
     }
 
-    // ensure .cache is in blacklist to filter index update event
-    unique_paths.insert(".cache");
+    // ensure deepin-anything-server is in blacklist to filter index update event
+    unique_paths.insert("deepin-anything-server");
+
+    // ensure .avfs is in blacklist to avoid loop scanning issues.
+    unique_paths.insert(".avfs");
 
     blacklist_paths.assign(unique_paths.begin(), unique_paths.end());
 }
@@ -342,7 +345,6 @@ bool Config::update_config()
         {"video",   video_file_suffix},
     };
     if(indexing_paths_.empty() ||
-        blacklist_paths_.empty() ||
         app_file_suffix.empty() ||
         archive_file_suffix.empty() ||
         audio_file_suffix.empty() ||
