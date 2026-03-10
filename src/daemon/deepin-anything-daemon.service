@@ -1,10 +1,6 @@
 [Unit]
 Description=Deepin anything daemon service
 After=udisks2.service
-# The time window is 3600 seconds (60 minutes)
-StartLimitIntervalSec=3600
-# A maximum of 2 starts are allowed within this window.
-StartLimitBurst=2
 
 [Service]
 ExecStart=/usr/libexec/deepin-anything-daemon
