@@ -102,3 +102,8 @@ debian/deepin-anything-server.debhelper.log
 .cursor/
 .specstory/
 .cursorindexingignore
+
+# kernelmod
+src/kernelmod/.Module.symvers.cmd
+src/kernelmod/.modules.order.cmd
+src/kernelmod/.vfs_monitor.mod.cmd
