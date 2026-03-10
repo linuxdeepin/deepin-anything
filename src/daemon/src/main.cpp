@@ -1,5 +1,4 @@
-// Copyright (C) 2024 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -11,6 +10,7 @@
 
 #include <QTimer>
 #include <QCoreApplication>
+#include <glib-unix.h>
 
 using namespace anything;
 
@@ -33,6 +33,15 @@ bool can_user_login() {
     }
 
     return true;
+}
+
+// 收到信号后调用, 运行在 Qt 事件循环中
+gboolean on_sigint_sigterm(gpointer user_data) {
+    spdlog::info("Interrupt signal ({}) received, quit", (const char *) user_data);
+    set_app_restart(false);
+    qApp->quit();
+
+    return TRUE;
 }
 
 void setup_kernel_module_alive_check(QTimer &timer) {
@@ -109,20 +118,21 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    // Process the interrupt signal
-    auto signalHandler = [&app](int sig) {
-        spdlog::info("Interrupt signal ({}) received, quit", sig);
-        set_app_restart(false);
-        app.quit();
-    };
-    set_signal_handler(SIGINT, signalHandler);
-    set_signal_handler(SIGTERM, signalHandler);
+    // Process the interrupt signal using g_unix_signal_add()
+    guint sigint_id = g_unix_signal_add(SIGINT, on_sigint_sigterm, (gpointer)"SIGINT");
+    guint sigterm_id = g_unix_signal_add(SIGTERM, on_sigint_sigterm, (gpointer)"SIGTERM");
 
     QTimer timer;
     setup_kernel_module_alive_check(timer);
 
     listenser.async_listen();
     app.exec();
+
+    // Clean up signal handlers
+    if (sigint_id > 0)
+        g_source_remove(sigint_id);
+    if (sigterm_id > 0)
+        g_source_remove(sigterm_id);
 
     spdlog::info("Performing cleanup tasks...");
     listenser.stop_listening();

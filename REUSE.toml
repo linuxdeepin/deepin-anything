@@ -4,7 +4,7 @@ SPDX-PackageSupplier = "wangrong <wangrong@uniontech.com>"
 SPDX-PackageDownloadLocation = "https://github.com/linuxdeepin/deepin-anything"
 
 [[annotations]]
-path = ["README.md", "README.zh_CN.md", "CHANGELOG.md", "src/server/backend/lib/README.txt", "src/logger/README.md"]
+path = ["README.md", "README.zh_CN.md", "CHANGELOG.md", "AGENTS.md", "src/server/backend/lib/README.txt", "src/logger/README.md"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "None"
 SPDX-License-Identifier = "CC0-1.0"
