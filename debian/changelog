@@ -1,3 +1,13 @@
+deepin-anything (7.0.38) unstable; urgency=medium
+
+  * refactor: Remove default blacklist paths
+  * chore: Add documentation and configuration updates
+  * refactor: Handle signals by g_unix_signal_add
+  * fix: Fix search fail after mounting ulnfs
+  * fix: Disable ProtectKernelTunables to config kernel module
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 12 Mar 2026 19:06:58 +0800
+
 deepin-anything (7.0.37) unstable; urgency=medium
 
   * fix: Disable ProtectHome to check mount info
