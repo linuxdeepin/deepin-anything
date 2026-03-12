@@ -7,6 +7,7 @@
 #define ANYTHING_TOOLS_H_
 
 #include <stdint.h>
+#include "core/mount_info.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,7 +17,7 @@ char *format_time(int64_t time);
 
 char *format_size(int64_t size);
 
-char *get_full_path(const char *path);
+char *get_full_path(MountInfo *mount_info, const char *path);
 
 unsigned int get_thread_pool_size_from_env(unsigned int default_size);
 

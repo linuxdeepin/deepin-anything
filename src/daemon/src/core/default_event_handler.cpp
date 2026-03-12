@@ -28,7 +28,7 @@ ANYTHING_NAMESPACE_BEGIN
 #define ACT_CONFIG_EVENT_END            130
 
 
-static std::string determine_blacklist_path(const char *path)
+static std::string determine_blacklist_path(MountInfo *mount_info, const char *path)
 {
     std::string ret;
 
@@ -37,7 +37,7 @@ static std::string determine_blacklist_path(const char *path)
         ret = path;
     } else {
         if (g_file_test(path, G_FILE_TEST_EXISTS)) {
-            g_autofree char *event_path = get_full_path(path);
+            g_autofree char *event_path = get_full_path(mount_info, path);
             if (event_path) {
                 ret = event_path;
             }
@@ -61,7 +61,7 @@ bool is_event_path_conflict_with_indexing_items(const std::string& event_path,
     return false;
 }
 
-std::string get_event_path(const std::string& origin_path, const std::vector<indexing_item>& indexing_items) {
+std::string get_event_path(MountInfo *mount_info, const std::string& origin_path, const std::vector<indexing_item>& indexing_items) {
     std::error_code ec;
     if (!std::filesystem::exists(origin_path, ec)) {
         spdlog::error("The origin path {} does not exist: {}", origin_path, ec.message());
@@ -69,7 +69,7 @@ std::string get_event_path(const std::string& origin_path, const std::vector<ind
     }
 
     std::string event_path_str;
-    char *event_path = get_full_path(origin_path.c_str());
+    char *event_path = get_full_path(mount_info, origin_path.c_str());
     if (event_path == nullptr) {
         spdlog::warn("Failed to get event path, use the origin path: {}", origin_path);
         event_path_str = origin_path;
@@ -98,11 +98,12 @@ default_event_handler::default_event_handler(const event_handler_config &config)
     event_queue_ = g_async_queue_new();
     event_filter_thread_ = g_thread_new("event_filter", event_filter_thread_func, this);
     config_event_queue_ = g_async_queue_new();
+    mount_info_ = mount_info_new();
 
     // init indexing_items_
     spdlog::info("processing indexing_paths...");
     for (auto& origin_path : config_.indexing_paths) {
-        std::string event_path_with_slash = get_event_path(origin_path, indexing_items_);
+        std::string event_path_with_slash = get_event_path(mount_info_, origin_path, indexing_items_);
         if (event_path_with_slash.empty()) {
             continue;
         }
@@ -125,7 +126,7 @@ default_event_handler::default_event_handler(const event_handler_config &config)
     // init event_path_blocked_list_
     spdlog::info("processing blacklist_paths...");
     for (auto& path : config_.blacklist_paths) {
-        std::string event_path = determine_blacklist_path(path.c_str());
+        std::string event_path = determine_blacklist_path(mount_info_, path.c_str());
         if (event_path.empty())
             continue;
         event_path_blocked_list_.emplace_back(event_path);
@@ -144,7 +145,6 @@ default_event_handler::default_event_handler(const event_handler_config &config)
     // indicate init scan end
     init_scan_index_delay("");
 
-    mount_info_ = mount_info_new();
     g_autofree gchar *dump = mount_info_dump(mount_info_);
     // remove the last "\n"
     dump[strlen(dump) - 1] = '\0';
@@ -512,7 +512,7 @@ void default_event_handler::handle_config_event()
 
         if (event->act == ACT_BLACKLIST_ADD_ABSOLUTE_PATH) {
             // add black list path
-            std::string path = determine_blacklist_path(event->src);
+            std::string path = determine_blacklist_path(mount_info_, event->src);
             if (!path.empty()) {
                 event_path_blocked_list_.emplace_back(path);
 
@@ -524,7 +524,7 @@ void default_event_handler::handle_config_event()
             }
         } else if (event->act == ACT_BLACKLIST_DEL_ABSOLUTE_PATH) {
             // del black list path
-            std::string path = determine_blacklist_path(event->src);
+            std::string path = determine_blacklist_path(mount_info_, event->src);
             if (!path.empty()) {
                 for (auto it = event_path_blocked_list_.begin(); it != event_path_blocked_list_.end(); ++it) {
                     if (*it == path) {
@@ -543,7 +543,7 @@ void default_event_handler::handle_config_event()
 
         } else if (event->act == ACT_BLACKLIST_ADD_OTHER) {
             // add black list path
-            std::string path = determine_blacklist_path(event->src);
+            std::string path = determine_blacklist_path(mount_info_, event->src);
             if (!path.empty()) {
                 event_path_blocked_list_.emplace_back(path);
 
