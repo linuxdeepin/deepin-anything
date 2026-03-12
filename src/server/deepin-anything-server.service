@@ -36,7 +36,8 @@ PrivateTmp=true
 PrivateDevices=true
 PrivateIPC=true
 ProtectClock=true
-ProtectKernelTunables=true
+# need to write files in /sys/kernel/vfs_monitor dir
+# ProtectKernelTunables=true
 MemoryDenyWriteExecute=true
 RestrictSUIDSGID=true
 
