@@ -160,13 +160,13 @@ char* find_dir_full_path(const char *mount_dir, const char *target_dir)
 // 获取一个路径的的完整路径
 // 完整路径表示为 设备根目录挂载路径 + 设备内路径
 // 例如: /home -> /persist/home/
-char *get_full_path(const char *path)
+char *get_full_path(MountInfo *mount_info, const char *path)
 {
     struct stat st;
     if (lstat(path, &st) != 0)
         return NULL;
 
-    g_autofree char *mountpoint = get_device_root_mountpoint(st.st_dev);
+    const gchar *mountpoint = mount_info_get_device_mount_point(mount_info, st.st_dev);
     if (!mountpoint)
         return NULL;
 
