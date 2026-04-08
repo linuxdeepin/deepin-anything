@@ -18,7 +18,6 @@ base_event_handler::base_event_handler(const event_handler_config &config)
       batch_size_(200),
       pool_(1),
       cancellable_(g_cancellable_new()),
-      delay_mode_(true/*index_manager_.indexed()*/),
       index_dirty_(false),
       volatile_index_dirty_(false),
       commit_volatile_index_timeout_(config_.commit_volatile_index_timeout),
@@ -88,51 +87,6 @@ bool base_event_handler::handle_config_change(const std::string &key, const even
 
 void base_event_handler::set_batch_size(std::size_t size) {
     batch_size_ = size;
-}
-
-void base_event_handler::insert_pending_paths(
-    std::vector<std::string> paths) {
-    if (delay_mode_) {
-        std::lock_guard<std::mutex> lock(pending_mtx_);
-        pending_paths_.insert(pending_paths_.end(),
-            std::make_move_iterator(paths.begin()),
-            std::make_move_iterator(paths.end()));
-    } else {
-        for (auto&& path : paths) {
-            add_index_delay(std::move(path));
-        }
-    }
-}
-
-void base_event_handler::insert_index_directory(const std::string &dir) {
-    pool_.enqueue_detach([this, dir]() {
-        this->insert_pending_paths(anything::disk_scanner::scan(dir, get_blacklist_paths()));
-
-        {
-            std::lock_guard<std::mutex> lock(index_dirs_mtx_);
-            index_dirs_.erase(std::find(index_dirs_.begin(), index_dirs_.end(), dir));
-            if (index_dirs_.empty()) {
-                index_status_ = anything::index_status::scanning;
-            }
-        }
-    });
-}
-
-void base_event_handler::set_index_dirs(const std::vector<std::string> &paths) {
-    std::lock_guard<std::mutex> lock(index_dirs_mtx_);
-    index_dirs_ = paths;
-    for (auto&& path : index_dirs_) {
-        add_index_delay(path);
-        insert_index_directory(path);
-    }
-}
-
-std::size_t base_event_handler::pending_paths_count() const {
-    return pending_paths_.size();
-}
-
-std::string base_event_handler::get_index_directory() const {
-    return index_manager_.index_directory();
 }
 
 void base_event_handler::add_index_delay(std::string path) {
@@ -319,101 +273,38 @@ cancellable_wait(GCancellable *cancellable, int cancellable_fd, gint timeout_ms)
 }
 
 void base_event_handler::timer_worker(int64_t interval) {
-    // When pending_batch_size is small, CPU usage is low, but total indexing time is longer.
-    // When pending_batch_size is large, CPU usage is high, but total indexing time is shorter.
-    constexpr std::size_t pending_batch_size = 20000;
     int cancellable_fd = g_cancellable_get_fd(cancellable_);
 
     while(!cancellable_wait(cancellable_, cancellable_fd, (gint)interval)) {
-        bool idle = false;
-        {
-            std::lock_guard<std::mutex> lock(jobs_mtx_);
-            if (!jobs_.empty()) {
-                eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
-            } else {
-                idle = true;
-            }
-
-            // Commit volatile index
-            if (index_dirty_ && commit_volatile_index_timeout_ > 0)
-                --commit_volatile_index_timeout_;
-            if (commit_volatile_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
-                g_atomic_int_get(&event_process_thread_count_) == 0) {
-                if (index_status_ == anything::index_status::updating)
-                    index_status_ = anything::index_status::monitoring;
-                if (!index_manager_.commit(index_status_)) {
-                    spdlog::info("Failed to commit index");
-                    set_index_invalid_and_restart();
-                }
-                commit_volatile_index_timeout_ = config_.commit_volatile_index_timeout;
-                index_dirty_ = false;
-                volatile_index_dirty_ = true;
-            }
-
-            // Commit persistent index
-            if (volatile_index_dirty_ && commit_persistent_index_timeout_ > 0)
-                --commit_persistent_index_timeout_;
-            if (commit_persistent_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
-                g_atomic_int_get(&event_process_thread_count_) == 0) {
-                index_manager_.persist_index();
-                commit_persistent_index_timeout_ = config_.commit_persistent_index_timeout;
-                volatile_index_dirty_ = false;
-            }
+        std::lock_guard<std::mutex> lock(jobs_mtx_);
+        if (!jobs_.empty()) {
+            eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
         }
 
-        // Automatically index missing system files to maintain index integrity when there are no jobs.
-        bool pending_paths_empty = false;
-        if (idle) {
-            std::vector<std::string> path_batch;
-            {
-                std::lock_guard<std::mutex> lock(pending_mtx_);
-                pending_paths_empty = pending_paths_.empty();
-                if (!pending_paths_empty) {
-                    std::size_t batch_size = std::min(pending_batch_size, pending_paths_.size());
-                    path_batch.insert(
-                        path_batch.end(),
-                        std::make_move_iterator(pending_paths_.begin()),
-                        std::make_move_iterator(pending_paths_.begin() + batch_size));
-                    pending_paths_.erase(pending_paths_.begin(), pending_paths_.begin() + batch_size);
-                }
-            }
-
-            if (path_batch.size() > 0) {
-                spdlog::debug("path batch size: {}", path_batch.size());
-            }
-
-            try {
-                for (auto&& path : path_batch) {
-                    // Before insertion, check if the file actually exists locally to avoid re-adding an index for a recently removed path.
-                    // - The document_exists check does not need to be real-time; it only needs to reflect the state at program startup to avoid
-                    //   efficiency issues caused by thread synchronization. 
-                    // - Since existing files without an index will not trigger new insertion events, only the initial state comparison is necessary.
-                    // - Index integrity is considered only for insertion here; deletions are not checked individually, as that would be inefficient.
-                    //   Instead, existence checks for indexed paths are handled at query time.
-                    if (!index_manager_.document_exists(path, true)) {
-                        std::error_code ec;
-                        if (std::filesystem::exists(path, ec)) {
-                            add_index_delay(std::move(path));
-                        }
-                    }
-                }
-            } catch (const std::exception& e) {
-                spdlog::error("Failed to add index in timer worker: {}", e.what());
-            }
-        }
-
-        if (index_status_ == anything::index_status::scanning &&
-            pending_paths_empty &&
-            idle &&
-            !pool_.busy() &&
+        // Commit volatile index
+        if (index_dirty_ && commit_volatile_index_timeout_ > 0)
+            --commit_volatile_index_timeout_;
+        if (commit_volatile_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
             g_atomic_int_get(&event_process_thread_count_) == 0) {
-            spdlog::info("Index scan completed, trigger index commit");
-
-            index_status_ = anything::index_status::monitoring;
+            if (index_status_ == anything::index_status::updating)
+                index_status_ = anything::index_status::monitoring;
             if (!index_manager_.commit(index_status_)) {
                 spdlog::info("Failed to commit index");
                 set_index_invalid_and_restart();
             }
+            commit_volatile_index_timeout_ = config_.commit_volatile_index_timeout;
+            index_dirty_ = false;
+            volatile_index_dirty_ = true;
+        }
+
+        // Commit persistent index
+        if (volatile_index_dirty_ && commit_persistent_index_timeout_ > 0)
+            --commit_persistent_index_timeout_;
+        if (commit_persistent_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
+            g_atomic_int_get(&event_process_thread_count_) == 0) {
+            index_manager_.persist_index();
+            commit_persistent_index_timeout_ = config_.commit_persistent_index_timeout;
+            volatile_index_dirty_ = false;
         }
     }
 

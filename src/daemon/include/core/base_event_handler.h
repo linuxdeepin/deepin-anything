@@ -52,14 +52,6 @@ public:
 protected:
     void set_batch_size(std::size_t size);
 
-    void insert_pending_paths(std::vector<std::string> paths);
-    void insert_index_directory(const std::string &dir);
-    void set_index_dirs(const std::vector<std::string> &paths);
-
-    std::size_t pending_paths_count() const;
-
-    std::string get_index_directory() const;
-
     void add_index_delay(std::string path);
     void remove_index_delay(std::string path);
     void update_index_delay(std::string src, std::string dst);
@@ -86,14 +78,11 @@ private:
     event_handler_config config_;
     anything::file_index_manager index_manager_;
     std::size_t batch_size_;
-    std::vector<std::string> pending_paths_;
     std::vector<anything::index_job> jobs_;
     anything::thread_pool pool_;
     GCancellable *cancellable_;
     std::mutex jobs_mtx_;
-    std::mutex pending_mtx_;
     std::thread timer_;
-    bool delay_mode_;
 
     bool index_dirty_;
     bool volatile_index_dirty_;
@@ -101,9 +90,6 @@ private:
     int commit_persistent_index_timeout_;
 
     anything::index_status index_status_;
-
-    std::vector<std::string> index_dirs_;
-    std::mutex index_dirs_mtx_;
 
     gint event_process_thread_count_;
 
