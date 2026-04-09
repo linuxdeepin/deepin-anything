@@ -386,9 +386,17 @@ void file_index_manager::persist_index() {
 //     test(StringUtils::toUnicode(pinyin_path));
 // }
 
-// int32_t file_index_manager::document_size(bool nrt) const {
-//     return nrt ? nrt_reader_->numDocs() : reader_->numDocs();
-// }
+int32_t file_index_manager::document_size(bool nrt) {
+    try_refresh_reader(nrt);
+    
+    auto reader = nrt ? nrt_reader_ : reader_;
+    if (!reader) {
+        spdlog::error("document_size: reader is null (nrt={})", nrt);
+        return -1;
+    }
+    
+    return reader->numDocs();
+}
 
 std::string file_index_manager::index_directory() const {
     return persistent_index_directory_;
