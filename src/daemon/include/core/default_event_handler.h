@@ -1,5 +1,4 @@
-// Copyright (C) 2024 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024-2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -34,13 +33,10 @@ public:
     virtual ~default_event_handler();
 
     void handle(fs_event *event) override;
-
     void start_handle_init_scan(const std::string &path) override;
-
-    void terminate_filter();
-
     bool handle_config_change(const std::string &key, const event_handler_config &new_config) override;
 
+    void terminate_filter();
 private:
     bool is_under_indexing_path(const std::string& path, indexing_item *&indexing_item);
 

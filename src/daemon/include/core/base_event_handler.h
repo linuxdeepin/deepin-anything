@@ -1,5 +1,4 @@
-// Copyright (C) 2024 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024-2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -40,13 +39,10 @@ public:
     virtual ~base_event_handler();
 
     virtual void handle(anything::fs_event *event) = 0;
-
     virtual void start_handle_init_scan(const std::string &path) = 0;
 
     void terminate_processing();
-
     void set_index_invalid_and_restart();
-
     virtual bool handle_config_change(const std::string &key, const event_handler_config &new_config);
 
 protected:
@@ -59,6 +55,7 @@ protected:
     void recursive_update_index_delay(std::string src, std::string dst);
     void init_scan_index_delay(std::string path);
     void refresh_indexes();
+    void init_refresh_scan_indexes(std::vector<std::string>& index_dirs);
 
 private:
     void eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number);

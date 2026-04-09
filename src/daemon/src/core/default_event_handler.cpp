@@ -1,5 +1,4 @@
-// Copyright (C) 2024 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024-2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -16,7 +15,6 @@
 #include "vfs_change_consts.h"
 #include "core/config.h"
 #include "utils/tools.h"
-#include "utils/string_helper.h"
 
 ANYTHING_NAMESPACE_BEGIN
 
@@ -101,7 +99,7 @@ default_event_handler::default_event_handler(const event_handler_config &config)
     mount_info_ = mount_info_new();
 
     // init indexing_items_
-    spdlog::info("processing indexing_paths...");
+    spdlog::info("Processing indexing_paths...");
     for (auto& origin_path : config_.indexing_paths) {
         std::string event_path_with_slash = get_event_path(mount_info_, origin_path, indexing_items_);
         if (event_path_with_slash.empty()) {
@@ -124,7 +122,7 @@ default_event_handler::default_event_handler(const event_handler_config &config)
     }
 
     // init event_path_blocked_list_
-    spdlog::info("processing blacklist_paths...");
+    spdlog::info("Processing blacklist_paths...");
     for (auto& path : config_.blacklist_paths) {
         std::string event_path = determine_blacklist_path(mount_info_, path.c_str());
         if (event_path.empty())
@@ -132,18 +130,16 @@ default_event_handler::default_event_handler(const event_handler_config &config)
         event_path_blocked_list_.emplace_back(event_path);
     }
 
-    // add init scan event
-    std::string scan_path_without_slash;
+    // index refresh and scan
+    std::vector<std::string> index_dirs;
     for (const auto& item : indexing_items_) {
-        scan_path_without_slash = item.origin_path;
+        std::string scan_path_without_slash = item.origin_path;
         if (scan_path_without_slash != "/") {
             scan_path_without_slash.pop_back();
         }
-        add_index_delay(scan_path_without_slash);
-        init_scan_index_delay(std::move(scan_path_without_slash));
+        index_dirs.push_back(std::move(scan_path_without_slash));
     }
-    // indicate init scan end
-    init_scan_index_delay("");
+    init_refresh_scan_indexes(index_dirs);
 
     g_autofree gchar *dump = mount_info_dump(mount_info_);
     // remove the last "\n"

@@ -1,5 +1,4 @@
-// Copyright (C) 2024 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024-2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -11,6 +10,15 @@
 #include "utils/tools.h"
 
 #include <QCoreApplication>
+#include <glib/gstdio.h>
+
+#define REFRESH_INDEX_FILE "refresh_index"
+
+
+static std::string get_refresh_index_path(const std::string &volatile_index_dir)
+{
+    return volatile_index_dir + "/" + REFRESH_INDEX_FILE;
+}
 
 base_event_handler::base_event_handler(const event_handler_config &config)
     : config_(config),
@@ -26,10 +34,6 @@ base_event_handler::base_event_handler(const event_handler_config &config)
       event_process_thread_count_(0),
       stop_scan_directory_(false),
       batch_count_(0) {
-    index_dirty_ = index_manager_.refresh_indexes(get_blacklist_paths(), false, true);
-
-    // The timer thread is started only after all initialization is completed
-    timer_ = std::thread(&base_event_handler::timer_worker, this, 1000);
 }
 
 base_event_handler::~base_event_handler() {
@@ -118,6 +122,40 @@ void base_event_handler::refresh_indexes() {
     jobs_push("", anything::index_job_type::refresh);
 }
 
+// 启动时按需扫盘
+// 若发现 refresh_index 文件存在, 则扫盘, 扫盘完成后会删除 refresh_index 文件
+// 若发现 refresh_index 文件不存在, 则不扫盘
+void base_event_handler::init_refresh_scan_indexes(std::vector<std::string>& index_dirs)
+{
+    if (g_file_test(get_refresh_index_path(config_.volatile_index_dir).c_str(), G_FILE_TEST_EXISTS)) {
+        spdlog::info("Found {} file, do index refresh and scan", REFRESH_INDEX_FILE);
+
+        // init refresh indexes
+        index_dirty_ = index_manager_.refresh_indexes(get_blacklist_paths(), false, true);
+
+        // add init scan event
+        for (auto& dir : index_dirs) {
+            add_index_delay(dir);
+            init_scan_index_delay(std::move(dir));
+        }
+        // indicate init scan end
+        init_scan_index_delay("");
+    } else {
+        spdlog::info("No found {} file, skip index refresh and scan", REFRESH_INDEX_FILE);
+
+        for (const auto& dir : index_dirs) {
+            start_handle_init_scan(dir);
+        }
+
+        index_status_ = anything::index_status::monitoring;
+
+        // trigger timer thead save index status
+        index_dirty_ = true;
+    }
+
+    timer_ = std::thread(&base_event_handler::timer_worker, this, 1000);
+}
+
 void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number) {
     std::vector<anything::index_job> processing_jobs;
     processing_jobs.insert(
@@ -200,6 +238,10 @@ void base_event_handler::eat_job(const anything::index_job& job) {
             } else {
                 // init scan end
                 index_status_ = anything::index_status::monitoring;
+                if (!g_unlink(get_refresh_index_path(config_.volatile_index_dir).c_str()))
+                    spdlog::info("Removed {} file", REFRESH_INDEX_FILE);
+                else
+                    spdlog::warn("Failed to remove {} file: {}", REFRESH_INDEX_FILE, strerror(errno));
                 spdlog::info("Index scan completed");
                 // index commit will be triggered by timer
                 ret = true;
