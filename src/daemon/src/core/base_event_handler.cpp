@@ -8,6 +8,7 @@
 #include "utils/log.h"
 #include "utils/string_helper.h"
 #include "utils/tools.h"
+#include "utils/running_flag.h"
 
 #include <QCoreApplication>
 #include <glib/gstdio.h>
@@ -34,13 +35,13 @@ base_event_handler::base_event_handler(const event_handler_config &config)
       event_process_thread_count_(0),
       stop_scan_directory_(false),
       batch_count_(0) {
-    // 若发现索引数量为空, 则创建 refresh_index 文件以触发扫盘逻辑
+    // 若发现索引数量为空或异常退出, 则创建 refresh_index 文件以触发扫盘逻辑
     // 索引版本号会保存为一条记录
-    if (index_manager_.document_size(false) <= 1) {
+    if (index_manager_.document_size(false) <= 1 || !is_last_time_normal_quit()) {
         if (g_file_set_contents(get_refresh_index_path(config_.volatile_index_dir).c_str(), "", -1, nullptr)) {
-            spdlog::info("Created {} file for empty index", REFRESH_INDEX_FILE);
+            spdlog::info("Created {} file for empty index or abnormal quit", REFRESH_INDEX_FILE);
         } else {
-            spdlog::warn("Failed to create {} file for empty index", REFRESH_INDEX_FILE);
+            spdlog::warn("Failed to create {} file for empty index or abnormal quit", REFRESH_INDEX_FILE);
         }
     }
 }

@@ -7,6 +7,7 @@
 
 #include "anything.hpp"
 #include "core/config.h"
+#include "utils/running_flag.h"
 
 #include <QTimer>
 #include <QCoreApplication>
@@ -38,6 +39,7 @@ bool can_user_login() {
 // 收到信号后调用, 运行在 Qt 事件循环中
 gboolean on_sigint_sigterm(gpointer user_data) {
     spdlog::info("Interrupt signal ({}) received, quit", (const char *) user_data);
+    remove_running_flag();
     set_app_restart(false);
     qApp->quit();
 
@@ -89,12 +91,16 @@ int main(int argc, char* argv[]) {
     spdlog::info("Qt version: {}", qVersion());
 
     Config config;
+    event_handler_config event_handler_config = config.make_event_handler_config();
 
     spdlog::set_level(spdlog::level::from_str(config.get_log_level()));
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [thread %t] %v");
 
+    set_volatile_index_dir(event_handler_config.volatile_index_dir);
+    detect_last_time_quit_status();
+    set_running_flag();
+
     event_listenser listenser;
-    event_handler_config event_handler_config = config.make_event_handler_config();
     print_event_handler_config(event_handler_config);
     default_event_handler handler(event_handler_config);
     listenser.set_handler([&handler](fs_event *event) {
