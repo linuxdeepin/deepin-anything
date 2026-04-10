@@ -8,6 +8,3 @@ Restart=on-failure
 RestartSec=30
 MemoryHigh=2G
 MemoryMax=3G
-
-[Install]
-WantedBy=default.target
