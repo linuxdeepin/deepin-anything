@@ -21,6 +21,45 @@ static std::string get_refresh_index_path(const std::string &volatile_index_dir)
     return volatile_index_dir + "/" + REFRESH_INDEX_FILE;
 }
 
+static bool set_refresh_index_flag(const std::string &volatile_index_dir)
+{
+    std::string refresh_flag_path = get_refresh_index_path(volatile_index_dir);
+
+    if (g_file_set_contents(refresh_flag_path.c_str(), "", -1, nullptr)) {
+        spdlog::info("Refresh index flag set successfully at {}", refresh_flag_path);
+        return true;
+    } else {
+        spdlog::warn("Failed to set refresh index flag at {}: {}", refresh_flag_path,
+                     strerror(errno));
+        return false;
+    }
+}
+
+static bool have_refresh_index_flag(const std::string &volatile_index_dir)
+{
+    return g_file_test(get_refresh_index_path(volatile_index_dir).c_str(), G_FILE_TEST_EXISTS);
+}
+
+static bool remove_refresh_index_flag(const std::string &volatile_index_dir)
+{
+    std::string refresh_flag_path = get_refresh_index_path(volatile_index_dir);
+
+    if (g_file_test(refresh_flag_path.c_str(), G_FILE_TEST_EXISTS)) {
+        if (g_unlink(refresh_flag_path.c_str()) != 0) {
+            spdlog::warn("Failed to remove refresh index flag at {}: {}", refresh_flag_path,
+                         strerror(errno));
+            return false;
+        } else {
+            spdlog::info("Refresh index flag removed successfully from {}", refresh_flag_path);
+            return true;
+        }
+    } else {
+        spdlog::debug("Refresh index flag file does not exist at {}, skipping removal",
+                      refresh_flag_path);
+        return true;
+    }
+}
+
 base_event_handler::base_event_handler(const event_handler_config &config)
     : config_(config),
       index_manager_(config_.persistent_index_dir, config_.volatile_index_dir, config_.file_type_mapping),
@@ -35,14 +74,11 @@ base_event_handler::base_event_handler(const event_handler_config &config)
       event_process_thread_count_(0),
       stop_scan_directory_(false),
       batch_count_(0) {
-    // 若发现索引数量为空或异常退出, 则创建 refresh_index 文件以触发扫盘逻辑
+    // 若发现索引数量为空或异常退出, 则设置 refresh_index 标志以触发扫盘逻辑
     // 索引版本号会保存为一条记录
     if (index_manager_.document_size(false) <= 1 || !is_last_time_normal_quit()) {
-        if (g_file_set_contents(get_refresh_index_path(config_.volatile_index_dir).c_str(), "", -1, nullptr)) {
-            spdlog::info("Created {} file for empty index or abnormal quit", REFRESH_INDEX_FILE);
-        } else {
-            spdlog::warn("Failed to create {} file for empty index or abnormal quit", REFRESH_INDEX_FILE);
-        }
+        spdlog::info("Set refresh index flag for empty index or abnormal quit");
+        set_refresh_index_flag(config_.volatile_index_dir);
     }
 }
 
@@ -137,8 +173,8 @@ void base_event_handler::refresh_indexes() {
 // 若发现 refresh_index 文件不存在, 则不扫盘
 void base_event_handler::init_refresh_scan_indexes(std::vector<std::string>& index_dirs)
 {
-    if (g_file_test(get_refresh_index_path(config_.volatile_index_dir).c_str(), G_FILE_TEST_EXISTS)) {
-        spdlog::info("Found {} file, do index refresh and scan", REFRESH_INDEX_FILE);
+    if (have_refresh_index_flag(config_.volatile_index_dir)) {
+        spdlog::info("Found refresh index flag, do index refresh and scan");
 
         // init refresh indexes
         index_dirty_ = index_manager_.refresh_indexes(get_blacklist_paths(), false, true);
@@ -151,7 +187,7 @@ void base_event_handler::init_refresh_scan_indexes(std::vector<std::string>& ind
         // indicate init scan end
         init_scan_index_delay("");
     } else {
-        spdlog::info("No found {} file, skip index refresh and scan", REFRESH_INDEX_FILE);
+        spdlog::info("No found refresh index flag, skip index refresh and scan");
 
         for (const auto& dir : index_dirs) {
             start_handle_init_scan(dir);
@@ -248,10 +284,11 @@ void base_event_handler::eat_job(const anything::index_job& job) {
             } else {
                 // init scan end
                 index_status_ = anything::index_status::monitoring;
-                if (!g_unlink(get_refresh_index_path(config_.volatile_index_dir).c_str()))
-                    spdlog::info("Removed {} file", REFRESH_INDEX_FILE);
-                else
-                    spdlog::warn("Failed to remove {} file: {}", REFRESH_INDEX_FILE, strerror(errno));
+                if (stop_scan_directory_) {
+                    spdlog::info("Not remove refresh index flag for interrupted scan");
+                } else {
+                    remove_refresh_index_flag(config_.volatile_index_dir);
+                }
                 spdlog::info("Index scan completed");
                 // index commit will be triggered by timer
                 ret = true;
