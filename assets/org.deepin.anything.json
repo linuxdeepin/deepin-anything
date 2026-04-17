@@ -69,7 +69,7 @@
             "visibility": "public"
         },
         "pic_file_suffix": {
-            "value": "ani;bmp;gif;ico;jpe;jpeg;jpg;pcx;png;psd;tga;tif;tiff;webp;wmf;svg",
+            "value": "ani;avif;avifs;bmp;bw;dci;eps;epsf;epsi;exr;gif;heic;heif;heis;heix;icns;ico;jpe;jpeg;jpg;kra;mng;ora;pcx;pic;png;psd;raf;ras;raw;rgb;rgba;sgi;svg;svgz;tga;tif;tiff;wbmp;webp;wmf;xcf;cr2;crw;nef;dng;arw;orf;rw2;pef;srw;mrw;x3f;dcr;kdc;3fr;nrw;mef;iiq;sr2;erf;mos;rwl",
             "serial": 0,
             "flags":[],
             "name": "Pic File Suffix",
