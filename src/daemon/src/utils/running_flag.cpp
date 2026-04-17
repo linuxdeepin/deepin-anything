@@ -96,6 +96,11 @@ void set_running_flag(void)
 
     std::string running_flag_path = get_running_flag_path();
 
+    if (g_file_test(running_flag_path.c_str(), G_FILE_TEST_EXISTS)) {
+        spdlog::debug("Running flag already exists at {}, skipping", running_flag_path);
+        return;
+    }
+
     if (!g_file_set_contents(running_flag_path.c_str(), "", -1, nullptr)) {
         spdlog::warn("Failed to set running flag at {}: {}", running_flag_path,
                      strerror(errno));
