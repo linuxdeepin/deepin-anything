@@ -102,6 +102,7 @@ debian/deepin-anything-server.debhelper.log
 .cursor/
 .specstory/
 .cursorindexingignore
+.claude/
 
 # kernelmod
 src/kernelmod/.Module.symvers.cmd
