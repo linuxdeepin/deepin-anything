@@ -41,14 +41,15 @@ struct file_record {
     std::string full_path;
     std::string file_type;
     std::string file_ext;
-    int64_t modify_time; // milliseconds time since epoch
+    int64_t birth_time; // seconds since epoch
+    int64_t modify_time; // seconds since epoch
     int64_t file_size;
     bool is_hidden;
 };
 
 void print_file_record(const file_record& record) {
-    spdlog::info("file_name: {} full_path: {} file_type: {} file_ext: {} modify_time: {} file_size: {} is_hidden: {}",
-        record.file_name, record.full_path, record.file_type, record.file_ext, record.modify_time, record.file_size, record.is_hidden);
+    spdlog::info("file_name: {} full_path: {} file_type: {} file_ext: {} birth_time: {} modify_time: {} file_size: {} is_hidden: {}",
+        record.file_name, record.full_path, record.file_type, record.file_ext, record.birth_time, record.modify_time, record.file_size, record.is_hidden);
 }
 
 file_record make_file_record(const std::filesystem::path& p,
@@ -61,6 +62,7 @@ file_record make_file_record(const std::filesystem::path& p,
         .full_path       = std::move(p.string()),
         .file_type       = "other",
         .file_ext        = std::move(p.extension().string()),
+        .birth_time      = 0,
         .modify_time     = 0,
         .file_size       = 0,
         .is_hidden       = false,
@@ -73,19 +75,25 @@ file_record make_file_record(const std::filesystem::path& p,
     }
     ret.is_hidden = ret.full_path.find("/.") != std::string::npos;
 
-    struct stat statbuf;
-    if (lstat(ret.full_path.c_str(), &statbuf) != 0) {
+    struct statx statxbuf;
+    if (statx(AT_FDCWD, ret.full_path.c_str(), AT_SYMLINK_NOFOLLOW,
+              STATX_BASIC_STATS | STATX_BTIME | STATX_MTIME, &statxbuf) != 0) {
         auto err = errno;
         // The error is usually that the file does not exist, mainly because the index is not updated in time.
-        spdlog::debug("stat fail: {} {}", ret.full_path, strerror(err));
+        spdlog::debug("statx fail: {} {}", ret.full_path, strerror(err));
         return ret;
     } else {
-        ret.modify_time = statbuf.st_mtim.tv_sec;
-        ret.file_size = statbuf.st_size;
+        if (statxbuf.stx_mask & STATX_BTIME) {
+            ret.birth_time = statxbuf.stx_btime.tv_sec;
+        }
+        if (statxbuf.stx_mask & STATX_MTIME) {
+            ret.modify_time = statxbuf.stx_mtime.tv_sec;
+        }
+        ret.file_size = statxbuf.stx_size;
 
-        if (S_ISDIR(statbuf.st_mode)) {
+        if (S_ISDIR(statxbuf.stx_mode)) {
             ret.file_type = "dir";
-        } else if (S_ISREG(statbuf.st_mode)) {
+        } else if (S_ISREG(statxbuf.stx_mode)) {
             auto it = file_type_mapping.find(ret.file_ext);
             if (it != file_type_mapping.end()) {
                 ret.file_type = it->second;
@@ -101,8 +109,8 @@ file_record make_file_record(const std::filesystem::path& p,
 #define FULL_PATH_FIELD L"full_path"
 #define FILE_TYPE_FIELD L"file_type"
 #define FILE_EXT_FIELD L"file_ext"
+#define BIRTH_TIME_FIELD L"birth_time"
 #define MODIFY_TIME_FIELD L"modify_time"
-#define MODIFY_TIME_STR_FIELD L"modify_time_str"
 #define FILE_SIZE_FIELD L"file_size"
 #define FILE_SIZE_STR_FIELD L"file_size_str"
 #define PINYIN_FIELD L"pinyin"
@@ -164,20 +172,16 @@ DocumentPtr create_document(const file_record& record) {
         StringUtils::toUnicode(record.file_ext),
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
 
-    char *formatted_time = format_time(record.modify_time);
-    doc->add(newLucene<Field>(MODIFY_TIME_STR_FIELD,
-        StringUtils::toUnicode(formatted_time),
-        Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
-    g_free(formatted_time);
+    doc->add(newLucene<NumericField>(BIRTH_TIME_FIELD, Field::STORE_YES, true)->setLongValue(record.birth_time));
+    doc->add(newLucene<NumericField>(MODIFY_TIME_FIELD, Field::STORE_YES, true)->setLongValue(record.modify_time));
 
     char *formatted_size = format_size(record.file_size);
     doc->add(newLucene<Field>(FILE_SIZE_STR_FIELD,
         StringUtils::toUnicode(formatted_size),
         Field::STORE_YES, Field::INDEX_NOT_ANALYZED));
     g_free(formatted_size);
+    doc->add(newLucene<NumericField>(FILE_SIZE_FIELD, Field::STORE_YES, true)->setLongValue(record.file_size));
 
-    doc->add(newLucene<NumericField>(MODIFY_TIME_FIELD)->setLongValue(record.modify_time));
-    doc->add(newLucene<NumericField>(FILE_SIZE_FIELD)->setLongValue(record.file_size));
     doc->add(newLucene<Field>(PINYIN_FIELD,
         StringUtils::toLower(StringUtils::toUnicode(record.file_name_pinyin)),
         Field::STORE_YES, Field::INDEX_ANALYZED));
@@ -195,7 +199,7 @@ DocumentPtr create_document(const file_record& record) {
 }
 
 
-#define INDEX_VERSION L"4"
+#define INDEX_VERSION L"5"
 #define INDEX_VERSION_FIELD L"index_version"
 
 file_index_manager::file_index_manager(const std::string& persistent_index_dir,

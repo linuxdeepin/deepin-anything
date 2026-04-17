@@ -14,10 +14,10 @@
 #include <fcntl.h>
 #include <errno.h>
 
-char *format_time(int64_t modify_time)
+char *format_time(int64_t time_num)
 {
     // 将 UNIX 时间戳转换为 GDateTime 对象（本地时区）
-    g_autoptr(GDateTime) datetime = g_date_time_new_from_unix_local(modify_time);
+    g_autoptr(GDateTime) datetime = g_date_time_new_from_unix_local(time_num);
     if (!datetime) {
         return g_strdup("Invalid time");
     }
