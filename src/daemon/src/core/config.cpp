@@ -12,6 +12,7 @@
 #include <sstream>
 #include <gio/gio.h>
 #include <unordered_set>
+#include <filesystem>
 
 #define COMMIT_VOLATILE_INDEX_TIMEOUT_DEFAULT 2
 #define COMMIT_VOLATILE_INDEX_TIMEOUT_MIN 1
@@ -252,10 +253,65 @@ Config::~Config() {
     g_object_unref(dbus_connection_);
 }
 
+static void migrate_index_dir(const std::string& old_dir, const std::string& new_dir) {
+    std::error_code ec;
+
+    // Skip if new directory already exists
+    if (std::filesystem::exists(new_dir, ec)) {
+        return;
+    }
+
+    // Skip if old directory doesn't exist
+    if (!std::filesystem::exists(old_dir, ec)) {
+        return;
+    }
+
+    spdlog::info("Migrating index from {} to {}", old_dir, new_dir);
+
+    // Create parent directory for new location
+    auto parent_path = std::filesystem::path(new_dir).parent_path();
+    if (!std::filesystem::exists(parent_path, ec)) {
+        std::filesystem::create_directories(parent_path, ec);
+        if (ec) {
+            spdlog::error("Failed to create parent directory {}: {}", parent_path.string(), ec.message());
+            return;
+        }
+    }
+
+    // Move the directory
+    std::filesystem::rename(old_dir, new_dir, ec);
+    if (ec) {
+        spdlog::error("Failed to migrate index directory: {}", ec.message());
+        // If rename fails (e.g., cross-device), try copy and remove
+        ec.clear();
+        std::filesystem::copy(old_dir, new_dir, std::filesystem::copy_options::recursive, ec);
+        if (ec) {
+            spdlog::error("Failed to copy index directory: {}", ec.message());
+            return;
+        }
+        ec.clear();
+        std::filesystem::remove_all(old_dir, ec);
+        if (ec) {
+            spdlog::warn("Failed to remove old index directory: {}", ec.message());
+        }
+    }
+
+    spdlog::info("Index migration completed successfully");
+}
+
 event_handler_config Config::make_event_handler_config()
 {
     event_handler_config config;
-    config.persistent_index_dir = std::string(g_get_user_cache_dir()) + "/deepin-anything-server";
+
+    // Use XDG_DATA_HOME for persistent index storage (instead of XDG_CACHE_HOME)
+    // This ensures the index survives cache cleaning operations
+    std::string old_index_dir = std::string(g_get_user_cache_dir()) + "/deepin-anything-server";
+    std::string new_index_dir = std::string(g_get_user_data_dir()) + "/deepin-anything-server";
+
+    // Migrate from old location to new location if needed
+    migrate_index_dir(old_index_dir, new_index_dir);
+
+    config.persistent_index_dir = new_index_dir;
     config.volatile_index_dir = config.persistent_index_dir;
     config.blacklist_paths = blacklist_paths_;
     config.indexing_paths = indexing_paths_;
