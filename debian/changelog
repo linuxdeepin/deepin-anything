@@ -1,3 +1,21 @@
+deepin-anything (7.0.39) unstable; urgency=medium
+
+  * chore(CI): add debian check workflow
+  * refactor: Remove the old directory scanning mechanism
+  * feat: optimize index initialization with conditional refresh
+  * feat: implement index size check and trigger full scan for empty
+    index
+  * feat: add daemon abnormal exit detection mechanism
+  * refactor: extract refresh_index flag operations into helper
+    functions
+  * chore: remove Install section from daemon service
+  * feat: add file birth time support using statx syscall
+  * feat: extend image format support based on Qt5 plugins
+  * feat: move index storage from XDG_CACHE_HOME to XDG_DATA_HOME
+  * fix: add idempotent check and re-call for running flag setup
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 23 Apr 2026 19:13:20 +0800
+
 deepin-anything (7.0.38) unstable; urgency=medium
 
   * refactor: Remove default blacklist paths
