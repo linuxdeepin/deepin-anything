@@ -373,17 +373,31 @@ void base_event_handler::timer_worker(int64_t interval) {
         // Commit volatile index
         if (index_dirty_ && commit_volatile_index_timeout_ > 0)
             --commit_volatile_index_timeout_;
-        if (commit_volatile_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
-            g_atomic_int_get(&event_process_thread_count_) == 0) {
-            if (index_status_ == anything::index_status::updating)
-                index_status_ = anything::index_status::monitoring;
-            if (!index_manager_.commit(index_status_)) {
-                spdlog::info("Failed to commit index");
-                set_index_invalid_and_restart();
+        if (commit_volatile_index_timeout_ == 0 && jobs_.empty()) {
+            int retry_count = 1;
+            bool cancellable_wait_ret = false;
+            while (true) {
+                if (!pool_.busy() && g_atomic_int_get(&event_process_thread_count_) == 0) {
+                    if (index_status_ == anything::index_status::updating)
+                        index_status_ = anything::index_status::monitoring;
+                    if (!index_manager_.commit(index_status_)) {
+                        spdlog::info("Failed to commit index");
+                        set_index_invalid_and_restart();
+                    }
+                    commit_volatile_index_timeout_ = config_.commit_volatile_index_timeout;
+                    index_dirty_ = false;
+                    volatile_index_dirty_ = true;
+                    break;
+                } else {
+                    if (retry_count-- <= 0)
+                        break;
+                    cancellable_wait_ret = cancellable_wait(cancellable_, cancellable_fd, (gint)interval);
+                    if (cancellable_wait_ret)
+                        break;
+                }
             }
-            commit_volatile_index_timeout_ = config_.commit_volatile_index_timeout;
-            index_dirty_ = false;
-            volatile_index_dirty_ = true;
+            if (cancellable_wait_ret)
+                break;
         }
 
         // Commit persistent index
