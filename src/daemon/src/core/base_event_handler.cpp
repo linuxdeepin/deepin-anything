@@ -14,6 +14,7 @@
 #include <glib/gstdio.h>
 
 #define REFRESH_INDEX_FILE "refresh_index"
+#define JOB_BATCH_COUNT_FOR_LIGHT_LOAD 4
 
 
 static std::string get_refresh_index_path(const std::string &volatile_index_dir)
@@ -67,13 +68,11 @@ base_event_handler::base_event_handler(const event_handler_config &config)
       pool_(1),
       cancellable_(g_cancellable_new()),
       index_dirty_(false),
-      volatile_index_dirty_(false),
       commit_volatile_index_timeout_(config_.commit_volatile_index_timeout),
-      commit_persistent_index_timeout_(config_.commit_persistent_index_timeout),
       index_status_(anything::index_status::loading),
-      event_process_thread_count_(0),
       stop_scan_directory_(false),
-      batch_count_(0) {
+      batch_count_(0),
+      wait_commit_persistent_index_(false) {
     // 若发现索引数量为空或异常退出, 则设置 refresh_index 标志以触发扫盘逻辑
     // 索引版本号会保存为一条记录
     if (index_manager_.document_size(false) <= 1 || !is_last_time_normal_quit()) {
@@ -133,6 +132,15 @@ bool base_event_handler::handle_config_change(const std::string &key, const even
         spdlog::info("Dynamic updates of config are not supported: {}", key);
         return false;
     }
+}
+
+gboolean base_event_handler::trigger_commit_persistent_index(base_event_handler *handler)
+{
+    // 不使用 jobs_push 避免将 index_dirty_ 置为 true
+    std::lock_guard<std::mutex> lock(handler->jobs_mtx_);
+    spdlog::debug("Push job: commit_persistent_index");
+    handler->jobs_.emplace_back("", anything::index_job_type::commit_persistent_index);
+    return FALSE;
 }
 
 void base_event_handler::set_batch_size(std::size_t size) {
@@ -204,26 +212,22 @@ void base_event_handler::init_refresh_scan_indexes(std::vector<std::string>& ind
 
 void base_event_handler::eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number) {
     std::vector<anything::index_job> processing_jobs;
+
     processing_jobs.insert(
         processing_jobs.end(),
         std::make_move_iterator(jobs.begin()),
         std::make_move_iterator(jobs.begin() + number));
     jobs.erase(jobs.begin(), jobs.begin() + number);
+
     g_atomic_int_inc(&batch_count_);
     pool_.enqueue_detach([this, processing_jobs = std::move(processing_jobs)]() {
-        g_atomic_int_inc(&this->event_process_thread_count_);
         for (const auto& job : processing_jobs) {
             eat_job(job);
         }
-        g_atomic_int_dec_and_test(&this->event_process_thread_count_);
         g_atomic_int_dec_and_test(&this->batch_count_);
+        check_jobs_load();
     });
 
-    if ((g_atomic_int_get(&batch_count_)*(int)batch_size_) >= config_.pending_events_trigger_updating &&
-        index_status_ == anything::index_status::monitoring) {
-        index_status_ = anything::index_status::updating;
-        index_manager_.set_index_updating();
-    }
 }
 
 void base_event_handler::eat_job(const anything::index_job& job) {
@@ -298,6 +302,34 @@ void base_event_handler::eat_job(const anything::index_job& job) {
             index_manager_.refresh_indexes(get_blacklist_paths(), true, false);
             ret = true;
             break;
+        case anything::index_job_type::commit_volatile_index:
+            spdlog::debug("Eat job: commit_volatile_index");
+            if (g_atomic_int_get(&batch_count_) <= JOB_BATCH_COUNT_FOR_LIGHT_LOAD) {
+                // 现在线程池中待处理的任务较少
+                if (index_status_ == anything::index_status::updating)
+                    index_status_ = anything::index_status::monitoring;
+                ret = index_manager_.commit(index_status_);
+                if (ret) {
+                    if (!wait_commit_persistent_index_) {
+                        wait_commit_persistent_index_ = true;
+                        g_timeout_add_seconds (config_.commit_persistent_index_timeout,
+                                               (GSourceFunc)trigger_commit_persistent_index,
+                                               this);
+                    }
+                } else {
+                    spdlog::error("Failed to commit index");
+                }
+            } else {
+                ret = true;
+                spdlog::debug("Skip to commit volatile index due to a large number of pending events");
+            }
+            break;
+        case anything::index_job_type::commit_persistent_index:
+            spdlog::debug("Eat job: commit_persistent_index");
+            index_manager_.persist_index();
+            wait_commit_persistent_index_ = false;
+            ret = true;
+            break;
         default:
             spdlog::error("Invalid job type: {}", static_cast<int>(job.type));
             break;
@@ -306,6 +338,16 @@ void base_event_handler::eat_job(const anything::index_job& job) {
     if (!ret) {
         spdlog::info("Failed to process job");
         set_index_invalid_and_restart();
+    }
+}
+
+void base_event_handler::check_jobs_load()
+{
+    if ((g_atomic_int_get(&batch_count_)*(int)batch_size_) >= config_.pending_events_trigger_updating &&
+        index_status_ == anything::index_status::monitoring) {
+        index_status_ = anything::index_status::updating;
+        index_manager_.set_index_updating();
+        spdlog::info("Set index status to updating");
     }
 }
 
@@ -366,35 +408,19 @@ void base_event_handler::timer_worker(int64_t interval) {
 
     while(!cancellable_wait(cancellable_, cancellable_fd, (gint)interval)) {
         std::lock_guard<std::mutex> lock(jobs_mtx_);
-        if (!jobs_.empty()) {
-            eat_jobs(jobs_, std::min(batch_size_, jobs_.size()));
-        }
 
-        // Commit volatile index
+        // trigger commit volatile index
         if (index_dirty_ && commit_volatile_index_timeout_ > 0)
             --commit_volatile_index_timeout_;
-        if (commit_volatile_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
-            g_atomic_int_get(&event_process_thread_count_) == 0) {
-            if (index_status_ == anything::index_status::updating)
-                index_status_ = anything::index_status::monitoring;
-            if (!index_manager_.commit(index_status_)) {
-                spdlog::info("Failed to commit index");
-                set_index_invalid_and_restart();
-            }
+        if (commit_volatile_index_timeout_ == 0) {
+            spdlog::debug("Push job: commit_volatile_index");
+            jobs_.emplace_back("", anything::index_job_type::commit_volatile_index);
             commit_volatile_index_timeout_ = config_.commit_volatile_index_timeout;
             index_dirty_ = false;
-            volatile_index_dirty_ = true;
         }
 
-        // Commit persistent index
-        if (volatile_index_dirty_ && commit_persistent_index_timeout_ > 0)
-            --commit_persistent_index_timeout_;
-        if (commit_persistent_index_timeout_ == 0 && jobs_.empty() && !pool_.busy() &&
-            g_atomic_int_get(&event_process_thread_count_) == 0) {
-            index_manager_.persist_index();
-            commit_persistent_index_timeout_ = config_.commit_persistent_index_timeout;
-            volatile_index_dirty_ = false;
-        }
+        if (!jobs_.empty())
+            eat_jobs(jobs_, jobs_.size());
     }
 
     if (cancellable_fd != -1) {
