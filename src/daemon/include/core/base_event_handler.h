@@ -18,7 +18,9 @@
 ANYTHING_NAMESPACE_BEGIN
 
 enum class index_job_type : char {
-    add, remove, update, scan, recursive_update, init_scan, refresh
+    add, remove, update, scan, recursive_update, init_scan, refresh,
+    commit_volatile_index,
+    commit_persistent_index
 };
 
 struct index_job {
@@ -45,6 +47,8 @@ public:
     void set_index_invalid_and_restart();
     virtual bool handle_config_change(const std::string &key, const event_handler_config &new_config);
 
+    static gboolean trigger_commit_persistent_index(base_event_handler *handler);
+
 protected:
     void set_batch_size(std::size_t size);
 
@@ -60,6 +64,7 @@ protected:
 private:
     void eat_jobs(std::vector<anything::index_job>& jobs, std::size_t number);
     void eat_job(const anything::index_job& job);
+    void check_jobs_load();
 
     void jobs_push(std::string src, anything::index_job_type type, std::optional<std::string> dst = std::nullopt);
 
@@ -82,19 +87,17 @@ private:
     std::thread timer_;
 
     bool index_dirty_;
-    bool volatile_index_dirty_;
     int commit_volatile_index_timeout_;
-    int commit_persistent_index_timeout_;
 
     anything::index_status index_status_;
-
-    gint event_process_thread_count_;
 
     std::atomic<bool> stop_scan_directory_;
 
     std::mutex config_access_mtx_;
 
     gint batch_count_;
+
+    bool wait_commit_persistent_index_;
 };
 
 #endif // ANYTHING_BASE_EVENT_HANDLER_H_
