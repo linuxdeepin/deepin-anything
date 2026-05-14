@@ -1,3 +1,10 @@
+deepin-anything (7.0.41) unstable; urgency=medium
+
+  * Revert "fix: retry volatile index commit when thread pool is busy"
+  * refactor: unify index commit into job queue with load awareness
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 14 May 2026 15:48:33 +0800
+
 deepin-anything (7.0.40) unstable; urgency=medium
 
   * fix: retry volatile index commit when thread pool is busy
