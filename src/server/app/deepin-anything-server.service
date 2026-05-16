@@ -10,6 +10,3 @@ ExecStartPre=modprobe vfs_monitor
 ExecStopPost=rmmod vfs_monitor
 Restart=always
 RestartSec=30
-
-[Install]
-WantedBy=multi-user.target

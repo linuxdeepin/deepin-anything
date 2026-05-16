@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 guanzi008 <245205080@qq.com>
+# SPDX-License-Identifier: CC0-1.0
+
+[Unit]
+Description=Start Deepin anything server after graphical login settles
+
+[Timer]
+OnBootSec=90s
+Unit=deepin-anything-server.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target
