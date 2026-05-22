@@ -58,5 +58,8 @@ message("CMAKE_CURRENT_BINARY_DIR:" ${CMAKE_CURRENT_BINARY_DIR})
  # Install all source files
  install(FILES ${SRC_FILES} DESTINATION ${INSTALL_DIR})
 
+ # Install helper scripts with executable permission
+ install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/dkms-make.sh DESTINATION ${INSTALL_DIR})
+
   # Install the module conf file
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/anything.conf DESTINATION /usr/lib/modules-load.d)
