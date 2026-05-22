@@ -15,6 +15,7 @@
 #include <linux/namei.h>
 #include <linux/version.h>
 #include <linux/atomic.h>
+#include <linux/err.h>
 
 #include "arg_extractor.h"
 #include "vfs_change_consts.h"
@@ -286,6 +287,24 @@ _DECL_CMN_KRP(sys_umount, path_umount);
         .kp.symbol_name = ""#fn"",\
     };
 
+#define DECL_VFS_INT_OR_PTR_RET_KRP(fn, act, de_i) static int on_##fn##_ent(struct kretprobe_instance *ri, struct pt_regs *regs)\
+    {\
+        return common_vfs_ent((struct vfs_event **)&(ri->data), (struct dentry *)get_arg(regs, de_i));\
+    }\
+    \
+    static int on_##fn##_ret(struct kretprobe_instance *ri, struct pt_regs *regs)\
+    {\
+        return common_vfs_ret_int_or_ptr((struct vfs_event **)&(ri->data), regs, act);\
+    }\
+    \
+    static struct kretprobe fn##_krp = {\
+        .entry_handler  = on_##fn##_ent,\
+        .handler        = on_##fn##_ret,\
+        .data_size      = sizeof(struct vfs_event *),\
+        .maxactive      = 64,\
+        .kp.symbol_name = ""#fn"",\
+    };
+
 /*
  * if kretprobe entry-handler returns a non-zero error,
  * then the handler will not be called.
@@ -334,11 +353,42 @@ fail:
     return 0;
 }
 
+static int common_vfs_ret_int_or_ptr(struct vfs_event **event, struct pt_regs *regs, int action)
+{
+    if (IS_ERR_VALUE(regs_return_value(regs)))
+        goto fail;
+
+    (*event)->action = action;
+    vfs_changed_entry(*event);
+    return 0;
+
+fail:
+    if (*event)
+        vfs_event_free(*event);
+    return 0;
+}
+
 // select dentry from vfs api by different kernel
 // If the vfs api in the subsequent kernel changes, please define a new macro branch.
 // The main work of the definition is to specify the position number (starting from 1) of
 // the dentry parameter according to the definition of vfs api.
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+// int vfs_create(struct mnt_idmap *, struct dentry *, umode_t, struct delegated_inode *);
+// int vfs_unlink(struct mnt_idmap *, struct inode *, struct dentry *, struct delegated_inode *);
+// struct dentry *vfs_mkdir(struct mnt_idmap *, struct inode *, struct dentry *, umode_t, struct delegated_inode *);
+// int vfs_rmdir(struct mnt_idmap *, struct inode *, struct dentry *, struct delegated_inode *);
+// int vfs_symlink(struct mnt_idmap *, struct inode *, struct dentry *, const char *, struct delegated_inode *);
+// int security_inode_create(struct inode *dir, struct dentry *dentry, umode_t mode);
+// int vfs_link(struct dentry *, struct mnt_idmap *, struct inode *, struct dentry *, struct delegated_inode *);
+DECL_VFS_KRP(vfs_create, ACT_NEW_FILE, 2);
+DECL_VFS_KRP(vfs_unlink, ACT_DEL_FILE, 3);
+DECL_VFS_INT_OR_PTR_RET_KRP(vfs_mkdir, ACT_NEW_FOLDER, 3);
+DECL_VFS_KRP(vfs_rmdir, ACT_DEL_FOLDER, 3);
+DECL_VFS_KRP(vfs_symlink, ACT_NEW_SYMLINK, 3);
+DECL_VFS_KRP(security_inode_create, ACT_NEW_FILE, 2);
+// select dest(4) dentry, not src(1) dentry
+DECL_VFS_KRP(vfs_link, ACT_NEW_LINK, 4);
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
 // vfs-create: struct inode*, struct dentry*, umode_t, bool
 // vfs-unlink: struct inode*, struct dentry*, struct inode**
 // vfs-mkdir: struct inode*, struct dentry*, umode_t
@@ -348,7 +398,7 @@ fail:
 // vfs-link: struct dentry*, struct inode*, struct dentry*, struct inode**
 DECL_VFS_KRP(vfs_create, ACT_NEW_FILE, 2);
 DECL_VFS_KRP(vfs_unlink, ACT_DEL_FILE, 2);
-DECL_VFS_KRP(vfs_mkdir, ACT_NEW_FOLDER, 2);
+DECL_VFS_INT_OR_PTR_RET_KRP(vfs_mkdir, ACT_NEW_FOLDER, 2);
 DECL_VFS_KRP(vfs_rmdir, ACT_DEL_FOLDER, 2);
 DECL_VFS_KRP(vfs_symlink, ACT_NEW_SYMLINK, 2);
 DECL_VFS_KRP(security_inode_create, ACT_NEW_FILE, 2);
@@ -364,7 +414,7 @@ DECL_VFS_KRP(vfs_link, ACT_NEW_LINK, 3);
 // int vfs_link(struct dentry *, struct user_namespace *, struct inode *, struct dentry *, struct inode **);
 DECL_VFS_KRP(vfs_create, ACT_NEW_FILE, 3);
 DECL_VFS_KRP(vfs_unlink, ACT_DEL_FILE, 3);
-DECL_VFS_KRP(vfs_mkdir, ACT_NEW_FOLDER, 3);
+DECL_VFS_INT_OR_PTR_RET_KRP(vfs_mkdir, ACT_NEW_FOLDER, 3);
 DECL_VFS_KRP(vfs_rmdir, ACT_DEL_FOLDER, 3);
 DECL_VFS_KRP(vfs_symlink, ACT_NEW_SYMLINK, 3);
 DECL_VFS_KRP(security_inode_create, ACT_NEW_FILE, 2);
