@@ -5,13 +5,13 @@
 
 #include "core/file_index_manager.h"
 #include "analyzers/AnythingAnalyzer.h"
+#include "analyzers/LowerCaseNGramAnalyzer.h"
 #include "core/config.h"
 #include "utils/string_helper.h"
 
 #include <chrono>
 #include <filesystem>
 
-#include "lucene++/ChineseAnalyzer.h"
 #include "lucene++/Highlighter.h"
 #include "lucene++/FileUtils.h"
 #include "lucene++/FuzzyQuery.h"
@@ -19,7 +19,6 @@
 #include "lucene++/SimpleHTMLFormatter.h"
 
 #include "analyzers/AnythingAnalyzer.h"
-#include "analyzers/chineseanalyzer.h"
 #include "utils/log.h"
 #include "utils/tools.h"
 #include "core/config.h"
@@ -199,7 +198,7 @@ DocumentPtr create_document(const file_record& record) {
 }
 
 
-#define INDEX_VERSION L"5"
+#define INDEX_VERSION L"6"
 #define INDEX_VERSION_FIELD L"index_version"
 
 file_index_manager::file_index_manager(const std::string& persistent_index_dir,
@@ -216,7 +215,7 @@ file_index_manager::file_index_manager(const std::string& persistent_index_dir,
         try {
             auto create = !IndexReader::indexExists(dir);
             writer_ = newLucene<IndexWriter>(dir,
-                newLucene<ChineseAnalyzer>(),
+                newLucene<LowerCaseNGramAnalyzer>(1, 2),
                 create, IndexWriter::MaxFieldLengthLIMITED);
             reader_  = IndexReader::open(dir, true);
             // check if index corrupted by same method
@@ -231,7 +230,7 @@ file_index_manager::file_index_manager(const std::string& persistent_index_dir,
             std::filesystem::remove_all(volatile_index_directory_, ec);
 
             writer_ = newLucene<IndexWriter>(dir,
-                newLucene<ChineseAnalyzer>(),
+                newLucene<LowerCaseNGramAnalyzer>(1, 2),
                 true, IndexWriter::MaxFieldLengthLIMITED);
             reader_  = IndexReader::open(dir, true);
         }

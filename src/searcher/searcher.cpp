@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "searcher.h"
-#include "analyzers/chineseanalyzer.h"
+#include "analyzers/LowerCaseNGramAnalyzer.h"
 #include "utils/string_helper.h"
 #include <glib.h>
 #include <iostream>
@@ -63,7 +63,7 @@ std::vector<std::string> Searcher::search(const std::string& path,
             finalQuery->add(wildcardQuery, BooleanClause::MUST);
         } else {
             // 创建查询解析器
-            AnalyzerPtr analyzer = newLucene<ChineseAnalyzer>();
+            AnalyzerPtr analyzer = newLucene<LowerCaseNGramAnalyzer>(1, 2);
             QueryParserPtr parser = newLucene<QueryParser>(LuceneVersion::LUCENE_CURRENT, L"file_name", analyzer);
 
             // 解析查询
