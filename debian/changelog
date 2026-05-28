@@ -1,3 +1,9 @@
+deepin-anything (7.0.42) unstable; urgency=medium
+
+  * refactor: replace ChineseAnalyzer with LowerCaseNGramAnalyzer
+
+ -- Zhang Sheng <zhangsheng@uniontech.com>  Thu, 28 May 2026 15:35:03 +0800
+
 deepin-anything (7.0.41) unstable; urgency=medium
 
   * Revert "fix: retry volatile index commit when thread pool is busy"
