@@ -579,6 +579,11 @@ static QPair<QString, fs_buf*> getFsBufByPath(const QString &path)
 
 bool LFTManager::hasLFT(const QString &path) const
 {
+    // 如果无法 stat path, 则认为没有索引
+    struct stat path_stat;
+    if (stat(QFile::encodeName(path).constData(), &path_stat))
+        return false;
+
     QStringList mountPoints = allPath();
     QString pathIntoMountPoint = convertPathIntoMountPoint(mountPoints, path);
 
