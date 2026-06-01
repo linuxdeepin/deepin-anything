@@ -1,3 +1,9 @@
+deepin-anything (6.2.12) unstable; urgency=medium
+
+  * fix(index): add early return in hasLFT for inaccessible paths
+
+ -- wangrong <wangrong@uniontech.com>  Mon, 01 Jun 2026 15:08:49 +0800
+
 deepin-anything (6.2.11) unstable; urgency=medium
 
   * fix: Remove deepin-anything user and group
