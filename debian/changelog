@@ -1,3 +1,11 @@
+deepin-anything (7.0.43) unstable; urgency=medium
+
+  * fix: adapt vfs probes for Linux 7
+  * fix: use matching clang for DKMS builds
+  * fix(vfs): adapt vfs probes for Linux 6.15+
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 04 Jun 2026 20:33:12 +0800
+
 deepin-anything (7.0.42) unstable; urgency=medium
 
   * refactor: replace ChineseAnalyzer with LowerCaseNGramAnalyzer
