@@ -104,8 +104,8 @@ int main(int argc, char* argv[]) {
     default_event_handler handler(event_handler_config);
     // default_event_handler 实例化时, 可能会清空索引目录, 这里重新设置 running 标志
     set_running_flag();
-    event_listenser listenser;
-    listenser.set_handler([&handler](fs_event *event) {
+    event_listener listener;
+    listener.set_handler([&handler](fs_event *event) {
         handler.handle(event);
     });
     config.set_config_change_handler([&handler, &config](std::string key) {
@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
     QTimer timer;
     setup_kernel_module_alive_check(timer);
 
-    listenser.async_listen();
+    listener.async_listen();
     app.exec();
 
     // Clean up signal handlers
@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
         g_source_remove(sigterm_id);
 
     spdlog::info("Performing cleanup tasks...");
-    listenser.stop_listening();
+    listener.stop_listening();
     handler.terminate_filter();
     handler.terminate_processing();
 

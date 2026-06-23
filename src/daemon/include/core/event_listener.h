@@ -3,8 +3,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#ifndef ANYTHING_EVENT_LISTENSER_H_
-#define ANYTHING_EVENT_LISTENSER_H_
+#ifndef ANYTHING_EVENT_LISTENER_H_
+#define ANYTHING_EVENT_LISTENER_H_
 
 #include <atomic>
 #include <functional>
@@ -22,10 +22,10 @@ ANYTHING_NAMESPACE_BEGIN
 using nl_sock_ptr = nl_sock*;
 using nl_msg_ptr  = nl_msg*;
 
-class event_listenser {
+class event_listener {
 public:
-    event_listenser();
-    ~event_listenser();
+    event_listener();
+    ~event_listener();
 
     void start_listening();
 
@@ -56,4 +56,4 @@ private:
 
 ANYTHING_NAMESPACE_END
 
-#endif // ANYTHING_EVENT_LISTENSER_H_
+#endif // ANYTHING_EVENT_LISTENER_H_
