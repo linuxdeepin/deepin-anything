@@ -100,11 +100,11 @@ int main(int argc, char* argv[]) {
     detect_last_time_quit_status();
     set_running_flag();
 
-    event_listenser listenser;
     print_event_handler_config(event_handler_config);
     default_event_handler handler(event_handler_config);
     // default_event_handler 实例化时, 可能会清空索引目录, 这里重新设置 running 标志
     set_running_flag();
+    event_listenser listenser;
     listenser.set_handler([&handler](fs_event *event) {
         handler.handle(event);
     });
