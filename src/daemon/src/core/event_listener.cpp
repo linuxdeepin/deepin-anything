@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "core/event_listenser.h"
+#include "core/event_listener.h"
 
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -56,7 +56,7 @@ bool set_max_socket_receive_buffer_size(nl_sock_ptr& sk) {
     return true;
 }
 
-event_listenser::event_listenser()
+event_listener::event_listener()
     : connected_{ connect(mcsk_) },
       timeout_{ -1 } {
     auto clean_and_exit = [this] {
@@ -89,7 +89,7 @@ event_listenser::event_listenser()
         clean_and_exit();
     }
 
-    if (!set_callback(mcsk_, event_listenser::event_handler)) {
+    if (!set_callback(mcsk_, event_listener::event_handler)) {
         spdlog::error("Error: failed to set callback");
         clean_and_exit();
     }
@@ -109,12 +109,12 @@ event_listenser::event_listenser()
     vfs_policy[VFSMONITOR_A_PATH].maxlen = 4096;
 }
 
-event_listenser::~event_listenser() {
+event_listener::~event_listener() {
     disconnect(mcsk_);
     close(stop_fd_);
 }
 
-void event_listenser::start_listening() {
+void event_listener::start_listening() {
     spdlog::info("listening for messages");
     int ep_fd = epoll_create1(0);
     if (ep_fd < 0) {
@@ -165,11 +165,11 @@ void event_listenser::start_listening() {
     delete[] ep_events;
 }
 
-void event_listenser::async_listen() {
-    listening_thread_ = std::thread(&event_listenser::start_listening, this);
+void event_listener::async_listen() {
+    listening_thread_ = std::thread(&event_listener::start_listening, this);
 }
 
-void event_listenser::stop_listening() {
+void event_listener::stop_listening() {
     uint64_t u = 1;
     [[maybe_unused]] auto _ = write(stop_fd_, &u, sizeof(u));
 
@@ -182,28 +182,28 @@ void event_listenser::stop_listening() {
     }
 }
 
-void event_listenser::set_handler(std::function<void(fs_event*)> handler) {
+void event_listener::set_handler(std::function<void(fs_event*)> handler) {
     handler_ = std::move(handler);
 }
 
-bool event_listenser::connect(nl_sock_ptr& sk) const {
+bool event_listener::connect(nl_sock_ptr& sk) const {
     sk = nl_socket_alloc();
     return sk ? genl_connect(sk) == 0 : false;
 }
 
-void event_listenser::disconnect(nl_sock_ptr& sk) const {
+void event_listener::disconnect(nl_sock_ptr& sk) const {
     nl_socket_free(sk);
 }
 
-bool event_listenser::set_callback(nl_sock_ptr& sk, nl_recvmsg_msg_cb_t func) {
+bool event_listener::set_callback(nl_sock_ptr& sk, nl_recvmsg_msg_cb_t func) {
     return nl_socket_modify_cb(sk, NL_CB_VALID, NL_CB_CUSTOM, func, this) == 0;
 }
 
-int event_listenser::get_fd(nl_sock_ptr& sk) const {
+int event_listener::get_fd(nl_sock_ptr& sk) const {
     return nl_socket_get_fd(sk);
 }
 
-void event_listenser::forward_event_to_handler(fs_event *event) const {
+void event_listener::forward_event_to_handler(fs_event *event) const {
     if (handler_) {
         std::invoke(handler_, event);
     }
@@ -227,7 +227,7 @@ fs_event* make_fs_event(uint8_t act,
     return event;
 }
 
-int event_listenser::event_handler(nl_msg_ptr msg, void* arg) {
+int event_listener::event_handler(nl_msg_ptr msg, void* arg) {
     nlattr* tb[VFSMONITOR_A_MAX + 1];
     int err = genlmsg_parse(nlmsg_hdr(msg), 0, tb, VFSMONITOR_A_MAX, vfs_policy);
     if (err < 0) {
@@ -252,8 +252,8 @@ int event_listenser::event_handler(nl_msg_ptr msg, void* arg) {
     }
 
     fs_event* event = make_fs_event(*act, *cookie, *major, *minor, *src, "");
-    auto listenser = static_cast<event_listenser*>(arg);
-    listenser->forward_event_to_handler(event);
+    auto listener = static_cast<event_listener*>(arg);
+    listener->forward_event_to_handler(event);
     return NL_OK;
 }
 
