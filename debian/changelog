@@ -1,3 +1,10 @@
+deepin-anything (7.0.44) unstable; urgency=medium
+
+  * fix: fix daemon fail to init
+  * fix: fix a typo
+
+ -- wangrong <wangrong@uniontech.com>  Tue, 23 Jun 2026 18:49:17 +0800
+
 deepin-anything (7.0.43) unstable; urgency=medium
 
   * fix: adapt vfs probes for Linux 7
