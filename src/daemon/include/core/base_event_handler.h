@@ -40,7 +40,7 @@ public:
     base_event_handler(const event_handler_config &config);
     virtual ~base_event_handler();
 
-    virtual void handle(anything::fs_event *event) = 0;
+    virtual void handle(fs_event *event) = 0;
     virtual void start_handle_init_scan(const std::string &path) = 0;
 
     void terminate_processing();

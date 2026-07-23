@@ -1,59 +1,33 @@
-// Copyright (C) 2024 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024-2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #ifndef ANYTHING_EVENT_LISTENER_H_
 #define ANYTHING_EVENT_LISTENER_H_
 
-#include <atomic>
-#include <functional>
-#include <thread>
+#define G_LOG_USE_STRUCTURED
+#include <glib.h>
 
-#include <netlink/attr.h>
-#include <netlink/handlers.h>
-
-#include "common/anything_fwd.hpp"
 #include "common/fs_event.h"
-#include "common/vfs_genl.h"
 
-ANYTHING_NAMESPACE_BEGIN
+G_BEGIN_DECLS
 
-using nl_sock_ptr = nl_sock*;
-using nl_msg_ptr  = nl_msg*;
+typedef struct EventListener EventListener;
 
-class event_listener {
-public:
-    event_listener();
-    ~event_listener();
+typedef void (*EventListenerCallback)(gpointer user_data, fs_event *event);
 
-    void start_listening();
+typedef void (*EventListenerQuitCallback)(gpointer user_data);
 
-    void async_listen();
+EventListener *event_listener_new(EventListenerCallback callback,
+                                   EventListenerQuitCallback quit_callback,
+                                   gpointer user_data);
 
-    void stop_listening();
+gboolean event_listener_start(EventListener *listener);
 
-    void set_handler(std::function<void(fs_event*)> handler);
+void event_listener_stop(EventListener *listener);
 
-private:
-    bool connect(nl_sock_ptr& sk) const;
-    void disconnect(nl_sock_ptr& sk) const;
-    bool set_callback(nl_sock_ptr& sk, nl_recvmsg_msg_cb_t func);
-    int get_fd(nl_sock_ptr& sk) const;
+void event_listener_free(EventListener *listener);
 
-    void forward_event_to_handler(fs_event *event) const;
-
-    static int event_handler(nl_msg_ptr msg, void* arg);
-
-private:
-    nl_sock_ptr mcsk_;
-    bool connected_;
-    int stop_fd_;
-    int timeout_;
-    std::function<void(fs_event*)> handler_;
-    std::thread listening_thread_;
-};
-
-ANYTHING_NAMESPACE_END
+G_END_DECLS
 
 #endif // ANYTHING_EVENT_LISTENER_H_

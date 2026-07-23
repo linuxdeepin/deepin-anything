@@ -192,107 +192,71 @@ void default_event_handler::start_handle_init_scan(const std::string &path) {
     }
 }
 
-// 将 fs_event 转换为 fs_event_with_full_path
-// return true 表示处理完成，false 表示需要继续处理
-bool default_event_handler::convert_fs_event(fs_event *event, fs_event_with_full_path *event_with_full_path) {
-    // Update partition event
-    if (event->act == ACT_MOUNT || event->act == ACT_UNMOUNT) {
-        spdlog::debug("{}: {}", (event->act == ACT_MOUNT ? "Mount a device" : "Unmount a device"), event->src);
-        mount_info_update(mount_info_);
-        return true;
-    }
+bool default_event_handler::prepare_event(fs_event *fs_evt,
+                                           fs_event_with_full_path *out) {
+    out->device_id = 0;
 
-    std::string root;
-    if (event->act < ACT_MOUNT) {
-        event_with_full_path->device_id = makedev(event->major, event->minor);
-
-        const char *mount_point = mount_info_get_device_mount_point(mount_info_, event_with_full_path->device_id);
-        if (!mount_point) {
-            spdlog::debug("Unknown device: {}, dev: {}:{}, path: {}, cookie: {}",
-                +event->act, event->major, +event->minor, event->src, event->cookie);
-            return true;
-        }
-        root = mount_point;
-        if (root == "/")
-            root.clear();
-    }
-
-    switch (event->act) {
+    switch (fs_evt->act) {
     case ACT_NEW_FILE:
     case ACT_NEW_SYMLINK:
     case ACT_NEW_LINK:
     case ACT_NEW_FOLDER:
     case ACT_DEL_FILE:
     case ACT_DEL_FOLDER:
-        {
-            event_with_full_path->act = event->act;
-            event_with_full_path->src = event->src;
-            event_with_full_path->dst = "";
-        }
+        out->act = fs_evt->act;
+        out->src = fs_evt->src;
+        out->dst = "";
         break;
     case ACT_RENAME_FROM_FILE:
     case ACT_RENAME_FROM_FOLDER:
-        rename_from_.emplace(event->cookie, event->src);
-        return true;
+        if (!has_saved_from_) {
+            saved_from_ = *fs_evt;
+            has_saved_from_ = true;
+            return false;
+        }
+        out->act = (saved_from_.act == ACT_RENAME_FROM_FILE)
+                   ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
+        out->src = saved_from_.src;
+        out->dst = "";
+        saved_from_ = *fs_evt;
+        break;
     case ACT_RENAME_TO_FILE:
     case ACT_RENAME_TO_FOLDER:
-        if (auto search = rename_from_.find(event->cookie);
-            search != rename_from_.end()) {
-            event_with_full_path->act = event->act == ACT_RENAME_TO_FILE ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
-            event_with_full_path->dst = event->src;
-            event_with_full_path->src = rename_from_[event->cookie];
+        if (!has_saved_from_) {
+            out->act = (fs_evt->act == ACT_RENAME_TO_FILE)
+                       ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
+            out->src = "";
+            out->dst = fs_evt->src;
+        } else if (saved_from_.cookie == fs_evt->cookie) {
+            out->act = (saved_from_.act == ACT_RENAME_FROM_FILE)
+                       ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
+            out->src = saved_from_.src;
+            out->dst = fs_evt->src;
+            has_saved_from_ = false;
+        } else {
+            out->act = (saved_from_.act == ACT_RENAME_FROM_FILE)
+                       ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
+            out->src = saved_from_.src;
+            out->dst = "";
+            has_saved_from_ = false;
+            pending_event_ = *fs_evt;
+            has_pending_event_ = true;
         }
         break;
-    case ACT_RENAME_FILE:
-    case ACT_RENAME_FOLDER:
-        spdlog::warn("Don't support file action: {}", +event->act);
-        return true;
     default:
-        spdlog::warn("Unknown file action: {}", +event->act);
-        return true;
-    }
-
-    if (!root.empty()) {
-        event_with_full_path->src = root + event_with_full_path->src;
-        if (!event_with_full_path->dst.empty())
-            event_with_full_path->dst = root + event_with_full_path->dst;
-    }
-
-    if (event->act == ACT_RENAME_FILE || event->act == ACT_RENAME_FOLDER) {
-        rename_from_.erase(event->cookie);
-    }
-
-    return false;
-}
-
-bool is_lowerfs_event(MountInfo *mount_info, fs_event_with_full_path *event) {
-    if (!mount_info_exist_lowerfs(mount_info)) {
+        spdlog::warn("Unknown file action: {}", +fs_evt->act);
         return false;
     }
 
-    const char* event_file_path = event->dst.empty() ? event->src.c_str() : event->dst.c_str();
-
-    const GList *child_mount_points = mount_info_get_child_mount_points(mount_info, event->device_id);
-    if (child_mount_points) {
-        for (const GList *iter = child_mount_points; iter != NULL; iter = iter->next) {
-            if (string_helper::starts_with(event_file_path, (const gchar *)iter->data)) {
-                spdlog::debug("{}:{} {} is under the child mount point: {}",
-                    major(event->device_id), minor(event->device_id), event_file_path, (gchar *)iter->data);
-                return true;
-            }
-        }
-    }
-
-    return false;
+    return true;
 }
 
-void default_event_handler::filter_event(fs_event *fs_event) {
+void default_event_handler::filter_event(fs_event *fs_evt) {
     [[maybe_unused]] const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
 
     fs_event_with_full_path event;
-    if (convert_fs_event(fs_event, &event)) {
+    if (!prepare_event(fs_evt, &event))
         return;
-    }
 
     spdlog::debug("Received event: {} {} {}", act_names[event.act], event.src, event.dst);
 
@@ -303,10 +267,6 @@ void default_event_handler::filter_event(fs_event *fs_event) {
     if (event.act != ACT_RENAME_FILE &&
         event.act != ACT_RENAME_FOLDER &&
         is_event_path_blocked(event.src, src_indexing_item)) {
-        return;
-    }
-
-    if (is_lowerfs_event(mount_info_, &event)) {
         return;
     }
 
@@ -386,6 +346,11 @@ void* default_event_handler::event_filter_thread_func(void* data) {
         }
         handler->filter_event(event);
         g_slice_free(fs_event, event);
+
+        while (handler->has_pending_event_) {
+            handler->has_pending_event_ = false;
+            handler->filter_event(&handler->pending_event_);
+        }
     }
 
     return NULL;

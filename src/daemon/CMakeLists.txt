@@ -7,9 +7,11 @@ project(
     deepin-anything-daemon
     VERSION 1.0.0
     DESCRIPTION "A file search engine"
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -68,12 +70,12 @@ if (Boost_VERSION_STRING VERSION_LESS "1.89.0")
     message(STATUS "Boost < 1.89 → using Boost::system")
     find_package(Boost REQUIRED COMPONENTS system)
 endif()
-pkg_check_modules(GNL REQUIRED libnl-3.0 libnl-genl-3.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 pkg_check_modules(LUCENE REQUIRED liblucene++)
 pkg_check_modules(LUCENE_CONTRIB REQUIRED liblucene++-contrib)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GIO REQUIRED gio-2.0)
+pkg_check_modules(GIO_UNIX REQUIRED gio-unix-2.0)
 pkg_check_modules(GMODULE REQUIRED gmodule-2.0)
 
 # Found all source files
@@ -93,13 +95,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../kernelmod>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../dispatcher>
     # $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     ${LUCENE_INCLUDE_DIRS}
-    ${GNL_INCLUDE_DIRS}
     ${MOUNT_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
     ${GIO_INCLUDE_DIRS}
+    ${GIO_UNIX_INCLUDE_DIRS}
     ${GMODULE_INCLUDE_DIRS}
     ${Qt${QT_VERSION_MAJOR}Core_INCLUDE_DIRS}
 )
@@ -107,7 +110,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 target_link_libraries(${PROJECT_NAME} PUBLIC
     ${LUCENE_LIBRARIES}
     ${LUCENE_CONTRIB_LIBRARIES}
-    ${GNL_LIBRARIES}
     ${MOUNT_LIBRARIES}
     ${Boost_LIBRARIES}
     pthread
@@ -115,8 +117,10 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     spdlog::spdlog
     ${GLIB_LIBRARIES}
     ${GIO_LIBRARIES}
+    ${GIO_UNIX_LIBRARIES}
     ${GMODULE_LIBRARIES}
     Qt${QT_VERSION_MAJOR}::Core
+    deepin-anything-dispatcher
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror -Wextra)

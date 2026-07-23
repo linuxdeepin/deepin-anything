@@ -1,260 +1,237 @@
-// Copyright (C) 2024 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024-2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "core/event_listener.h"
 
-#include <sys/epoll.h>
-#include <sys/eventfd.h>
-#include <unistd.h> // close()
+#include <string.h>
 
-#include <memory> // unique_ptr
-#include <unordered_map>
-#include <sstream>
+#include <glib-unix.h>
 
-#include <netlink/genl/ctrl.h>
-#include <netlink/genl/family.h>
-#include <netlink/genl/genl.h>
-#include <netlink/netlink.h>
-#include <netlink/socket.h>
-#include <QCoreApplication>
-
-#include "utils/genl_parser.hpp"
+#include "event_dispatcher.h"
 #include "utils/log.h"
-#include "utils/tools.h"
-#include "vfs_change_consts.h"
-#include "core/config.h"
 
-#include <gmodule.h>
+#define DISPATCHER_SOCKET_PATH "/run/deepin-anything/event-dispatcher.sock"
 
-ANYTHING_NAMESPACE_BEGIN
+struct EventListener {
+    EventReceiver           *receiver;
+    GMainLoop               *loop;
+    GMainContext            *context;
+    GThread                 *thread;
+    EventListenerCallback    callback;
+    EventListenerQuitCallback quit_callback;
+    gpointer                 user_data;
+    guint                    fd_source_id;
 
-constexpr int epoll_size = 10;
-static nla_policy vfs_policy[VFSMONITOR_A_MAX + 1];
+    GMutex                   startup_mutex;
+    GCond                    startup_cond;
+    volatile gint            started;  /* 0 = pending, 1 = success, -1 = failure */
+};
 
-bool set_max_socket_receive_buffer_size(nl_sock_ptr& sk) {
-    // Get max socket receive buffer size
-    char *contents = nullptr;
-    if (!g_file_get_contents("/proc/sys/net/core/rmem_max", &contents, NULL, NULL)) {
-        spdlog::error("Failed to open /proc/sys/net/core/rmem_max");
-        return false;
-    }
-    int max_rcvbuf = atoi(contents);
-    g_free(contents);
-
-    int ret = nl_socket_set_buffer_size(sk, max_rcvbuf, 0);
-    if (ret < 0) {
-        spdlog::error("Failed to set max socket receive buffer size: {}", ret);
-        return false;
-    }
-
-    char *formatted_size = format_size(max_rcvbuf);
-    spdlog::info("Set max socket receive buffer size: {}", formatted_size);
-    g_free(formatted_size);
-
-    return true;
+static void signal_startup(EventListener *listener, gboolean success)
+{
+    g_mutex_lock(&listener->startup_mutex);
+    g_atomic_int_set(&listener->started, success ? 1 : -1);
+    g_cond_signal(&listener->startup_cond);
+    g_mutex_unlock(&listener->startup_mutex);
 }
 
-event_listener::event_listener()
-    : connected_{ connect(mcsk_) },
-      timeout_{ -1 } {
-    auto clean_and_exit = [this] {
-        disconnect(mcsk_);
-        exit(APP_QUIT_CODE);
-    };
-
-    if (!connected_) {
-        spdlog::error("Error: failed to connect to generic netlink");
-        clean_and_exit();
-    }
-
-    set_max_socket_receive_buffer_size(mcsk_);
-
-    // Disable sequence checks for asynchronous multicast messages
-    nl_socket_disable_seq_check(mcsk_);
-    nl_socket_disable_auto_ack(mcsk_);
-
-    // Resolve the multicast group
-    int mcgrp = genl_ctrl_resolve_grp(mcsk_, VFSMONITOR_FAMILY_NAME, VFSMONITOR_MCG_DENTRY_NAME);
-    if (mcgrp < 0) {
-		spdlog::error("Error: failed to resolve generic netlink multicast group");
-		clean_and_exit();
-	}
-
-    // Joint the multicast group
-    int ret = nl_socket_add_membership(mcsk_, mcgrp);
-    if (ret < 0) {
-        spdlog::error("Error: failed to join multicast group");
-        clean_and_exit();
-    }
-
-    if (!set_callback(mcsk_, event_listener::event_handler)) {
-        spdlog::error("Error: failed to set callback");
-        clean_and_exit();
-    }
-
-    stop_fd_ = eventfd(0, EFD_NONBLOCK);
-    if (stop_fd_ == -1) {
-        spdlog::error("Failed to create eventfd");
-        clean_and_exit();
-    }
-
-    // Initialize policy
-    vfs_policy[VFSMONITOR_A_ACT].type = NLA_U8;
-    vfs_policy[VFSMONITOR_A_COOKIE].type = NLA_U32;
-    vfs_policy[VFSMONITOR_A_MAJOR].type = NLA_U16;
-    vfs_policy[VFSMONITOR_A_MINOR].type = NLA_U8;
-    vfs_policy[VFSMONITOR_A_PATH].type = NLA_NUL_STRING;
-    vfs_policy[VFSMONITOR_A_PATH].maxlen = 4096;
+static void notify_quit(EventListener *listener)
+{
+    if (listener->quit_callback)
+        listener->quit_callback(listener->user_data);
 }
 
-event_listener::~event_listener() {
-    disconnect(mcsk_);
-    close(stop_fd_);
+static gboolean on_fd_readable(G_GNUC_UNUSED gint fd,
+                               GIOCondition condition,
+                               gpointer data)
+{
+    EventListener *listener = (EventListener *)data;
+
+    if ((condition & (G_IO_HUP | G_IO_ERR)) != 0) {
+        spdlog::info("Dispatcher connection lost");
+        listener->fd_source_id = 0;
+        notify_quit(listener);
+        return G_SOURCE_REMOVE;
+    }
+
+    dispatch_event_t dispatch_evt;
+    memset(&dispatch_evt, 0, sizeof(dispatch_evt));
+
+    EventReceiveResult result = event_receiver_receive(listener->receiver,
+                                                        &dispatch_evt);
+
+    switch (result) {
+    case EVENT_RECEIVE_OK: {
+        fs_event *evt = g_slice_new(fs_event);
+        evt->act = (uint8_t)dispatch_evt.event_action;
+        evt->cookie = dispatch_evt.cookie;
+        g_strlcpy(evt->src, dispatch_evt.event_path, MAX_PATH_LEN);
+        evt->dst[0] = '\0';
+
+        if (listener->callback)
+            listener->callback(listener->user_data, evt);
+
+        return G_SOURCE_CONTINUE;
+    }
+    case EVENT_RECEIVE_INTERRUPTED:
+        return G_SOURCE_CONTINUE;
+    case EVENT_RECEIVE_DISCONNECTED:
+        spdlog::info("Dispatcher closed the connection");
+        listener->fd_source_id = 0;
+        notify_quit(listener);
+        return G_SOURCE_REMOVE;
+    case EVENT_RECEIVE_ERROR:
+        spdlog::warn("Failed to receive event");
+        listener->fd_source_id = 0;
+        notify_quit(listener);
+        return G_SOURCE_REMOVE;
+    default:
+        return G_SOURCE_CONTINUE;
+    }
 }
 
-void event_listener::start_listening() {
-    spdlog::info("listening for messages");
-    int ep_fd = epoll_create1(0);
-    if (ep_fd < 0) {
-        spdlog::error("Epoll creation failed.");
+static gpointer event_listener_thread_func(gpointer data)
+{
+    EventListener *listener = (EventListener *)data;
+
+    listener->context = g_main_context_new();
+    if (listener->context == NULL) {
+        spdlog::error("Failed to create event listener GMainContext");
+        signal_startup(listener, FALSE);
+        return NULL;
+    }
+
+    listener->loop = g_main_loop_new(listener->context, FALSE);
+    g_main_context_push_thread_default(listener->context);
+
+    int sock_fd = -1;
+
+    listener->receiver = event_receiver_new(DISPATCHER_SOCKET_PATH);
+    if (listener->receiver == NULL) {
+        spdlog::error("Failed to connect to dispatcher at {}",
+                      DISPATCHER_SOCKET_PATH);
+        spdlog::info("Is deepin-anything-server running and reachable?");
+        signal_startup(listener, FALSE);
+        goto cleanup;
+    }
+
+    spdlog::info("Connected to dispatcher: {}", DISPATCHER_SOCKET_PATH);
+
+    sock_fd = event_receiver_get_socket(listener->receiver);
+    if (sock_fd < 0) {
+        spdlog::error("Invalid receiver socket fd");
+        signal_startup(listener, FALSE);
+        goto cleanup;
+    }
+
+    listener->fd_source_id = g_unix_fd_add_full(
+        G_PRIORITY_DEFAULT, sock_fd,
+        (GIOCondition)(G_IO_IN | G_IO_HUP | G_IO_ERR),
+        on_fd_readable, listener, NULL);
+    if (listener->fd_source_id == 0) {
+        spdlog::error("Failed to add fd watch for receiver socket");
+        signal_startup(listener, FALSE);
+        goto cleanup;
+    }
+
+    spdlog::info("Event listener thread started");
+    signal_startup(listener, TRUE);
+    g_main_loop_run(listener->loop);
+
+cleanup:
+    if (listener->fd_source_id > 0) {
+        g_source_remove(listener->fd_source_id);
+        listener->fd_source_id = 0;
+    }
+    if (listener->receiver != NULL) {
+        event_receiver_free(listener->receiver);
+        listener->receiver = NULL;
+    }
+    g_main_context_pop_thread_default(listener->context);
+    if (listener->loop != NULL) {
+        g_main_loop_unref(listener->loop);
+        listener->loop = NULL;
+    }
+    if (listener->context != NULL) {
+        g_main_context_unref(listener->context);
+        listener->context = NULL;
+    }
+
+    spdlog::info("Event listener thread stopped");
+    return NULL;
+}
+
+EventListener *event_listener_new(EventListenerCallback callback,
+                                   EventListenerQuitCallback quit_callback,
+                                   gpointer user_data)
+{
+    g_return_val_if_fail(callback != NULL, NULL);
+
+    EventListener *listener = g_new0(EventListener, 1);
+    listener->callback = callback;
+    listener->quit_callback = quit_callback;
+    listener->user_data = user_data;
+    listener->fd_source_id = 0;
+    g_atomic_int_set(&listener->started, 0);
+    g_mutex_init(&listener->startup_mutex);
+    g_cond_init(&listener->startup_cond);
+
+    return listener;
+}
+
+gboolean event_listener_start(EventListener *listener)
+{
+    g_return_val_if_fail(listener != NULL, FALSE);
+
+    if (listener->thread) {
+        spdlog::warn("Event listener is already started");
+        return FALSE;
+    }
+
+    listener->thread = g_thread_new("event_listener",
+                                     event_listener_thread_func, listener);
+    if (listener->thread == NULL) {
+        spdlog::error("Failed to create event listener thread");
+        return FALSE;
+    }
+
+    g_mutex_lock(&listener->startup_mutex);
+    while (g_atomic_int_get(&listener->started) == 0)
+        g_cond_wait(&listener->startup_cond, &listener->startup_mutex);
+    gboolean ok = (g_atomic_int_get(&listener->started) == 1);
+    g_mutex_unlock(&listener->startup_mutex);
+
+    if (!ok) {
+        g_thread_join(listener->thread);
+        listener->thread = NULL;
+        spdlog::error("Event listener thread failed during startup");
+    }
+
+    return ok;
+}
+
+void event_listener_stop(EventListener *listener)
+{
+    g_return_if_fail(listener != NULL);
+
+    if (listener->loop != NULL)
+        g_main_loop_quit(listener->loop);
+
+    if (listener->thread) {
+        g_thread_join(listener->thread);
+        listener->thread = NULL;
+    }
+}
+
+void event_listener_free(EventListener *listener)
+{
+    if (listener == NULL)
         return;
-    }
 
-    int mcsk_fd = get_fd(mcsk_);
-    epoll_event* ep_events = new epoll_event[epoll_size];
-    epoll_event event[2];
-    event[0].events = EPOLLIN;
-    event[0].data.fd = mcsk_fd;
-    event[1].events = EPOLLIN;
-    event[1].data.fd = stop_fd_;
-    epoll_ctl(ep_fd, EPOLL_CTL_ADD, mcsk_fd, &event[0]);
-    epoll_ctl(ep_fd, EPOLL_CTL_ADD, stop_fd_, &event[1]);
+    event_listener_stop(listener);
 
-    bool running = true;
-    while (running) {
-        int event_cnt = epoll_wait(ep_fd, ep_events, epoll_size, timeout_);
-        if (event_cnt == -1) {
-            if (errno == EINTR) {
-                continue;
-            }
-            spdlog::error("epoll_wait() error: {} (errno: {})", strerror(errno), errno);
-            break;
-        }
-
-        for (int i = 0; i < event_cnt; ++i) {
-            if (ep_events[i].data.fd == mcsk_fd) {
-                int ret = nl_recvmsgs_default(mcsk_);
-                if (ret < 0) {
-                    spdlog::error("Failed to receive netlink messages: {}", ret);
-                    spdlog::info("Found events lost, restart");
-                    set_app_restart(true);
-                    qApp->quit();
-                }
-            } else if (ep_events[i].data.fd == stop_fd_) {
-                uint64_t u;
-                [[maybe_unused]] auto _ = read(stop_fd_, &u, sizeof(u));
-                running = false;
-                break;
-            }
-        }
-    }
-
-    close(ep_fd);
-    delete[] ep_events;
+    g_mutex_clear(&listener->startup_mutex);
+    g_cond_clear(&listener->startup_cond);
+    g_free(listener);
 }
-
-void event_listener::async_listen() {
-    listening_thread_ = std::thread(&event_listener::start_listening, this);
-}
-
-void event_listener::stop_listening() {
-    uint64_t u = 1;
-    [[maybe_unused]] auto _ = write(stop_fd_, &u, sizeof(u));
-
-    if (listening_thread_.joinable()) {
-        auto thread_id = listening_thread_.get_id();
-        listening_thread_.join();
-        std::ostringstream oss;
-        oss << thread_id;
-        spdlog::info("Listening thread {} has exited.", oss.str());
-    }
-}
-
-void event_listener::set_handler(std::function<void(fs_event*)> handler) {
-    handler_ = std::move(handler);
-}
-
-bool event_listener::connect(nl_sock_ptr& sk) const {
-    sk = nl_socket_alloc();
-    return sk ? genl_connect(sk) == 0 : false;
-}
-
-void event_listener::disconnect(nl_sock_ptr& sk) const {
-    nl_socket_free(sk);
-}
-
-bool event_listener::set_callback(nl_sock_ptr& sk, nl_recvmsg_msg_cb_t func) {
-    return nl_socket_modify_cb(sk, NL_CB_VALID, NL_CB_CUSTOM, func, this) == 0;
-}
-
-int event_listener::get_fd(nl_sock_ptr& sk) const {
-    return nl_socket_get_fd(sk);
-}
-
-void event_listener::forward_event_to_handler(fs_event *event) const {
-    if (handler_) {
-        std::invoke(handler_, event);
-    }
-}
-
-fs_event* make_fs_event(uint8_t act,
-                        uint32_t cookie,
-                        uint16_t major,
-                        uint8_t minor,
-                        const char* src,
-                        const char* dst) {
-    fs_event* event = g_slice_new(fs_event);
-    event->act = act;
-    event->cookie = cookie;
-    event->major = major;
-    event->minor = minor;
-    strncpy(event->src, src, MAX_PATH_LEN);
-    event->src[MAX_PATH_LEN - 1] = '\0';
-    strncpy(event->dst, dst, MAX_PATH_LEN);
-    event->dst[MAX_PATH_LEN - 1] = '\0';
-    return event;
-}
-
-int event_listener::event_handler(nl_msg_ptr msg, void* arg) {
-    nlattr* tb[VFSMONITOR_A_MAX + 1];
-    int err = genlmsg_parse(nlmsg_hdr(msg), 0, tb, VFSMONITOR_A_MAX, vfs_policy);
-    if (err < 0) {
-        spdlog::error("Unable to parse the message: {}", strerror(-err));
-        return NL_SKIP;
-    }
-
-    if (!tb[VFSMONITOR_A_PATH]) {
-        spdlog::error("Attributes missing from the message");
-        return NL_SKIP;
-    }
-
-    nla_parser parser(tb);
-    auto act    = parser.get_value<nla_u8>(VFSMONITOR_A_ACT);
-    auto cookie = parser.get_value<nla_u32>(VFSMONITOR_A_COOKIE);
-    auto major  = parser.get_value<nla_u16>(VFSMONITOR_A_MAJOR);
-    auto minor  = parser.get_value<nla_u8>(VFSMONITOR_A_MINOR);
-    auto src    = parser.get_value<nla_string>(VFSMONITOR_A_PATH);
-    if (!act || !cookie || !major || !minor || !src) {
-        spdlog::error("Attributes missing from the message");
-        return NL_SKIP;
-    }
-
-    fs_event* event = make_fs_event(*act, *cookie, *major, *minor, *src, "");
-    auto listener = static_cast<event_listener*>(arg);
-    listener->forward_event_to_handler(event);
-    return NL_OK;
-}
-
-ANYTHING_NAMESPACE_END
