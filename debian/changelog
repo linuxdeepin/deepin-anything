@@ -1,3 +1,14 @@
+deepin-anything (7.0.45) unstable; urgency=medium
+
+  * fix(kernelmod): restrict genl multicast group binding by kernel
+    capability
+  * fix: Update cppcheck workflow to use checkout@v7
+  * feat(dispatcher): add event dispatcher module with Unix socket IPC
+  * feat(server): add VFS event listening and dispatching
+  * refactor(event-listener): replace netlink with dispatcher socket
+
+ -- wangrong <wangrong@uniontech.com>  Thu, 23 Jul 2026 23:13:43 +0800
+
 deepin-anything (7.0.44) unstable; urgency=medium
 
   * fix: fix daemon fail to init
