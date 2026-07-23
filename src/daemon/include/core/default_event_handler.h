@@ -46,7 +46,7 @@ private:
 
     void filter_event(fs_event *event);
 
-    bool convert_fs_event(fs_event *event, fs_event_with_full_path *event_with_full_path);
+    bool prepare_event(fs_event *fs_evt, fs_event_with_full_path *out);
 
     static void* event_filter_thread_func(void* data);
 
@@ -55,7 +55,10 @@ private:
     bool handle_blacklist_paths_change(const event_handler_config &old_config, const event_handler_config &new_config);
 
 private:
-    std::unordered_map<uint32_t, std::string> rename_from_;
+    bool has_saved_from_ = false;
+    fs_event saved_from_;
+    bool has_pending_event_ = false;
+    fs_event pending_event_;
     // config_ 使用情况
     // 1. 主线程中实例化时使用
     // 2. 主线程中调用 handle_config_change() 时使用
