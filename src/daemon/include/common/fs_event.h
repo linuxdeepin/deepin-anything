@@ -6,23 +6,21 @@
 #ifndef ANYTHING_FS_EVENT_H_
 #define ANYTHING_FS_EVENT_H_
 
-#include <string>
-
-#include "common/anything_fwd.hpp"
-
-ANYTHING_NAMESPACE_BEGIN
+#include <stdint.h>
 
 #define MAX_PATH_LEN 4096
+
+G_BEGIN_DECLS
 
 struct fs_event {
     uint8_t     act;
     uint32_t    cookie;
-    uint16_t    major;
-    uint8_t     minor;
     char        src[MAX_PATH_LEN];
     char        dst[MAX_PATH_LEN];
 };
 
-ANYTHING_NAMESPACE_END
+typedef struct fs_event fs_event;
+
+G_END_DECLS
 
 #endif // ANYTHING_FS_EVENT_H_

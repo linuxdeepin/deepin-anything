@@ -9,11 +9,24 @@
 #include "core/config.h"
 #include "utils/running_flag.h"
 
-#include <QTimer>
 #include <QCoreApplication>
 #include <glib-unix.h>
 
 using namespace anything;
+
+extern "C" {
+static void on_event_received(gpointer user_data, fs_event *event) {
+    auto handler = static_cast<default_event_handler*>(user_data);
+    handler->handle(event);
+}
+
+static void on_quit_requested(gpointer user_data) {
+    (void)user_data;
+    spdlog::info("Event listener disconnected, requesting restart");
+    set_app_restart(true);
+    qApp->quit();
+}
+}
 
 // 判断 uid 是否可登录
 bool can_user_login() {
@@ -44,33 +57,6 @@ gboolean on_sigint_sigterm(gpointer user_data) {
     qApp->quit();
 
     return TRUE;
-}
-
-void setup_kernel_module_alive_check(QTimer &timer) {
-    // 创建 qtimer 定时检查 /sys/kernel/vfs_monitor 的 inode 是否发生变化
-    std::string path = "/sys/kernel/vfs_monitor";
-    struct stat st_begin;
-    if (lstat(path.c_str(), &st_begin) != 0) {
-        spdlog::error("Check {} failed: {}", path, strerror(errno));
-        exit(APP_QUIT_CODE);
-    }
-
-    QObject::connect(&timer, &QTimer::timeout, [path, st_begin]() {
-        struct stat st_current;
-        // when system reboot, the file may be deleted before we quit
-        // so we not quit or restart, we wait stop command from systemd or the file appear again
-        if (lstat(path.c_str(), &st_current) != 0) {
-            return;
-        }
-
-        if (st_current.st_ino != st_begin.st_ino) {
-            spdlog::info("File {} inode changed, restart", path);
-            set_app_restart(true);
-            qApp->quit();
-        }
-    });
-    timer.setInterval(3000);
-    timer.start();
 }
 
 int main(int argc, char* argv[]) {
@@ -104,10 +90,9 @@ int main(int argc, char* argv[]) {
     default_event_handler handler(event_handler_config);
     // default_event_handler 实例化时, 可能会清空索引目录, 这里重新设置 running 标志
     set_running_flag();
-    event_listener listener;
-    listener.set_handler([&handler](fs_event *event) {
-        handler.handle(event);
-    });
+    EventListener *listener = event_listener_new(on_event_received,
+                                                    on_quit_requested,
+                                                    &handler);
     config.set_config_change_handler([&handler, &config](std::string key) {
         spdlog::info("Config changed: {}", key);
 
@@ -126,14 +111,18 @@ int main(int argc, char* argv[]) {
         }
     });
 
+    if (!event_listener_start(listener)) {
+        spdlog::error("Failed to start event listener");
+        event_listener_free(listener);
+        handler.terminate_filter();
+        handler.terminate_processing();
+        return APP_QUIT_CODE;
+    }
+
     // Process the interrupt signal using g_unix_signal_add()
     guint sigint_id = g_unix_signal_add(SIGINT, on_sigint_sigterm, (gpointer)"SIGINT");
     guint sigterm_id = g_unix_signal_add(SIGTERM, on_sigint_sigterm, (gpointer)"SIGTERM");
 
-    QTimer timer;
-    setup_kernel_module_alive_check(timer);
-
-    listener.async_listen();
     app.exec();
 
     // Clean up signal handlers
@@ -143,7 +132,8 @@ int main(int argc, char* argv[]) {
         g_source_remove(sigterm_id);
 
     spdlog::info("Performing cleanup tasks...");
-    listener.stop_listening();
+    event_listener_stop(listener);
+    event_listener_free(listener);
     handler.terminate_filter();
     handler.terminate_processing();
 
