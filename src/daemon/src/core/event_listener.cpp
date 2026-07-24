@@ -5,6 +5,7 @@
 #include "core/event_listener.h"
 
 #include <string.h>
+#include <sys/stat.h>
 
 #include <glib-unix.h>
 
@@ -12,6 +13,8 @@
 #include "utils/log.h"
 
 #define DISPATCHER_SOCKET_PATH "/run/deepin-anything/event-dispatcher.sock"
+#define RESTART_CHECK_INTERVAL_MS 3000
+#define MAX_RESTART_CHECKS 10
 
 struct EventListener {
     EventReceiver           *receiver;
@@ -22,6 +25,9 @@ struct EventListener {
     EventListenerQuitCallback quit_callback;
     gpointer                 user_data;
     guint                    fd_source_id;
+    guint                    timer_source_id;
+    ino_t                    initial_sock_inode;
+    gint                     timer_check_count;
 
     GMutex                   startup_mutex;
     GCond                    startup_cond;
@@ -42,6 +48,54 @@ static void notify_quit(EventListener *listener)
         listener->quit_callback(listener->user_data);
 }
 
+static gboolean on_restart_check(gpointer data)
+{
+    EventListener *listener = (EventListener *)data;
+
+    listener->timer_check_count++;
+
+    struct stat st;
+    ino_t current_inode = 0;
+    if (stat(DISPATCHER_SOCKET_PATH, &st) == 0)
+        current_inode = st.st_ino;
+
+    if (current_inode != 0 && current_inode != listener->initial_sock_inode) {
+        spdlog::info("Dispatcher socket inode changed, server has restarted");
+        listener->timer_source_id = 0;
+        notify_quit(listener);
+        return G_SOURCE_REMOVE;
+    }
+
+    if (listener->timer_check_count >= MAX_RESTART_CHECKS) {
+        spdlog::info("Dispatcher did not restart after {} checks, requesting quit",
+                     MAX_RESTART_CHECKS);
+        listener->timer_source_id = 0;
+        notify_quit(listener);
+        return G_SOURCE_REMOVE;
+    }
+
+    return G_SOURCE_CONTINUE;
+}
+
+static void start_restart_check(EventListener *listener)
+{
+    struct stat st;
+    listener->initial_sock_inode = 0;
+    if (stat(DISPATCHER_SOCKET_PATH, &st) == 0)
+        listener->initial_sock_inode = st.st_ino;
+
+    listener->timer_check_count = 0;
+    listener->timer_source_id = g_timeout_add(RESTART_CHECK_INTERVAL_MS,
+                                              on_restart_check, listener);
+    if (listener->timer_source_id == 0) {
+        spdlog::warn("Failed to create restart check timer, quitting immediately");
+        notify_quit(listener);
+    } else {
+        spdlog::info("Waiting for dispatcher restart (checking every {}ms, "
+                     "up to {} times)", RESTART_CHECK_INTERVAL_MS, MAX_RESTART_CHECKS);
+    }
+}
+
 static gboolean on_fd_readable(G_GNUC_UNUSED gint fd,
                                GIOCondition condition,
                                gpointer data)
@@ -51,7 +105,7 @@ static gboolean on_fd_readable(G_GNUC_UNUSED gint fd,
     if ((condition & (G_IO_HUP | G_IO_ERR)) != 0) {
         spdlog::info("Dispatcher connection lost");
         listener->fd_source_id = 0;
-        notify_quit(listener);
+        start_restart_check(listener);
         return G_SOURCE_REMOVE;
     }
 
@@ -79,12 +133,12 @@ static gboolean on_fd_readable(G_GNUC_UNUSED gint fd,
     case EVENT_RECEIVE_DISCONNECTED:
         spdlog::info("Dispatcher closed the connection");
         listener->fd_source_id = 0;
-        notify_quit(listener);
+        start_restart_check(listener);
         return G_SOURCE_REMOVE;
     case EVENT_RECEIVE_ERROR:
         spdlog::warn("Failed to receive event");
         listener->fd_source_id = 0;
-        notify_quit(listener);
+        start_restart_check(listener);
         return G_SOURCE_REMOVE;
     default:
         return G_SOURCE_CONTINUE;
@@ -144,6 +198,10 @@ cleanup:
         g_source_remove(listener->fd_source_id);
         listener->fd_source_id = 0;
     }
+    if (listener->timer_source_id > 0) {
+        g_source_remove(listener->timer_source_id);
+        listener->timer_source_id = 0;
+    }
     if (listener->receiver != NULL) {
         event_receiver_free(listener->receiver);
         listener->receiver = NULL;
@@ -173,6 +231,9 @@ EventListener *event_listener_new(EventListenerCallback callback,
     listener->quit_callback = quit_callback;
     listener->user_data = user_data;
     listener->fd_source_id = 0;
+    listener->timer_source_id = 0;
+    listener->initial_sock_inode = 0;
+    listener->timer_check_count = 0;
     g_atomic_int_set(&listener->started, 0);
     g_mutex_init(&listener->startup_mutex);
     g_cond_init(&listener->startup_cond);
