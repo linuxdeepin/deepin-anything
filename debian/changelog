@@ -1,3 +1,10 @@
+deepin-anything (7.0.46) unstable; urgency=medium
+
+  * fix(event-listener): delay quit on disconnect to detect server
+    restart
+
+ -- wangrong <wangrong@uniontech.com>  Fri, 24 Jul 2026 21:12:44 +0800
+
 deepin-anything (7.0.45) unstable; urgency=medium
 
   * fix(kernelmod): restrict genl multicast group binding by kernel
