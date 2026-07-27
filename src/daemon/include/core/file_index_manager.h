@@ -44,6 +44,11 @@ public:
     /// @param new_path The new path to be added to the index.
     bool update_index(const std::string& old_path, const std::string& new_path);
 
+    /// @brief Update the index for a file that has been written and closed.
+    ///        Skips the update if the target file does not exist.
+    /// @param path The full path of the modified file.
+    bool update_index(const std::string& path);
+
     /// Commit all changes to the index
     bool commit(index_status status);
 

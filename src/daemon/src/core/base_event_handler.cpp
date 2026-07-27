@@ -159,6 +159,10 @@ void base_event_handler::update_index_delay(std::string src, std::string dst) {
     jobs_push(std::move(src), anything::index_job_type::update, std::move(dst));
 }
 
+void base_event_handler::update_index_delay(std::string path) {
+    jobs_push(std::move(path), anything::index_job_type::update);
+}
+
 void base_event_handler::scan_index_delay(std::string path) {
     jobs_push(std::move(path), anything::index_job_type::scan);
 }
@@ -243,6 +247,8 @@ void base_event_handler::eat_job(const anything::index_job& job) {
         case anything::index_job_type::update:
             if (job.dst) {
                 ret = index_manager_.update_index(job.src, *job.dst);
+            } else {
+                ret = index_manager_.update_index(job.src);
             }
             break;
         case anything::index_job_type::scan:
