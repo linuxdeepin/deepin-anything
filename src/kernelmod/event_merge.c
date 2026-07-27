@@ -84,6 +84,7 @@ static int merge_new_file(struct list_head* p, struct vfs_event *cur)
  *
  * new(X) + del(X)                                 => remove new(X)
  * ren_fr(X) + ren_to(Y) + del(Y)                  => update ren_fr(X) to del(X), remove ren_to(Y)
+ * close_write(X) + del(X)                         => remove close_write(X), merge fail
  *
  * merge success, remove cur, else add to list
  */
@@ -112,6 +113,10 @@ static int merge_del_file(struct list_head* p, struct vfs_event *cur)
 
         REMOVE_ENTRY(p, e);
         return MERGE_OK;
+    } else if (ACT_CLOSE_WRITE_FILE == e->action) {
+        if (!cmp_event_path(e, cur))
+            REMOVE_ENTRY(p, e);
+        return MERGE_FAIL;
     }
     return MERGE_FAIL;
 }
@@ -121,6 +126,7 @@ static int merge_del_file(struct list_head* p, struct vfs_event *cur)
  *
  * new(X) + ren_fr(X) + ren_to(Y)                  => update ren_to(Y) to new(Y), remove new(X)
  * ren_fr(X) + ren_to(Y) + ren_fr(Y) + ren_to(Z)   => update ren_fr(X) to del(X), update ren_to(Z) to new(Z), remove ren_to(Y)
+ * close_write(X) + ren_fr(X)                      => remove close_write(X), merge fail
  *
  * merge success, remove cur, else add to list
  */
@@ -156,6 +162,10 @@ static int merge_rename_from_file(struct list_head* p, struct vfs_event *cur)
 
         REMOVE_ENTRY(p, e);
         return MERGE_OK;
+    } else if (ACT_CLOSE_WRITE_FILE == e->action) {
+        if (!cmp_event_path(e, cur))
+            REMOVE_ENTRY(p, e);
+        return MERGE_FAIL;
     }
     return MERGE_FAIL;
 }
@@ -191,7 +201,7 @@ static int merge_rename_to_file(struct list_head* p, struct vfs_event *cur)
     return MERGE_FAIL;
 }
 
-static merge_action_fn_t action_merge_fns[] = {merge_new_file, merge_new_file, merge_new_file, 0, merge_del_file, 0, 0, 0, merge_rename_from_file, merge_rename_to_file, 0, 0, 0, 0};
+static merge_action_fn_t action_merge_fns[] = {merge_new_file, merge_new_file, merge_new_file, 0, merge_del_file, 0, 0, 0, merge_rename_from_file, merge_rename_to_file, 0, 0, 0, 0, 0};
 
 /*
  * notify policy
