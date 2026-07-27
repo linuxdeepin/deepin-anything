@@ -203,6 +203,7 @@ bool default_event_handler::prepare_event(fs_event *fs_evt,
     case ACT_NEW_FOLDER:
     case ACT_DEL_FILE:
     case ACT_DEL_FOLDER:
+    case ACT_CLOSE_WRITE_FILE:
         out->act = fs_evt->act;
         out->src = fs_evt->src;
         out->dst = "";
@@ -252,7 +253,12 @@ bool default_event_handler::prepare_event(fs_event *fs_evt,
 }
 
 void default_event_handler::filter_event(fs_event *fs_evt) {
-    [[maybe_unused]] const char* act_names[] = {"file_created", "link_created", "symlink_created", "dir_created", "file_deleted", "dir_deleted", "file_renamed", "dir_renamed"};
+    [[maybe_unused]] const char* act_names[] = {
+        "file_created", "link_created", "symlink_created", "dir_created",
+        "file_deleted", "dir_deleted",
+        "file_renamed", "dir_renamed", "file_renamed_from", "file_renamed_to", "dir_renamed_from", "dir_renamed_to",
+        "mount", "unmount",
+        "file_close_write" };
 
     fs_event_with_full_path event;
     if (!prepare_event(fs_evt, &event))
@@ -275,6 +281,9 @@ void default_event_handler::filter_event(fs_event *fs_evt) {
         // Do not check for the existence of files; we trust the kernel module.
         convert_event_path_to_origin_path(event.src, *src_indexing_item);
         add_index_delay(std::move(event.src));
+    } else if (event.act == ACT_CLOSE_WRITE_FILE) {
+        convert_event_path_to_origin_path(event.src, *src_indexing_item);
+        update_index_delay(std::move(event.src));
     } else if (event.act == ACT_DEL_FILE || event.act == ACT_DEL_FOLDER) {
         convert_event_path_to_origin_path(event.src, *src_indexing_item);
         remove_index_delay(std::move(event.src));
