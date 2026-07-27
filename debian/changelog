@@ -1,3 +1,10 @@
+deepin-anything (7.0.47) unstable; urgency=medium
+
+  * feat(kernelmod): track file close-write events
+  * feat(daemon): handle ACT_CLOSE_WRITE_FILE event for index update
+
+ -- wangrong <wangrong@uniontech.com>  Mon, 27 Jul 2026 15:41:13 +0800
+
 deepin-anything (7.0.46) unstable; urgency=medium
 
   * fix(event-listener): delay quit on disconnect to detect server
