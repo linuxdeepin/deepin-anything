@@ -98,12 +98,6 @@ debian/deepin-anything-server.postrm.debhelper
 debian/deepin-anything-server.prerm.debhelper
 debian/deepin-anything-server.debhelper.log
 
-# AI
-.cursor/
-.specstory/
-.cursorindexingignore
-.claude/
-
 # kernelmod
 src/kernelmod/.Module.symvers.cmd
 src/kernelmod/.modules.order.cmd
