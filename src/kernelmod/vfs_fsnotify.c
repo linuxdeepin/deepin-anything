@@ -170,7 +170,7 @@ static void on_file_op(int action, struct inode *p_inode, const unsigned char *f
     }
 }
 
-#define TARGET_EVENT (FS_DELETE | FS_UNMOUNT_DIR | FS_MOUNT_DIR | FS_CREATE | FS_MOVED_FROM | FS_MOVED_TO)
+#define TARGET_EVENT (FS_DELETE | FS_UNMOUNT_DIR | FS_MOUNT_DIR | FS_CREATE | FS_MOVED_FROM | FS_MOVED_TO | FS_CLOSE_WRITE)
 
 static inline void fsnotify_event_handler(struct inode *to_tell, __u32 mask, const unsigned char *file_name, u32 cookie)
 {
@@ -193,6 +193,10 @@ static inline void fsnotify_event_handler(struct inode *to_tell, __u32 mask, con
         break;
     case FS_UNMOUNT_DIR:
         on_unmount(file_name);
+        break;
+    case FS_CLOSE_WRITE:
+        if (!(mask & FS_ISDIR))
+            on_file_op(ACT_CLOSE_WRITE_FILE, to_tell, file_name, cookie);
         break;
     default:
         break;

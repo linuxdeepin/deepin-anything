@@ -15,6 +15,7 @@
 #include <linux/version.h>
 #include <linux/atomic.h>
 #include <linux/err.h>
+#include <linux/fsnotify_backend.h>
 
 #include "arg_extractor.h"
 #include "vfs_change_consts.h"
@@ -520,9 +521,43 @@ fail:
 
 DECL_CMN_KRP(vfs_rename);
 
+static int on___fput_ent(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct file *file = (struct file *)get_arg(regs, 1);
+    struct vfs_event *event;
+    struct inode *inode = file_inode(file);
+
+    if (unlikely(!file))
+        return 1;
+
+    if (inode && S_ISDIR(inode->i_mode))
+        return 1;
+
+    if (!(file->f_mode & FMODE_OPENED))
+        return 1;
+
+    if (!(file->f_mode & FMODE_WRITE))
+        return 1;
+
+    if (common_vfs_ent(&event, file->f_path.dentry))
+        return 1;
+
+    event->action = ACT_CLOSE_WRITE_FILE;
+    vfs_changed_entry(event);
+    return 0;
+}
+
+static struct kretprobe __fput_krp = {
+    .entry_handler  = on___fput_ent,
+    .handler        = NULL,
+    .data_size      = 0,
+    .maxactive      = 64,
+    .kp.symbol_name = "__fput",
+};
+
 static struct kretprobe *vfs_krps[] = {&do_mount_krp, &sys_umount_krp, &vfs_create_krp,
     &vfs_unlink_krp, &vfs_mkdir_krp, &vfs_rmdir_krp, &vfs_symlink_krp, &vfs_link_krp,
-    &vfs_rename_krp, &security_inode_create_krp
+    &vfs_rename_krp, &security_inode_create_krp, &__fput_krp
 };
 
 int init_vfs_kretprobes(void *vfs_changed_func)
