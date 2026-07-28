@@ -1,3 +1,9 @@
+deepin-anything (7.0.48) unstable; urgency=medium
+
+  * fix(kernelmod): add missing parentheses in cmp_event_path macro
+
+ -- wangrong <wangrong@uniontech.com>  Tue, 28 Jul 2026 16:55:49 +0800
+
 deepin-anything (7.0.47) unstable; urgency=medium
 
   * feat(kernelmod): track file close-write events
