@@ -161,14 +161,17 @@ typedef struct EventReceiver EventReceiver;
  * @EVENT_RECEIVE_OK: Event received successfully
  * @EVENT_RECEIVE_DISCONNECTED: Server closed the connection
  * @EVENT_RECEIVE_INTERRUPTED: recv() was interrupted by a signal (EINTR)
+ * @EVENT_RECEIVE_WOULD_BLOCK: No data available (non-blocking receive only)
  * @EVENT_RECEIVE_ERROR: Other error occurred
  *
- * Result codes for event_receiver_receive().
+ * Result codes for event_receiver_receive() and
+ * event_receiver_receive_nonblock().
  */
 typedef enum {
     EVENT_RECEIVE_OK,
     EVENT_RECEIVE_DISCONNECTED,
     EVENT_RECEIVE_INTERRUPTED,
+    EVENT_RECEIVE_WOULD_BLOCK,
     EVENT_RECEIVE_ERROR
 } EventReceiveResult;
 
@@ -215,6 +218,23 @@ int event_receiver_get_socket(EventReceiver *receiver);
  */
 EventReceiveResult event_receiver_receive(EventReceiver *receiver,
                                           dispatch_event_t *event);
+
+/**
+ * event_receiver_receive_nonblock:
+ * @receiver: an EventReceiver
+ * @event: (out caller-allocates): output event buffer
+ *
+ * Non-blocking variant of event_receiver_receive(). Uses MSG_DONTWAIT
+ * so the call returns immediately when no event is available. Designed
+ * for use in fd-readable callbacks that drain the socket in a loop.
+ *
+ * Returns: %EVENT_RECEIVE_OK on success, %EVENT_RECEIVE_WOULD_BLOCK when
+ *          no data is available, %EVENT_RECEIVE_DISCONNECTED when the
+ *          server closed the connection, %EVENT_RECEIVE_ERROR on other
+ *          errors
+ */
+EventReceiveResult event_receiver_receive_nonblock(EventReceiver *receiver,
+                                                    dispatch_event_t *event);
 
 G_END_DECLS
 
