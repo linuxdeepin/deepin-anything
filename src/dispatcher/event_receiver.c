@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#define _GNU_SOURCE
 #define G_LOG_USE_STRUCTURED
 #include "event_dispatcher.h"
 
@@ -11,6 +12,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
+/* 1 MiB receive buffer — the default (~208 KB) is too small for bursts of
+ * 4 KB dispatch_event_t messages, causing the server to see EAGAIN and kick
+ * the client ("slow client ... kicking"). */
+#define RECEIVER_SOCKET_BUF_SIZE (1 << 20)
 
 struct EventReceiver {
     int sock_fd;            /* connected socket (SOCK_SEQPACKET, blocking) */
@@ -29,6 +35,13 @@ EventReceiver *event_receiver_new(const char *address)
     if (r->sock_fd < 0) {
         g_warning("socket() failed: %s", strerror(errno));
         goto fail;
+    }
+
+    /* Enlarge the receive buffer so bursts don't cause the server to kick us */
+    int buf_size = RECEIVER_SOCKET_BUF_SIZE;
+    if (setsockopt(r->sock_fd, SOL_SOCKET, SO_RCVBUF, &buf_size,
+                   sizeof(buf_size)) < 0) {
+        g_debug("setsockopt(SO_RCVBUF) failed: %s", strerror(errno));
     }
 
     struct sockaddr_un addr;
@@ -66,18 +79,21 @@ int event_receiver_get_socket(EventReceiver *receiver)
     return receiver->sock_fd;
 }
 
-EventReceiveResult event_receiver_receive(EventReceiver *receiver,
-                                          dispatch_event_t *event)
+/* Shared recv logic. @flags are passed verbatim to recv(). */
+static EventReceiveResult do_receive(EventReceiver *receiver,
+                                     dispatch_event_t *event, int flags)
 {
     g_return_val_if_fail(receiver != NULL, EVENT_RECEIVE_ERROR);
     g_return_val_if_fail(event != NULL, EVENT_RECEIVE_ERROR);
 
     memset(event, 0, sizeof(*event));
 
-    ssize_t ret = recv(receiver->sock_fd, event, sizeof(*event), 0);
+    ssize_t ret = recv(receiver->sock_fd, event, sizeof(*event), flags);
     if (ret < 0) {
         if (errno == EINTR)
             return EVENT_RECEIVE_INTERRUPTED;
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return EVENT_RECEIVE_WOULD_BLOCK;
         g_debug("recv() failed: %s", strerror(errno));
         return EVENT_RECEIVE_ERROR;
     }
@@ -95,4 +111,16 @@ EventReceiveResult event_receiver_receive(EventReceiver *receiver,
     /* event_path is guaranteed null-terminated:
      * either from the sent data or from zero-initialization above */
     return EVENT_RECEIVE_OK;
+}
+
+EventReceiveResult event_receiver_receive(EventReceiver *receiver,
+                                          dispatch_event_t *event)
+{
+    return do_receive(receiver, event, 0);
+}
+
+EventReceiveResult event_receiver_receive_nonblock(EventReceiver *receiver,
+                                                    dispatch_event_t *event)
+{
+    return do_receive(receiver, event, MSG_DONTWAIT);
 }
