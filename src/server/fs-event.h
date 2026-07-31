@@ -15,6 +15,7 @@ G_BEGIN_DECLS
 typedef struct {
     guint8      act;
     guint32     cookie;
+    guint32    seq;
     guint16     major;
     guint8      minor;
     gchar       src[MAX_PATH_LEN];
