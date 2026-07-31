@@ -109,39 +109,47 @@ static gboolean on_fd_readable(G_GNUC_UNUSED gint fd,
         return G_SOURCE_REMOVE;
     }
 
-    dispatch_event_t dispatch_evt;
-    memset(&dispatch_evt, 0, sizeof(dispatch_evt));
+    /* Drain all pending events in one callback to avoid GMainContext
+     * re-dispatch overhead per event under high throughput. The fd source
+     * is level-triggered, so it will fire again if the kernel buffer still
+     * has data after we return. */
+    for (;;) {
+        dispatch_event_t dispatch_evt;
+        memset(&dispatch_evt, 0, sizeof(dispatch_evt));
 
-    EventReceiveResult result = event_receiver_receive(listener->receiver,
-                                                        &dispatch_evt);
+        EventReceiveResult result = event_receiver_receive_nonblock(
+            listener->receiver, &dispatch_evt);
 
-    switch (result) {
-    case EVENT_RECEIVE_OK: {
-        fs_event *evt = g_slice_new(fs_event);
-        evt->act = (uint8_t)dispatch_evt.event_action;
-        evt->cookie = dispatch_evt.cookie;
-        g_strlcpy(evt->src, dispatch_evt.event_path, MAX_PATH_LEN);
-        evt->dst[0] = '\0';
+        switch (result) {
+        case EVENT_RECEIVE_OK: {
+            fs_event *evt = g_slice_new(fs_event);
+            evt->act = (uint8_t)dispatch_evt.event_action;
+            evt->cookie = dispatch_evt.cookie;
+            g_strlcpy(evt->src, dispatch_evt.event_path, MAX_PATH_LEN);
+            evt->dst[0] = '\0';
 
-        if (listener->callback)
-            listener->callback(listener->user_data, evt);
+            if (listener->callback)
+                listener->callback(listener->user_data, evt);
 
-        return G_SOURCE_CONTINUE;
-    }
-    case EVENT_RECEIVE_INTERRUPTED:
-        return G_SOURCE_CONTINUE;
-    case EVENT_RECEIVE_DISCONNECTED:
-        spdlog::info("Dispatcher closed the connection");
-        listener->fd_source_id = 0;
-        start_restart_check(listener);
-        return G_SOURCE_REMOVE;
-    case EVENT_RECEIVE_ERROR:
-        spdlog::warn("Failed to receive event");
-        listener->fd_source_id = 0;
-        start_restart_check(listener);
-        return G_SOURCE_REMOVE;
-    default:
-        return G_SOURCE_CONTINUE;
+            continue;
+        }
+        case EVENT_RECEIVE_WOULD_BLOCK:
+            return G_SOURCE_CONTINUE;
+        case EVENT_RECEIVE_INTERRUPTED:
+            continue;
+        case EVENT_RECEIVE_DISCONNECTED:
+            spdlog::info("Dispatcher closed the connection");
+            listener->fd_source_id = 0;
+            start_restart_check(listener);
+            return G_SOURCE_REMOVE;
+        case EVENT_RECEIVE_ERROR:
+            spdlog::warn("Failed to receive event");
+            listener->fd_source_id = 0;
+            start_restart_check(listener);
+            return G_SOURCE_REMOVE;
+        default:
+            continue;
+        }
     }
 }
 
