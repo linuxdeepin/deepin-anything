@@ -14,6 +14,8 @@ add_executable(${PROJECT_NAME}
     vfs-unnamed-device.c
     mount-monitor.c
     event-listener.c
+    event-listener-genl.c
+    event-listener-mmap-ring.c
     event-dispatcher.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/src/core/mount_info.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/src/utils/tools.c
