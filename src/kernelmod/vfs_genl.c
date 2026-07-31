@@ -121,6 +121,9 @@ int vfs_notify_dentry_event(struct vfs_event *event)
     rc = nla_put_u32(msg, VFSMONITOR_A_COOKIE, event->cookie);
     if (rc != 0)
         goto failure;
+    rc = nla_put_u32(msg, VFSMONITOR_A_SEQ, event->seq);
+    if (rc != 0)
+        goto failure;
     rc = nla_put_u16(msg, VFSMONITOR_A_MAJOR, MAJOR(event->dev));
     if (rc != 0)
         goto failure;
@@ -143,11 +146,12 @@ failure:
     return rc;
 }
 
-int vfs_notify_proc_info(struct proc_info *info)
+int vfs_notify_proc_info(struct vfs_event *event)
 {
     int rc;
     struct sk_buff *msg;
     void *msg_head;
+    struct proc_info *info = event->proc_info;
 
     /* alloc msg */
     msg = genlmsg_new(NLMSG_GOODSIZE, GFP_ATOMIC);
@@ -162,6 +166,9 @@ int vfs_notify_proc_info(struct proc_info *info)
         goto failure;
     }
     /* add attributes */
+    rc = nla_put_u32(msg, VFSMONITOR_A_SEQ, event->seq);
+    if (rc != 0)
+        goto failure;
     rc = nla_put_u32(msg, VFSMONITOR_A_UID, info->uid);
     if (rc != 0)
         goto failure;
@@ -197,7 +204,7 @@ int vfs_notify_vfs_event(struct vfs_event *event)
         return rc;
 
     if (event->proc_info && event->proc_info->tgid != 0)
-        return vfs_notify_proc_info(event->proc_info);
+        return vfs_notify_proc_info(event);
 
     return 0;
 }

@@ -44,7 +44,7 @@ typedef int (*merge_action_fn_t)(struct list_head* entry, struct vfs_event *cur)
     --events_number;\
 }
 
-#define cmp_event_path(e1, e2) e1->dev != e2->dev ||  strcmp(e1->path, e2->path)
+#define cmp_event_path(e1, e2) ((e1)->dev != (e2)->dev || strcmp((e1)->path, (e2)->path))
 
 /*
  * merge rules

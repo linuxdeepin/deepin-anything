@@ -27,6 +27,7 @@ struct proc_info {
 #define VFS_EVENT_PART struct list_head list; \
     unsigned char action; \
     u32 cookie; \
+    u32 seq; \
     dev_t dev; \
     char *path; \
     void *pair; \

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2023 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -140,6 +140,27 @@ static ssize_t disable_event_merge_store(struct kobject *kobj,
 static struct kobj_attribute disable_event_merge_attribute =
     __ATTR(disable_event_merge, 0660, disable_event_merge_show, (void *)disable_event_merge_store);
 
+static ssize_t transport_show(struct kobject *kobj,
+                            struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%s\n", vfs_transport_to_str(vfs_transport));
+}
+
+static ssize_t transport_store(struct kobject *kobj,
+                                struct kobj_attribute *attr, char *buf,
+                                size_t count)
+{
+    int val = vfs_transport_from_str(buf);
+    if (val < 0)
+        return -EINVAL;
+    vfs_transport = val;
+
+    return count;
+}
+
+static struct kobj_attribute transport_attribute =
+    __ATTR(transport, 0660, transport_show, (void *)transport_store);
+
 int vfs_init_sysfs(void)
 {
     int error = 0;
@@ -172,8 +193,18 @@ int vfs_init_sysfs(void)
         goto err_disable_event_merge;
     }
 
+    error = sysfs_create_file(vfs_monitor,
+        &transport_attribute.attr);
+    if (error) {
+        mpr_info("failed to create the transport file "
+                "in /sys/kernel/vfs_monitor\n");
+        goto err_transport;
+    }
+
     return 0;
 
+err_transport:
+    sysfs_remove_file(vfs_monitor, &disable_event_merge_attribute.attr);
 err_disable_event_merge:
     sysfs_remove_file(vfs_monitor, &trace_event_mask_attribute.attr);
 err_trace_event_mask:
@@ -185,10 +216,16 @@ err_unnamed_devices:
 
 void vfs_exit_sysfs(void)
 {
+    if (!vfs_monitor)
+        return;
+
     sysfs_remove_file(vfs_monitor, &disable_event_merge_attribute.attr);
     sysfs_remove_file(vfs_monitor, &trace_event_mask_attribute.attr);
     sysfs_remove_file(vfs_monitor, &vfs_unnamed_devices_attribute.attr);
+    sysfs_remove_file(vfs_monitor, &transport_attribute.attr);
+
     kobject_put(vfs_monitor);
+    vfs_monitor = NULL;
 }
 
 

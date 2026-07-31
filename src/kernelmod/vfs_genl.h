@@ -19,6 +19,7 @@ enum {
     VFSMONITOR_A_PATH,
     VFSMONITOR_A_UID,
     VFSMONITOR_A_TGID,
+    VFSMONITOR_A_SEQ,
     __VFSMONITOR_A_MAX,
 };
 #define VFSMONITOR_A_MAX (__VFSMONITOR_A_MAX - 1)
@@ -33,6 +34,7 @@ static struct nla_policy vfsmonitor_genl_policy[VFSMONITOR_A_MAX + 1] = {
     [VFSMONITOR_A_PATH] = { .type = NLA_NUL_STRING, .maxlen = 4096 },
     [VFSMONITOR_A_UID] = { .type = NLA_U32 },
     [VFSMONITOR_A_TGID] = { .type = NLA_S32 },
+    [VFSMONITOR_A_SEQ] = { .type = NLA_U32 },
 };
 #endif
 
