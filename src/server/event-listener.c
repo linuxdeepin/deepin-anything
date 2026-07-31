@@ -93,6 +93,12 @@ void server_event_listener_free(ServerEventListener *listener)
     if (!listener)
         return;
 
+    /* Ensure the backend thread is joined before releasing its
+     * resources (fd, mmap, socket). Without this, a caller that
+     * reaches free without a prior stop would trigger a use-after-
+     * free as the worker thread keeps touching the freed backend. */
+    server_event_listener_stop(listener);
+
     if (listener->backend) {
         listener->backend->free(listener->backend);
         listener->backend = NULL;
