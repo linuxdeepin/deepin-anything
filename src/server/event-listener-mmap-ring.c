@@ -94,7 +94,8 @@ static void ring_drain(MmapRingBackend *backend)
     if (dropped != backend->last_dropped) {
         __u64 delta = dropped - backend->last_dropped;
         backend->last_dropped = dropped;
-        g_warning("mmap-ring: dropped %llu events (ring full)", delta);
+        g_warning("mmap-ring: dropped %llu events (ring full)",
+                  (unsigned long long)delta);
     }
 }
 
