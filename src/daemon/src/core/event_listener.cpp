@@ -85,10 +85,19 @@ static void start_restart_check(EventListener *listener)
         listener->initial_sock_inode = st.st_ino;
 
     listener->timer_check_count = 0;
-    listener->timer_source_id = g_timeout_add(RESTART_CHECK_INTERVAL_MS,
-                                              on_restart_check, listener);
-    if (listener->timer_source_id == 0) {
+
+    GSource *timer_source = g_timeout_source_new(RESTART_CHECK_INTERVAL_MS);
+    if (timer_source == NULL) {
         spdlog::warn("Failed to create restart check timer, quitting immediately");
+        notify_quit(listener);
+        return;
+    }
+    g_source_set_callback(timer_source, on_restart_check, listener, NULL);
+    listener->timer_source_id = g_source_attach(timer_source, listener->context);
+    g_source_unref(timer_source);
+
+    if (listener->timer_source_id == 0) {
+        spdlog::warn("Failed to attach restart check timer, quitting immediately");
         notify_quit(listener);
     } else {
         spdlog::info("Waiting for dispatcher restart (checking every {}ms, "
@@ -179,14 +188,24 @@ static gpointer event_listener_thread_func(gpointer data)
         goto cleanup;
     }
 
-    listener->fd_source_id = g_unix_fd_add_full(
-        G_PRIORITY_DEFAULT, sock_fd,
-        (GIOCondition)(G_IO_IN | G_IO_HUP | G_IO_ERR),
-        on_fd_readable, listener, NULL);
-    if (listener->fd_source_id == 0) {
-        spdlog::error("Failed to add fd watch for receiver socket");
-        signal_startup(listener, FALSE);
-        goto cleanup;
+    {
+        GSource *fd_source = g_unix_fd_source_new(sock_fd,
+            (GIOCondition)(G_IO_IN | G_IO_HUP | G_IO_ERR));
+        if (fd_source == NULL) {
+            spdlog::error("Failed to create fd watch source for receiver socket");
+            signal_startup(listener, FALSE);
+            goto cleanup;
+        }
+        g_source_set_priority(fd_source, G_PRIORITY_DEFAULT);
+        g_source_set_callback(fd_source,
+            (GSourceFunc)(void (*)(void))on_fd_readable, listener, NULL);
+        listener->fd_source_id = g_source_attach(fd_source, listener->context);
+        g_source_unref(fd_source);
+        if (listener->fd_source_id == 0) {
+            spdlog::error("Failed to attach fd watch to listener context");
+            signal_startup(listener, FALSE);
+            goto cleanup;
+        }
     }
 
     spdlog::info("Event listener thread started");
