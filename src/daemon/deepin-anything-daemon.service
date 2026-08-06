@@ -6,5 +6,6 @@ After=udisks2.service
 ExecStart=/usr/libexec/deepin-anything-daemon
 Restart=on-failure
 RestartSec=30
+TimeoutStopSec=3
 MemoryHigh=2G
 MemoryMax=3G
