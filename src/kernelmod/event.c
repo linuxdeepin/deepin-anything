@@ -1,5 +1,4 @@
-// Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2021 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -25,15 +24,29 @@ void cleanup_vfs_event_cache(void)
 
 struct vfs_event *vfs_event_alloc(void)
 {
-    return kmem_cache_alloc(vfs_event_cachep, GFP_KERNEL);
+    struct vfs_event *event;
+
+    event = kmem_cache_alloc(vfs_event_cachep, GFP_KERNEL);
+    if (event != NULL)
+        event->proc_info = NULL;
+
+    return event;
 }
 
 struct vfs_event *vfs_event_alloc_atomic(void)
 {
-    return kmem_cache_alloc(vfs_event_cachep, GFP_ATOMIC);
+    struct vfs_event *event;
+
+    event = kmem_cache_alloc(vfs_event_cachep, GFP_ATOMIC);
+    if (event != NULL)
+        event->proc_info = NULL;
+
+    return event;
 }
 
 void vfs_event_free(struct vfs_event *event)
 {
+    // event->proc_info 目前未使用, 始终为 NULL, 不需要释放
+
     kmem_cache_free(vfs_event_cachep, event);
 }
