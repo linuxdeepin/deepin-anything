@@ -10,19 +10,21 @@
 
 #include "vfs_sysfs.h"
 #include "event.h"
-#include "vfs_kgenl.h"
 #include "vfs_fsnotify.h"
 #include "vfs_kretprobes.h"
 #include "event_merge.h"
 
+static int vfs_event_sink(struct vfs_event *event)
+{
+    return 0;
+}
+
 int __init vfs_monitor_init_module(void)
 {
     int ret;
-    char *notify_solution;
     char *events_source;
     void *vfs_changed_func;
 
-    notify_solution = "genl";
 #ifdef CONFIG_FSNOTIFY_BROADCAST
     events_source = "fsnotify_broadcast";
 #else
@@ -37,10 +39,7 @@ int __init vfs_monitor_init_module(void)
     if (ret)
         goto init_vfs_event_cache_quit;
 
-    vfs_changed_func = vfs_notify_dentry_event;
-    ret = init_vfs_genl();
-    if (ret)
-        goto init_vfs_genl_fail;
+    vfs_changed_func = vfs_event_sink;
 
 #ifdef CONFIG_FSNOTIFY_BROADCAST
     ret = init_vfs_fsnotify(get_event_merge_entry(vfs_changed_func));
@@ -52,18 +51,16 @@ int __init vfs_monitor_init_module(void)
         goto init_event_source_fail;
 #endif
 
-    mpr_info("init ok, %s, %s\n", events_source, notify_solution);
-	return 0;
+    mpr_info("init ok, %s\n", events_source);
+    return 0;
 
 init_event_source_fail:
-    cleanup_vfs_genl();
-init_vfs_genl_fail:
     cleanup_vfs_event_cache();
 init_vfs_event_cache_quit:
     vfs_exit_sysfs();
 vfs_init_sysfs_quit:
-    mpr_info("init fail, %s, %s\n", events_source, notify_solution);
-	return ret;
+    mpr_info("init fail, %s\n", events_source);
+    return ret;
 }
 
 void __exit vfs_monitor_cleanup_module(void)
@@ -78,7 +75,6 @@ void __exit vfs_monitor_cleanup_module(void)
     msleep(150);
 
     clearup_event_merge();
-    cleanup_vfs_genl();
     cleanup_vfs_event_cache();
     vfs_exit_sysfs();
 
@@ -91,3 +87,4 @@ module_exit(vfs_monitor_cleanup_module);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wangrong@uniontech.com");
 MODULE_DESCRIPTION("VFS change monitor");
+
