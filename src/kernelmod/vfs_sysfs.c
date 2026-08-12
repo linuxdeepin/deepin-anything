@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2023 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -105,10 +105,11 @@ int vfs_init_sysfs(void)
 
 void vfs_exit_sysfs(void)
 {
+    if (!vfs_monitor)
+        return;
+
+    sysfs_remove_file(vfs_monitor, &vfs_unnamed_devices_attribute.attr);
+
     kobject_put(vfs_monitor);
+    vfs_monitor = NULL;
 }
-
-
-
-
-

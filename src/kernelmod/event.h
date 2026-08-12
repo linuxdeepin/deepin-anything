@@ -1,5 +1,4 @@
-// Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2021 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -8,12 +7,30 @@
 
 #include <uapi/linux/limits.h>
 
+
+#define PROCESS_INFO_PART u32 uid; \
+	s32 tgid; \
+	char *path;
+
+struct __process_info_part {
+	PROCESS_INFO_PART
+};
+
+#define PROCESS_INFO_PATH_LEN (PATH_MAX - sizeof(struct __process_info_part))
+
+struct proc_info {
+	PROCESS_INFO_PART
+	char buf[PROCESS_INFO_PATH_LEN];
+};
+
 #define VFS_EVENT_PART struct list_head list; \
     unsigned char action; \
     u32 cookie; \
+    u32 seq; \
     dev_t dev; \
     char *path; \
-    void *pair;
+    void *pair; \
+    struct proc_info *proc_info;
 
 struct __vfs_event_part {
 	VFS_EVENT_PART

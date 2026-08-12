@@ -1,5 +1,4 @@
-// Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2021 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -42,7 +41,7 @@ typedef int (*merge_action_fn_t)(struct list_head* entry, struct vfs_event *cur)
     --events_number;\
 }
 
-#define cmp_event_path(e1, e2) e1->dev != e2->dev ||  strcmp(e1->path, e2->path)
+#define cmp_event_path(e1, e2) ((e1)->dev != (e2)->dev || strcmp((e1)->path, (e2)->path))
 
 /*
  * merge rules
