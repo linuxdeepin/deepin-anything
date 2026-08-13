@@ -1,5 +1,4 @@
-// Copyright (C) 2020 ~ 2021 Uniontech Software Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -7,12 +6,12 @@
 #define ANYTHINGBACKEND_H
 
 #include "dasdefine.h"
+#include "eventsource.h"
 #include <QObject>
 
 DAS_BEGIN_NAMESPACE
 
 class Server;
-class EventSource_GENL;
 class AnythingBackend : public QObject
 {
     Q_OBJECT
@@ -29,7 +28,7 @@ private:
 
     Server *server = nullptr;
     bool hasconnected = false;
-    EventSource_GENL *eventsrc = nullptr;
+    EventSource *eventsrc = nullptr;
 };
 
 DAS_END_NAMESPACE
