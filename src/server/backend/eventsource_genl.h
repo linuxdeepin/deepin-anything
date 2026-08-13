@@ -1,5 +1,4 @@
-// Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2021 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -10,6 +9,7 @@
 #include <QByteArray>
 #include "dasdefine.h"
 #include "eventsource.h"
+#include "partitionmonitor.h"
 
 struct nl_msg;
 struct nl_sock;
@@ -28,7 +28,6 @@ public:
     bool getEvent(unsigned char *type, char **src, char **dst, bool *end) override;
 
 private:
-    void updatePartitions();
     static int handleMsg(struct nl_msg *msg, void* arg);
     int handleMsg(struct nl_msg *msg);
 
@@ -40,7 +39,7 @@ private:
     struct nl_sock *nlsock;
     struct nl_cb *cb;
     QMap<unsigned int, QByteArray> rename_from;
-    QMap<unsigned int, QByteArray> partitions;
+    PartitionMonitor partitions;
 
     char buf[4096*2];
     bool new_msg;

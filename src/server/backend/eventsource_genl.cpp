@@ -1,5 +1,4 @@
-// Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2021 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -7,14 +6,11 @@
 #include "vfs_change_consts.h"
 #include "logdefine.h"
 #include "vfs_genl.h"
-#include "mountcacher.h"
 
 #include <sys/sysmacros.h>
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
 #include <errno.h>
-#include <QString>
-#include <QFile>
 
 DAS_BEGIN_NAMESPACE
 
@@ -44,7 +40,6 @@ EventSource_GENL::EventSource_GENL()
 
     nlsock = nullptr;
     cb = nl_cb_alloc(NL_CB_DEFAULT);
-    updatePartitions();
 
     buf[0] = 0;
     new_msg = false;
@@ -136,109 +131,6 @@ bool EventSource_GENL::getEvent(unsigned char *type, char **src, char **dst, boo
     }
 }
 
-#define MKDEV(ma,mi)    ((ma)<<8 | (mi))
-
-
-void write_vfs_unnamed_device(const char *str)
-{
-    QString path("/sys/kernel/vfs_monitor/vfs_unnamed_devices");
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
-        QByteArray ba = path.toLatin1();
-        nWarning("open file failed: %s.", ba.data());
-        return;
-    }
-    file.write(str, strlen(str));
-    file.close();
-}
-
-void read_vfs_unnamed_device(QSet<QByteArray> &devices)
-{
-    QString path("/sys/kernel/vfs_monitor/vfs_unnamed_devices");
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QByteArray ba = path.toLatin1();
-        nWarning("open file failed: %s.", ba.data());
-        return;
-    }
-    QByteArray line = file.readLine();
-    file.close();
-    
-    /* remove last \n */
-    line.chop(1);
-    QList<QByteArray> list = line.split(',');
-    foreach (const QByteArray &minor, list) {
-        devices.insert(minor);
-    }
-}
-
-void update_vfs_unnamed_device(const QSet<QByteArray> &news)
-{
-    char buf[32];
-    QSet<QByteArray> olds;
-    read_vfs_unnamed_device(olds);
-
-    QSet<QByteArray> removes(olds);
-    removes.subtract(news);
-    foreach (const QByteArray &minor, removes) {
-        snprintf(buf, sizeof(buf), "r%s", minor.data());
-        write_vfs_unnamed_device(buf);
-    }
-
-    QSet<QByteArray> adds(news);
-    adds.subtract(olds);
-    foreach (const QByteArray &minor, adds) {
-        snprintf(buf, sizeof(buf), "a%s", minor.data());
-        write_vfs_unnamed_device(buf);
-    }
-}
-
-void EventSource_GENL::updatePartitions()
-{
-    /* Invokes updateMountPoints in the event loop of MountCacher to avoid multi-threaded access */
-    QMetaObject::invokeMethod(MountCacher::instance(), "updateMountPoints", Qt::QueuedConnection);
-
-    /*
-     * No use`MountCacher::instance()->getMountPointsByRoot("/")` to get mount list.
-     * This is to avoid multi-threaded access, and locks may cause dead locks.
-     */
-    QString file_mountinfo_path("/proc/self/mountinfo");
-    QFile file_mountinfo(file_mountinfo_path);
-    if (!file_mountinfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QByteArray ba = file_mountinfo_path.toLatin1();
-        nWarning("open file failed: %s.", ba.data());
-        return;
-    }
-    QByteArray mount_info;
-    mount_info = file_mountinfo.readAll();
-    file_mountinfo.close();
-
-    unsigned int major, minor;
-    char mp[256], root[256], type[256], *line = mount_info.data();
-    QSet<QByteArray> dlnfs_devs;
-    QByteArray ba;
-    partitions.clear();
-    nInfo("updatePartitions start.");
-    while (sscanf(line, "%*d %*d %u:%u %250s %250s %*s %*s %*s %250s %*s %*s\n", &major, &minor, root, mp, type) == 5) {
-        line = strchr(line, '\n') + 1;
-
-        if (!major && strcmp(type, "fuse.dlnfs"))
-            continue;
-
-        if (!strcmp(root, "/")) {
-            partitions.insert(MKDEV(major, minor), QByteArray(mp));
-            nInfo("%u:%u, %s", major, minor, mp);
-            /* add monitoring for dlnfs device */
-            if (!major && !strcmp(type, "fuse.dlnfs")) {
-                ba.setNum(minor);
-                dlnfs_devs.insert(ba);
-            }
-        }
-    }
-    update_vfs_unnamed_device(dlnfs_devs);
-    nInfo("updatePartitions end.");
-}
-
 int EventSource_GENL::handleMsg(struct nl_msg *msg, void* arg)
 {
     EventSource_GENL *event_src = static_cast<EventSource_GENL*>(arg);
@@ -276,11 +168,11 @@ int EventSource_GENL::handleMsg(struct nl_msg *msg)
     get_attr(attrs, VFSMONITOR_A_PATH, _src, string);
 
     if (_act < ACT_MOUNT) {
-        if (!partitions.contains(MKDEV(major, minor))) {
+        if (!partitions.contains(major, minor)) {
             nWarning("unknown device, %u, dev: %u:%u, path: %s, cookie: %u.", _act, major, minor, _src, _cookie);
             return 0;
         }
-        _root = partitions[MKDEV(major, minor)].data();
+        _root = const_cast<char*>(partitions.rootFor(major, minor));
         if (strcmp(_root, "/") == 0)
             _root = nullptr;
     }
@@ -308,7 +200,7 @@ int EventSource_GENL::handleMsg(struct nl_msg *msg)
         break;
     case ACT_MOUNT:
     case ACT_UNMOUNT:
-        updatePartitions();
+        partitions.updatePartitions();
         return 0;
     case ACT_RENAME_FILE:
     case ACT_RENAME_FOLDER:
