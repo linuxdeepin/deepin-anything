@@ -1,19 +1,19 @@
-// Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-
-#include <signal.h>
-#include <sys/utsname.h>
-
-#include <QDBusConnection>
 
 #include "anythingbackend.h"
 #include "anythingexport.h"
 #include "server.h"
 #include "eventsource_genl.h"
+#include "eventsource_mmap.h"
 #include "logdefine.h"
 #include "logsaver.h"
+#include <QDBusConnection>
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #include "lftmanager.h"
 #include "anything_adaptor.h"
@@ -78,10 +78,25 @@ int AnythingBackend::init_connection()noexcept
     return -1;
 }
 
+static EventSource *createEventSource()
+{
+    /* Prefer the mmap-ring transport when the kernel char-device is
+     * available; fall back to generic netlink otherwise. */
+    struct stat st;
+    if (stat("/dev/vfs_monitor", &st) == 0 && S_ISCHR(st.st_mode)) {
+        EventSource *mmap_src = new EventSource_MMAP();
+        if (mmap_src->init())
+            return mmap_src;
+        nInfo("mmap transport init failed, fallback to genl.");
+        delete mmap_src;
+    }
+    return new EventSource_GENL();
+}
+
 int AnythingBackend::monitorStart()
 {
     if (!eventsrc)
-        eventsrc = new EventSource_GENL();
+        eventsrc = createEventSource();
 
     if (!eventsrc->isInited() && !eventsrc->init())
         return -1;

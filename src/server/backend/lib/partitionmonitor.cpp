@@ -42,8 +42,10 @@ void PartitionMonitor::updatePartitions()
     QByteArray ba;
     partitions.clear();
     nInfo("updatePartitions start.");
-    while (sscanf(line, "%*d %*d %u:%u %250s %250s %*s %*s %*s %250s %*s %*s\n", &major, &minor, root, mp, type) == 5) {
-        line = strchr(line, '\n') + 1;
+    while (line && sscanf(line, "%*d %*d %u:%u %250s %250s %*s %*s %*s %250s %*s %*s\n", &major, &minor, root, mp, type) == 5) {
+        line = strchr(line, '\n');
+        if (line)
+            ++line;
 
         if (!major && strcmp(type, "fuse.dlnfs"))
             continue;
