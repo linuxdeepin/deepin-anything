@@ -64,7 +64,13 @@ void thread_pool::thread_loop() {
         }
 
         // do the job
-        job();
+        try {
+            job();
+        } catch (const std::exception& e) {
+            spdlog::error("Unhandled exception in thread pool job: {}", e.what());
+        } catch (...) {
+            spdlog::error("Unknown unhandled exception in thread pool job");
+        }
     }
 }
 

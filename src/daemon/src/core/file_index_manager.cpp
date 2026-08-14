@@ -454,15 +454,22 @@ std::vector<std::string> file_index_manager::traverse_directory(const std::strin
 }
 
 bool file_index_manager::document_exists(const std::string &path, bool only_check_initial_index) {
-    TermPtr term = newLucene<Term>(FULL_PATH_FIELD, StringUtils::toUnicode(path));
-    TermDocsPtr termDocs;
-    if (only_check_initial_index) {
-        termDocs = reader_->termDocs(term);
-    } else {
-        try_refresh_reader(true);
-        termDocs = nrt_reader_->termDocs(term);
+    try {
+        TermPtr term = newLucene<Term>(FULL_PATH_FIELD, StringUtils::toUnicode(path));
+        TermDocsPtr termDocs;
+        if (only_check_initial_index) {
+            termDocs = reader_->termDocs(term);
+        } else {
+            try_refresh_reader(true);
+            termDocs = nrt_reader_->termDocs(term);
+        }
+        return termDocs->next();
+    } catch (const LuceneException& e) {
+        spdlog::error("Failed to check document exists {}: {}", path, StringUtils::toUTF8(e.getError()));
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to check document exists {}: {}", path, e.what());
     }
-    return termDocs->next();
+    return false;
 }
 
 bool file_index_manager::refresh_indexes(const std::vector<std::string>& blacklist_paths, bool nrt, bool check_exist) {

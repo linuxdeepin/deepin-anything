@@ -459,6 +459,8 @@ bool base_event_handler::scan_directory(const std::string& dir_path, std::functi
     } catch (std::filesystem::filesystem_error const& e) {
         spdlog::error("Failed to scan directory: {}, {}, {}, {}",
             e.what(), e.path1().string(), e.path2().string(), e.code().value());
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to scan directory {}: {}", dir_path, e.what());
     }
 
     spdlog::info("Scanning directory {} completed", dir_path);
