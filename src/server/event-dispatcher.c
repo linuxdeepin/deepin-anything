@@ -150,33 +150,6 @@ static gboolean convert_fs_event(ServerEventDispatcher *dispatcher,
 {
     dispatch_fs_event_init(out);
 
-    if (event->act == ACT_MOUNT || event->act == ACT_UNMOUNT) {
-        g_debug("%s: %s",
-                event->act == ACT_MOUNT ? "Mount a device" : "Unmount a device",
-                event->src);
-        mount_info_update(dispatcher->mount_info);
-        return TRUE;
-    }
-
-    gchar *root = NULL;
-    if (event->act < ACT_MOUNT) {
-        out->device_id = makedev(event->major, event->minor);
-
-        const gchar *mount_point = mount_info_get_device_mount_point(
-            dispatcher->mount_info, out->device_id);
-        if (!mount_point) {
-            g_debug("Unknown device: %u, dev: %u:%u, path: %s, cookie: %u",
-                    +event->act, event->major, +event->minor,
-                    event->src, event->cookie);
-            return TRUE;
-        }
-        root = g_strdup(mount_point);
-        if (g_strcmp0(root, "/") == 0) {
-            g_free(root);
-            root = NULL;
-        }
-    }
-
     switch (event->act) {
     case ACT_NEW_FILE:
     case ACT_NEW_SYMLINK:
@@ -184,62 +157,79 @@ static gboolean convert_fs_event(ServerEventDispatcher *dispatcher,
     case ACT_NEW_FOLDER:
     case ACT_DEL_FILE:
     case ACT_DEL_FOLDER:
+    case ACT_CLOSE_WRITE_FILE:
         out->act = event->act;
         out->src = g_strdup(event->src);
         out->dst = g_strdup("");
         break;
+
     case ACT_RENAME_FROM_FILE:
     case ACT_RENAME_FROM_FOLDER:
         g_hash_table_insert(dispatcher->rename_from,
                             GUINT_TO_POINTER(event->cookie),
                             g_strdup(event->src));
-        g_free(root);
         return TRUE;
+
     case ACT_RENAME_TO_FILE:
     case ACT_RENAME_TO_FOLDER: {
         gpointer from_src = g_hash_table_lookup(dispatcher->rename_from,
                                                 GUINT_TO_POINTER(event->cookie));
-        if (from_src) {
-            out->act = (event->act == ACT_RENAME_TO_FILE)
-                           ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
-            out->cookie = event->cookie;
-            out->dst = g_strdup(event->src);
-            out->src = g_strdup((const gchar *)from_src);
-            g_hash_table_remove(dispatcher->rename_from,
-                                GUINT_TO_POINTER(event->cookie));
-        } else {
+        if (!from_src) {
             g_debug("Rename-to without matching rename-from (cookie=%u)",
                     event->cookie);
-            g_free(root);
             return TRUE;
         }
+        out->act = (event->act == ACT_RENAME_TO_FILE)
+                       ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
+        out->cookie = event->cookie;
+        out->src = g_strdup((const gchar *)from_src);
+        out->dst = g_strdup(event->src);
+        g_hash_table_remove(dispatcher->rename_from,
+                            GUINT_TO_POINTER(event->cookie));
         break;
     }
+
     case ACT_RENAME_FILE:
     case ACT_RENAME_FOLDER:
-        g_warning("Unsupported file action: %u", +event->act);
-        g_free(root);
+        g_warning("Unsupported file action: %u", (guint)event->act);
         return TRUE;
+
+    case ACT_MOUNT:
+    case ACT_UNMOUNT:
+        g_debug("%s: %s",
+                event->act == ACT_MOUNT ? "Mount a device" : "Unmount a device",
+                event->src);
+        mount_info_update(dispatcher->mount_info);
+        return TRUE;
+
     default:
-        g_warning("Unknown file action: %u", +event->act);
-        g_free(root);
+        g_warning("Unknown file action: %u", (guint)event->act);
         return TRUE;
     }
 
-    if (root) {
+    out->device_id = makedev(event->major, event->minor);
+    const gchar *mount_point = mount_info_get_device_mount_point(
+        dispatcher->mount_info, out->device_id);
+    if (!mount_point) {
+        g_debug("Unknown device: %u, dev: %u:%u, path: %s, cookie: %u",
+                (guint)event->act, event->major, (guint)event->minor,
+                event->src, event->cookie);
+        return TRUE;
+    }
+
+    if (g_strcmp0(mount_point, "/") != 0) {
         if (out->src) {
-            gchar *new_src = g_strconcat(root, out->src, NULL);
+            gchar *prefixed = g_strconcat(mount_point, out->src, NULL);
             g_free(out->src);
-            out->src = new_src;
+            out->src = prefixed;
         }
         if (out->dst && out->dst[0] != '\0') {
-            gchar *new_dst = g_strconcat(root, out->dst, NULL);
+            gchar *prefixed = g_strconcat(mount_point, out->dst, NULL);
             g_free(out->dst);
-            out->dst = new_dst;
+            out->dst = prefixed;
         }
     }
 
-    g_free(root);
     return FALSE;
 }
 

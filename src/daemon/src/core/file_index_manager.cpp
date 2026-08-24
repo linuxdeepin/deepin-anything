@@ -311,6 +311,29 @@ bool file_index_manager::update_index(const std::string& old_path, const std::st
     return ret;
 }
 
+bool file_index_manager::update_index(const std::string& path) {
+    auto record = make_file_record(path, pinyin_processor_, file_type_mapping_);
+    if (record.modify_time == 0) {
+        spdlog::debug("Skip updating index for non-existent file: {}", path);
+        return true;
+    }
+
+    bool ret = false;
+
+    try {
+        auto doc = create_document(record);
+        writer_->updateDocument(newLucene<Term>(FULL_PATH_FIELD, StringUtils::toUnicode(path)), doc);
+        spdlog::debug("Updated index for {}", path);
+        ret = true;
+    } catch (const LuceneException& e) {
+        spdlog::error("Failed to update index for {}: {}", path, StringUtils::toUTF8(e.getError()));
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to update index for {}: {}", path, e.what());
+    }
+
+    return ret;
+}
+
 bool check_index_corrupted(const std::string& index_directory) {
     try {
         FSDirectoryPtr dir = FSDirectory::open(StringUtils::toUnicode(index_directory));

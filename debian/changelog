@@ -1,3 +1,11 @@
+deepin-anything (7.0.61) unstable; urgency=medium
+
+  * feat(kernelmod): track file close-write events
+  * feat(daemon): handle ACT_CLOSE_WRITE_FILE event for index update
+  * fix(kernelmod): add missing parentheses in cmp_event_path macro
+
+ -- wangrong <wangrong@uniontech.com>  Mon, 24 Aug 2026 14:13:12 +0800
+
 deepin-anything (7.0.60) unstable; urgency=medium
 
   * fix(daemon): ensure daemon exit within 3 seconds via TimeoutStopSec

@@ -55,6 +55,7 @@ protected:
     void add_index_delay(std::string path);
     void remove_index_delay(std::string path);
     void update_index_delay(std::string src, std::string dst);
+    void update_index_delay(std::string path);
     void scan_index_delay(std::string path);
     void recursive_update_index_delay(std::string src, std::string dst);
     void init_scan_index_delay(std::string path);
