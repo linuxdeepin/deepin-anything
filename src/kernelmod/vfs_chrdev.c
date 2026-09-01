@@ -64,23 +64,32 @@ static int vfs_ring_init(struct vfs_ring *ring, u32 capacity, u32 record_size)
     struct vfs_ringbuf_header *hdr;
     size_t header_size;
     size_t data_size;
-    size_t total;
+    size_t alloc_size;
 
     header_size = sizeof(struct vfs_ringbuf_header);
     data_size = (size_t)capacity * record_size;
-    total = header_size + data_size;
+
+    /* Align the allocation to a whole number of pages up front. On
+     * kernels whose PAGE_SIZE != 4096 (e.g. Loongson 16 KiB, arm64
+     * 64 KiB) the raw header+data total is not a page multiple, so
+     * the consumer's mmap() — which the kernel page-aligns — would
+     * be larger than the recorded size and get rejected with
+     * "size > mem_size". Page-aligning here keeps the allocation
+     * request, the recorded mem_size, and the consumer's mapping
+     * all in sync. */
+    alloc_size = PAGE_ALIGN(header_size + data_size);
 
     /* vmalloc gives virtually-contiguous memory without MAX_ORDER
      * limits; physical pages are discontiguous, which is fine for
      * this SPSC ring (single-record access, no DMA). */
-    ring->mem = vzalloc(total);
+    ring->mem = vzalloc(alloc_size);
     if (!ring->mem) {
-        mpr_err("ring_init: vzalloc fail, total=%zu (capacity=%u, record_size=%u)\n",
-                total, capacity, record_size);
+        mpr_err("ring_init: vzalloc fail, alloc_size=%zu (capacity=%u, record_size=%u)\n",
+                alloc_size, capacity, record_size);
         return -ENOMEM;
     }
 
-    ring->mem_size = total;
+    ring->mem_size = alloc_size;
 
     hdr = (struct vfs_ringbuf_header *)ring->mem;
     hdr->magic       = VFS_RINGBUF_MAGIC;
