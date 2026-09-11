@@ -14,3 +14,14 @@ target_include_directories(test_dispatcher PRIVATE
     ${GLIB_INCLUDE_DIRS}
 )
 add_test(NAME dispatcher COMMAND test_dispatcher)
+
+add_executable(test_relay_dispatcher test_relay_dispatcher.c)
+target_link_libraries(test_relay_dispatcher PRIVATE
+    deepin-anything-dispatcher
+    ${GLIB_LIBRARIES}
+)
+target_include_directories(test_relay_dispatcher PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GLIB_INCLUDE_DIRS}
+)
+add_test(NAME relay-dispatcher COMMAND test_relay_dispatcher)
