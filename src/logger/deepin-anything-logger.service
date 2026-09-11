@@ -7,6 +7,7 @@ Group=root
 ExecStart=/usr/libexec/deepin-anything-logger
 Restart=on-failure
 RestartSec=30
+TimeoutStopSec=3
 ProtectProc=invisible
 SupplementaryGroups=
 CapabilityBoundingSet=

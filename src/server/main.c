@@ -9,16 +9,15 @@
 
 #include "mount-monitor.h"
 #include "event-listener.h"
-#include "event-dispatcher.h"
-
-#define DISPATCHER_SOCKET_PATH "/run/deepin-anything/event-dispatcher.sock"
+#include "event-relay-dispatcher.h"
+#include "dbus-service.h"
 
 static GMainLoop *loop = NULL;
 
 static void on_file_event(gpointer user_data, fs_event *event)
 {
-    ServerEventDispatcher *dispatcher = (ServerEventDispatcher *)user_data;
-    server_event_dispatcher_push_event(dispatcher, event);
+    ServerEventRelayDispatcher *dispatcher = (ServerEventRelayDispatcher *)user_data;
+    server_event_relay_dispatcher_push_event(dispatcher, event);
 }
 
 static gboolean on_signal(gpointer user_data)
@@ -34,8 +33,9 @@ static gboolean on_signal(gpointer user_data)
 int main(G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
 {
     int ret = 0;
-    ServerEventDispatcher *dispatcher = NULL;
+    ServerEventRelayDispatcher *dispatcher = NULL;
     ServerEventListener *listener = NULL;
+    AnythingDBusService *dbus_service = NULL;
 
     setlocale(LC_ALL, "");
 
@@ -52,15 +52,27 @@ int main(G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
     g_unix_signal_add(SIGTERM, on_signal, NULL);
     g_unix_signal_add(SIGINT, on_signal, NULL);
 
-    dispatcher = server_event_dispatcher_new(DISPATCHER_SOCKET_PATH);
+    dispatcher = server_event_relay_dispatcher_new(30);
     if (!dispatcher) {
-        g_critical("Failed to create server event dispatcher");
+        g_critical("Failed to create server event relay dispatcher");
         ret = 1;
         goto quit;
     }
 
-    if (!server_event_dispatcher_start(dispatcher)) {
-        g_critical("Failed to start server event dispatcher");
+    if (!server_event_relay_dispatcher_start(dispatcher)) {
+        g_critical("Failed to start server event relay dispatcher");
+        ret = 1;
+        goto quit;
+    }
+
+    dbus_service = anything_dbus_service_new(dispatcher, loop);
+    if (!dbus_service) {
+        g_critical("Failed to create D-Bus service");
+        ret = 1;
+        goto quit;
+    }
+    if (!anything_dbus_service_start(dbus_service)) {
+        g_critical("Failed to start D-Bus service");
         ret = 1;
         goto quit;
     }
@@ -87,9 +99,13 @@ quit:
         server_event_listener_stop(listener);
         server_event_listener_free(listener);
     }
+    if (dbus_service) {
+        anything_dbus_service_stop(dbus_service);
+        anything_dbus_service_free(dbus_service);
+    }
     if (dispatcher) {
-        server_event_dispatcher_stop(dispatcher);
-        server_event_dispatcher_free(dispatcher);
+        server_event_relay_dispatcher_stop(dispatcher);
+        server_event_relay_dispatcher_free(dispatcher);
     }
     if (monitor) {
         g_object_unref(monitor);

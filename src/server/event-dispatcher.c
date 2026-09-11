@@ -169,7 +169,7 @@ static gboolean convert_fs_event(ServerEventDispatcher *dispatcher,
     case ACT_DEL_FOLDER:
     case ACT_CLOSE_WRITE_FILE:
         out->act = event->act;
-        out->src = g_strdup(event->src);
+        out->src = g_strdup(event->path);
         out->dst = g_strdup("");
         break;
 
@@ -177,7 +177,7 @@ static gboolean convert_fs_event(ServerEventDispatcher *dispatcher,
     case ACT_RENAME_FROM_FOLDER:
         g_hash_table_insert(dispatcher->rename_from,
                             GUINT_TO_POINTER(event->cookie),
-                            g_strdup(event->src));
+                            g_strdup(event->path));
         return TRUE;
 
     case ACT_RENAME_TO_FILE:
@@ -193,7 +193,7 @@ static gboolean convert_fs_event(ServerEventDispatcher *dispatcher,
                        ? ACT_RENAME_FILE : ACT_RENAME_FOLDER;
         out->cookie = event->cookie;
         out->src = g_strdup((const gchar *)from_src);
-        out->dst = g_strdup(event->src);
+        out->dst = g_strdup(event->path);
         g_hash_table_remove(dispatcher->rename_from,
                             GUINT_TO_POINTER(event->cookie));
         break;
@@ -208,7 +208,7 @@ static gboolean convert_fs_event(ServerEventDispatcher *dispatcher,
     case ACT_UNMOUNT:
         g_debug("%s: %s",
                 event->act == ACT_MOUNT ? "Mount a device" : "Unmount a device",
-                event->src);
+                event->path);
         mount_info_update(dispatcher->mount_info);
         return TRUE;
 
@@ -223,7 +223,7 @@ static gboolean convert_fs_event(ServerEventDispatcher *dispatcher,
     if (!mount_point) {
         g_debug("Unknown device: %u, dev: %u:%u, path: %s, cookie: %u",
                 (guint)event->act, event->major, (guint)event->minor,
-                event->src, event->cookie);
+                event->path, event->cookie);
         return TRUE;
     }
 

@@ -16,9 +16,8 @@ typedef struct {
     guint8      act;
     guint32     cookie;
     guint16     major;
-    guint8      minor;
-    gchar       src[MAX_PATH_LEN];
-    gchar       dst[MAX_PATH_LEN];
+    guint32     minor;
+    gchar       path[MAX_PATH_LEN];
 } fs_event;
 
 G_END_DECLS
