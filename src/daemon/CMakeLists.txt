@@ -80,6 +80,9 @@ pkg_check_modules(GMODULE REQUIRED gmodule-2.0)
 
 # Found all source files
 file(GLOB_RECURSE SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp" "${PROJECT_SOURCE_DIR}/src/*.c")
+# Exclude the unit-test sources so their main() does not end up inside the
+# daemon binary (tests/ is only wired in below via ENABLE_TESTING).
+list(FILTER SOURCE_FILES EXCLUDE REGEX "/tests/")
 list(LENGTH SOURCE_FILES SRC_FILES_SIZE)
 message(STATUS "Found ${SRC_FILES_SIZE} source files of deepin-anything-daemon")
 foreach(source_file ${SOURCE_FILES})
@@ -129,8 +132,14 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 target_link_options(${PROJECT_NAME} PRIVATE -pie)
 
 configure_file ("${PROJECT_NAME}.pc.in" "${PROJECT_NAME}.pc" @ONLY)
-install(TARGETS ${PROJECT_NAME} DESTINATION libexec)
+install(TARGETS ${PROJECT_NAME} DESTINATION libexec/deepin)
 install(FILES deepin-anything-daemon.service DESTINATION lib/systemd/user)
+# Build tests if enabled
+option(ENABLE_TESTING "Enable testing" OFF)
+if(ENABLE_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # Install dconfig meta file
 install(FILES ${CMAKE_SOURCE_DIR}/assets/org.deepin.anything.json DESTINATION share/dsg/configs/org.deepin.anything)

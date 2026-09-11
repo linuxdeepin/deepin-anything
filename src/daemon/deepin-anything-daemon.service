@@ -3,8 +3,13 @@ Description=Deepin anything daemon service
 After=udisks2.service
 
 [Service]
-ExecStart=/usr/libexec/deepin-anything-daemon
+Type=forking
+PIDFile=%t/deepin-anything-daemon.pid
+ExecStartPre=rm -f %t/deepin-anything-daemon.pid
+ExecStart=/usr/bin/deepin-security-loader --group deepin-daemon -- /usr/libexec/deepin/deepin-anything-daemon
+ExecStopPost=rm -f %t/deepin-anything-daemon.pid
 Restart=on-failure
 RestartSec=30
+TimeoutStopSec=3
 MemoryHigh=2G
 MemoryMax=3G

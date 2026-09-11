@@ -1,25 +1,25 @@
-// Copyright (C) 2024 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2024 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2024 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #ifndef ANYTHING_FS_EVENT_H_
 #define ANYTHING_FS_EVENT_H_
 
-#include <stdint.h>
+#define G_LOG_USE_STRUCTURED
+#include <glib.h>
 
 #define MAX_PATH_LEN 4096
 
 G_BEGIN_DECLS
 
-struct fs_event {
-    uint8_t     act;
-    uint32_t    cookie;
-    char        src[MAX_PATH_LEN];
-    char        dst[MAX_PATH_LEN];
-};
-
-typedef struct fs_event fs_event;
+typedef struct {
+    guint8      act;
+    guint32     cookie;
+    guint32     seq;
+    guint16     major;
+    guint32     minor;
+    gchar       path[MAX_PATH_LEN];
+} fs_event;
 
 G_END_DECLS
 
