@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <glib-unix.h>
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
 
@@ -15,10 +15,11 @@
 
 struct ServerEventListener {
     struct nl_sock *sock;
-    GIOChannel     *channel;
-    gint            source_id;
     GMainLoop      *loop;
     GThread        *thread;
+    GMutex          startup_mutex;
+    GCond           startup_cond;
+    volatile gint   started;  /* 0 = pending, 1 = success, -1 = failure */
     FileEventHandler handler;
     gpointer         user_data;
 };
@@ -85,8 +86,7 @@ static int netlink_event_handler(struct nl_msg *msg, void *arg)
     event->minor = nla_get_u8(attrs[VFSMONITOR_A_MINOR]);
 
     path = nla_get_string(attrs[VFSMONITOR_A_PATH]);
-    safe_string_copy(event->src, path, sizeof(event->src));
-    event->dst[0] = '\0';
+    safe_string_copy(event->path, path, sizeof(event->path));
 
     if (listener->handler) {
         listener->handler(listener->user_data, event);
@@ -97,7 +97,7 @@ static int netlink_event_handler(struct nl_msg *msg, void *arg)
     return NL_OK;
 }
 
-static gboolean on_netlink_readable(G_GNUC_UNUSED GIOChannel *source,
+static gboolean on_netlink_readable(G_GNUC_UNUSED gint fd,
                                     G_GNUC_UNUSED GIOCondition condition,
                                     gpointer data)
 {
@@ -161,45 +161,82 @@ static gboolean join_multicast_group(struct nl_sock *sk, const char *group_name)
     return TRUE;
 }
 
+static void signal_startup(ServerEventListener *listener, gboolean success)
+{
+    g_mutex_lock(&listener->startup_mutex);
+    g_atomic_int_set(&listener->started, success ? 1 : -1);
+    g_cond_signal(&listener->startup_cond);
+    g_mutex_unlock(&listener->startup_mutex);
+}
+
 static gpointer event_listener_thread_func(gpointer data)
 {
     ServerEventListener *listener = (ServerEventListener *)data;
+    gboolean startup_signaled = FALSE;
+    GMainLoop *loop = NULL;
 
-    listener->loop = g_main_loop_new(NULL, FALSE);
+    GMainContext *context = g_main_context_new();
+    if (!context) {
+        g_critical("Failed to create main context for event listener");
+        signal_startup(listener, FALSE);
+        return NULL;
+    }
+
+    g_main_context_push_thread_default(context);
+
+    loop = g_main_loop_new(context, FALSE);
+    if (!loop) {
+        g_critical("Failed to create main loop for event listener");
+        goto cleanup;
+    }
 
     int fd = nl_socket_get_fd(listener->sock);
     if (fd < 0) {
         g_critical("Failed to get file descriptor from netlink socket");
-        return NULL;
+        goto cleanup;
     }
 
-    listener->channel = g_io_channel_unix_new(fd);
-    if (!listener->channel) {
-        g_critical("Failed to create GIOChannel from netlink fd %d", fd);
-        return NULL;
+    GSource *fd_source = g_unix_fd_source_new(fd,
+                                               G_IO_IN | G_IO_ERR | G_IO_HUP);
+    if (!fd_source) {
+        g_critical("Failed to create unix fd source for netlink fd %d", fd);
+        goto cleanup;
     }
 
-    listener->source_id = g_io_add_watch(listener->channel,
-                                          G_IO_IN | G_IO_ERR | G_IO_HUP,
-                                          on_netlink_readable, listener->sock);
-    if (listener->source_id == 0) {
-        g_critical("Failed to add IO watch for netlink channel");
-        g_io_channel_unref(listener->channel);
-        listener->channel = NULL;
-        return NULL;
+    g_source_set_callback(fd_source,
+                          G_SOURCE_FUNC(on_netlink_readable),
+                          listener->sock, NULL);
+
+    /* Attach the source to the dedicated context; ownership transfers to the
+     * context and the source is destroyed when the context is finalized. */
+    guint id = g_source_attach(fd_source, context);
+    g_source_unref(fd_source);
+    if (id == 0) {
+        g_critical("Failed to attach unix fd source for netlink channel");
+        goto cleanup;
     }
 
+    /* Publish the loop so stop() can quit it; take an extra reference so
+     * this thread owns its own copy and can run/unref independently. */
+    g_main_loop_ref(loop);
+    listener->loop = loop;
+    signal_startup(listener, TRUE);
+    startup_signaled = TRUE;
     g_message("Event listener thread started");
-    g_main_loop_run(listener->loop);
+    g_main_loop_run(loop);
 
-    if (listener->source_id > 0) {
-        g_source_remove(listener->source_id);
-        listener->source_id = 0;
+cleanup:
+    if (!startup_signaled) {
+        signal_startup(listener, FALSE);
     }
 
-    if (listener->channel) {
-        g_io_channel_unref(listener->channel);
-        listener->channel = NULL;
+    g_main_context_pop_thread_default(context);
+
+    if (loop) {
+        g_main_loop_unref(loop);
+    }
+    if (context) {
+        g_main_context_unref(context);
     }
 
     g_message("Event listener thread stopped");
@@ -212,22 +249,23 @@ ServerEventListener *server_event_listener_new(FileEventHandler handler,
     g_return_val_if_fail(handler != NULL, NULL);
 
     ServerEventListener *listener = g_new0(ServerEventListener, 1);
+    g_mutex_init(&listener->startup_mutex);
+    g_cond_init(&listener->startup_cond);
+    g_atomic_int_set(&listener->started, 0);
     listener->handler = handler;
     listener->user_data = user_data;
 
     listener->sock = nl_socket_alloc();
     if (!listener->sock) {
         g_critical("Failed to allocate netlink socket");
-        g_free(listener);
-        return NULL;
+        goto fail;
     }
 
     int ret = genl_connect(listener->sock);
     if (ret < 0) {
         g_critical("Failed to connect to generic netlink: %s", strerror(-ret));
         nl_socket_free(listener->sock);
-        g_free(listener);
-        return NULL;
+        goto fail;
     }
 
     set_max_socket_receive_buffer_size(listener->sock);
@@ -238,8 +276,7 @@ ServerEventListener *server_event_listener_new(FileEventHandler handler,
     if (!join_multicast_group(listener->sock, VFSMONITOR_MCG_DENTRY_NAME)) {
         g_critical("Failed to join dentry multicast group");
         nl_socket_free(listener->sock);
-        g_free(listener);
-        return NULL;
+        goto fail;
     }
 
     ret = nl_socket_modify_cb(listener->sock, NL_CB_VALID, NL_CB_CUSTOM,
@@ -247,12 +284,17 @@ ServerEventListener *server_event_listener_new(FileEventHandler handler,
     if (ret < 0) {
         g_critical("Failed to set netlink callback: %s", strerror(-ret));
         nl_socket_free(listener->sock);
-        g_free(listener);
-        return NULL;
+        goto fail;
     }
 
     g_message("Event listener created successfully");
     return listener;
+
+fail:
+    g_mutex_clear(&listener->startup_mutex);
+    g_cond_clear(&listener->startup_cond);
+    g_free(listener);
+    return NULL;
 }
 
 gboolean server_event_listener_start(ServerEventListener *listener)
@@ -269,6 +311,19 @@ gboolean server_event_listener_start(ServerEventListener *listener)
                                      event_listener_thread_func, listener);
     if (!listener->thread) {
         g_critical("Failed to create event listener thread");
+        return FALSE;
+    }
+
+    g_mutex_lock(&listener->startup_mutex);
+    while (g_atomic_int_get(&listener->started) == 0)
+        g_cond_wait(&listener->startup_cond, &listener->startup_mutex);
+    gboolean ok = (g_atomic_int_get(&listener->started) == 1);
+    g_mutex_unlock(&listener->startup_mutex);
+
+    if (!ok) {
+        g_thread_join(listener->thread);
+        listener->thread = NULL;
+        g_critical("Event listener thread failed during startup");
         return FALSE;
     }
 
@@ -306,6 +361,9 @@ void server_event_listener_free(ServerEventListener *listener)
         nl_socket_free(listener->sock);
         listener->sock = NULL;
     }
+
+    g_mutex_clear(&listener->startup_mutex);
+    g_cond_clear(&listener->startup_cond);
 
     g_free(listener);
 }

@@ -1,4 +1,5 @@
 usr/libexec/deepin-anything-server
 usr/libexec/deepin-anything-logger
-/usr/lib/systemd/system/deepin-anything-logger.service
+usr/lib/systemd/system/deepin-anything-logger.service
 usr/share/dsg
+usr/share/dbus-1/system.d/org.deepin.Anything.conf
