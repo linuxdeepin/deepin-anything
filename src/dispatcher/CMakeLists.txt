@@ -11,18 +11,26 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
+pkg_check_modules(GIO REQUIRED gio-2.0)
+pkg_check_modules(GIO_UNIX REQUIRED gio-unix-2.0)
 
 add_library(deepin-anything-dispatcher STATIC
     event_dispatcher.c
     event_receiver.c
+    event_relay_dispatcher.c
+    event_relay_receiver.c
 )
 
 target_include_directories(deepin-anything-dispatcher PUBLIC
     ${GLIB_INCLUDE_DIRS}
+    ${GIO_INCLUDE_DIRS}
+    ${GIO_UNIX_INCLUDE_DIRS}
 )
 
 target_link_libraries(deepin-anything-dispatcher PUBLIC
     ${GLIB_LIBRARIES}
+    ${GIO_LIBRARIES}
+    ${GIO_UNIX_LIBRARIES}
 )
 
 # Build tests if enabled
