@@ -47,11 +47,10 @@ static void ring_rec_to_fs_event(const struct vfs_ringbuf_dentry_rec *rec,
     event->minor = rec->minor;
 
     size_t copy_len = rec->path_len;
-    if (copy_len >= sizeof(event->src))
-        copy_len = sizeof(event->src) - 1;
-    memcpy(event->src, rec->path, copy_len);
-    event->src[copy_len] = '\0';
-    event->dst[0] = '\0';
+    if (copy_len >= sizeof(event->path))
+        copy_len = sizeof(event->path) - 1;
+    memcpy(event->path, rec->path, copy_len);
+    event->path[copy_len] = '\0';
 }
 
 static void ring_drain(MmapRingBackend *backend)
@@ -120,16 +119,33 @@ static gpointer mmap_ring_thread_func(gpointer data)
     MmapRingBackend *backend = (MmapRingBackend *)data;
 
     backend->context = g_main_context_new();
+    if (backend->context == NULL) {
+        g_critical("Failed to create mmap-ring listener GMainContext");
+        return NULL;
+    }
     backend->loop = g_main_loop_new(backend->context, FALSE);
     g_main_context_push_thread_default(backend->context);
 
-    backend->source_id = g_unix_fd_add(backend->fd,
-                                       G_IO_IN | G_IO_HUP | G_IO_ERR,
-                                       on_ring_fd_ready, backend);
+    GSource *source = g_unix_fd_source_new(backend->fd,
+                                           G_IO_IN | G_IO_HUP | G_IO_ERR);
+    if (source == NULL) {
+        g_critical("Failed to create mmap-ring fd watch source");
+        goto cleanup;
+    }
+    g_source_set_callback(source,
+                          (GSourceFunc)(void (*)(void))on_ring_fd_ready,
+                          backend, NULL);
+    backend->source_id = g_source_attach(source, backend->context);
+    g_source_unref(source);
+    if (backend->source_id == 0) {
+        g_critical("Failed to attach mmap-ring fd watch to listener context");
+        goto cleanup;
+    }
 
     g_message("Mmap-ring event listener thread started");
     g_main_loop_run(backend->loop);
 
+cleanup:
     if (backend->source_id > 0) {
         g_source_remove(backend->source_id);
         backend->source_id = 0;

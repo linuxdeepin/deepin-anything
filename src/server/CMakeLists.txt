@@ -11,14 +11,13 @@ pkg_check_modules(LIBNL REQUIRED libnl-3.0 libnl-genl-3.0)
 
 add_executable(${PROJECT_NAME}
     main.c
+    dbus-service.c
     vfs-unnamed-device.c
     mount-monitor.c
     event-listener.c
     event-listener-genl.c
     event-listener-mmap-ring.c
-    event-dispatcher.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/src/core/mount_info.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/src/utils/tools.c
+    event-relay-dispatcher.c
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -29,7 +28,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${LIBNL_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/../kernelmod
     ${CMAKE_CURRENT_SOURCE_DIR}/../dispatcher
-    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/include
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -44,8 +42,16 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 target_link_options(${PROJECT_NAME} PRIVATE -pie)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION libexec)
+install(FILES org.deepin.Anything.conf DESTINATION share/dbus-1/system.d)
 # installed by debhelper
 # install(FILES deepin-anything-server.service DESTINATION lib/systemd/system)
+
+# Build tests if enabled
+option(ENABLE_TESTING "Enable testing" OFF)
+if(ENABLE_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # Build the receiver-side example (off by default).
 option(BUILD_SERVER_EXAMPLE "Build the server receiver example" OFF)

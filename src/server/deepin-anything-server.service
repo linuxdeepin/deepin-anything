@@ -3,6 +3,8 @@ Description=Deepin anything server service
 After=udisks2.service
 
 [Service]
+Type=dbus
+BusName=org.deepin.Anything
 User=root
 Group=root
 ExecStart=/usr/libexec/deepin-anything-server
@@ -10,6 +12,7 @@ ExecStartPre=modprobe vfs_monitor
 ExecStopPost=rmmod vfs_monitor
 Restart=always
 RestartSec=30
+TimeoutStopSec=3
 RuntimeDirectory=deepin-anything
 ProtectProc=invisible
 SupplementaryGroups=

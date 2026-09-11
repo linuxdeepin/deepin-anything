@@ -87,8 +87,7 @@ static int netlink_event_handler(struct nl_msg *msg, void *arg)
     event->minor = nla_get_u8(attrs[VFSMONITOR_A_MINOR]);
 
     path = nla_get_string(attrs[VFSMONITOR_A_PATH]);
-    safe_string_copy(event->src, path, sizeof(event->src));
-    event->dst[0] = '\0';
+    safe_string_copy(event->path, path, sizeof(event->path));
 
     if (backend->handler)
         backend->handler(backend->user_data, event);
@@ -167,18 +166,36 @@ static gpointer genl_backend_thread_func(gpointer data)
     GenlBackend *backend = (GenlBackend *)data;
 
     GMainContext *ctx = g_main_context_new();
+    if (ctx == NULL) {
+        g_critical("Failed to create genl listener GMainContext");
+        return NULL;
+    }
     backend->loop = g_main_loop_new(ctx, FALSE);
     g_main_context_push_thread_default(ctx);
 
     int fd = nl_socket_get_fd(backend->sock);
     backend->channel = g_io_channel_unix_new(fd);
-    backend->source_id = g_io_add_watch(backend->channel,
-                                        G_IO_IN | G_IO_ERR | G_IO_HUP,
-                                        on_netlink_readable, backend->sock);
+
+    GSource *source = g_io_create_watch(backend->channel,
+                                        G_IO_IN | G_IO_ERR | G_IO_HUP);
+    if (source == NULL) {
+        g_critical("Failed to create genl fd watch source");
+        goto cleanup;
+    }
+    g_source_set_callback(source,
+                          (GSourceFunc)(void (*)(void))on_netlink_readable,
+                          backend->sock, NULL);
+    backend->source_id = g_source_attach(source, ctx);
+    g_source_unref(source);
+    if (backend->source_id == 0) {
+        g_critical("Failed to attach genl fd watch to listener context");
+        goto cleanup;
+    }
 
     g_message("Genl event listener thread started");
     g_main_loop_run(backend->loop);
 
+cleanup:
     if (backend->source_id > 0) {
         g_source_remove(backend->source_id);
         backend->source_id = 0;

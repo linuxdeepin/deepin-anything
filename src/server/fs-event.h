@@ -15,11 +15,10 @@ G_BEGIN_DECLS
 typedef struct {
     guint8      act;
     guint32     cookie;
-    guint32    seq;
+    guint32     seq;
     guint16     major;
-    guint8      minor;
-    gchar       src[MAX_PATH_LEN];
-    gchar       dst[MAX_PATH_LEN];
+    guint32     minor;
+    gchar       path[MAX_PATH_LEN];
 } fs_event;
 
 G_END_DECLS
