@@ -1,3 +1,13 @@
+deepin-anything (7.1.0) unstable; urgency=medium
+
+  * fix(event-listener): attach fd/timer sources to thread-local context
+  * test: add server/daemon stop-start stress test script
+  * fix(dispatcher): drain socket and enlarge buffers for high-
+    throughput events
+  * fix: reconnect listener instead of waiting for dispatcher restart
+
+ -- wangrong <wangrong@uniontech.com>  Mon, 21 Sep 2026 15:39:11 +0800
+
 deepin-anything (7.0.49) unstable; urgency=medium
 
   * fix(daemon): ensure daemon exit within 3 seconds via TimeoutStopSec
