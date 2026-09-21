@@ -69,7 +69,10 @@ static void dispatch_fs_event_clear(dispatch_fs_event_t *ev)
  * getpwuid_r and resolves all paths through get_full_path so that
  * subscription prefixes match event paths produced by convert_fs_event
  * (which uses device mount points). This handles bind mounts (e.g.
- * /home/user → /data/home/user) correctly.
+ * /home/user → /data/home/user) correctly. When get_full_path fails,
+ * the expanded path is used as a fallback (matching the daemon's
+ * get_event_path in default_event_handler.cpp) so subscriptions are
+ * not silently dropped.
  *
  * Returns: (transfer full) (nullable): NULL-terminated array of
  *     fully-resolved path prefixes, or NULL if the user has no
@@ -115,24 +118,31 @@ static gchar **get_user_subscribed_cb(uid_t uid, gpointer user_data)
 
         /* Step 2: Resolve through get_full_path for bind-mount awareness.
          * All paths go through get_full_path so subscription prefixes
-         * match the event paths produced by convert_fs_event. */
+         * match the event paths produced by convert_fs_event. When
+         * get_full_path fails (path not yet mounted, device unknown, or
+         * BFS lookup miss), fall back to the expanded path — matching the
+         * daemon's get_event_path behavior in default_event_handler.cpp —
+         * so the subscription prefix is not silently dropped. */
         gchar *full = get_full_path(dispatcher->mount_info, expanded);
+        if (full == NULL) {
+            g_warning("Failed to resolve full path for %s, using expanded path as fallback",
+                      expanded);
+            full = g_strdup(expanded);
+        }
 
         /* Step 3: Ensure trailing slash for prefix matching. All
          * subscription prefixes must end with '/' so that only children
          * match (not the directory itself). get_full_path /
          * find_dir_full_path strips trailing slashes, so we always
          * re-add one. */
-        if (full && !g_str_has_suffix(full, "/")) {
+        if (!g_str_has_suffix(full, "/")) {
             gchar *with_slash = g_strconcat(full, "/", NULL);
             g_free(full);
             full = with_slash;
         }
 
         g_free(expanded);
-
-        if (full)
-            g_ptr_array_add(out, full);
+        g_ptr_array_add(out, full);
     }
 
     if (out->len == 0) {
