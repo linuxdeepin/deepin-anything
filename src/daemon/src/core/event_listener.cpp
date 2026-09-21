@@ -5,7 +5,6 @@
 #include "core/event_listener.h"
 
 #include <string.h>
-#include <sys/stat.h>
 
 #include <glib-unix.h>
 
@@ -13,8 +12,8 @@
 #include "utils/log.h"
 
 #define DISPATCHER_SOCKET_PATH "/run/deepin-anything/event-dispatcher.sock"
-#define RESTART_CHECK_INTERVAL_MS 3000
-#define MAX_RESTART_CHECKS 10
+#define RECONNECT_DELAY_MS     10000   /* 10s delay to ride out event bursts */
+#define MAX_RECONNECT_ATTEMPTS 30      /* give up and quit after this many fails */
 
 struct EventListener {
     EventReceiver           *receiver;
@@ -25,9 +24,8 @@ struct EventListener {
     EventListenerQuitCallback quit_callback;
     gpointer                 user_data;
     guint                    fd_source_id;
-    guint                    timer_source_id;
-    ino_t                    initial_sock_inode;
-    gint                     timer_check_count;
+    guint                    reconnect_timer_id;
+    gint                     reconnect_attempts;
 
     GMutex                   startup_mutex;
     GCond                    startup_cond;
@@ -48,60 +46,135 @@ static void notify_quit(EventListener *listener)
         listener->quit_callback(listener->user_data);
 }
 
-static gboolean on_restart_check(gpointer data)
+static gboolean on_fd_readable(gint fd, GIOCondition condition, gpointer data);
+
+/*
+ * Reconnect state machine — why one-shot timers instead of a single
+ * repeating GSource:
+ *
+ * A one-shot timer per attempt (create → fire → destroy → create next)
+ * trades a tiny per-10s allocation for three simplifications:
+ *
+ *   1. Success path needs no cleanup: returning G_SOURCE_REMOVE auto-
+ *      destroys the timer, so reconnection back to fd-driven mode is a
+ *      single return with no g_source_remove() branch.
+ *   2. Single reschedule point: the failure-count check, the new-timer
+ *      creation, and the id storage all live in one place (schedule_retry
+ *      below). A repeating source would split "keep going" (return value)
+ *      from "hit the cap" (in-body check), scattering the state machine.
+ *   3. stop() is trivial: at most one pending source id
+ *      (reconnect_timer_id) to remove in the cleanup block; the callback
+ *      entry immediately clears it, so the state space is minimal.
+ *
+ * The allocation cost (g_timeout_source_new + attach + unref) is paid at
+ * most once per RECONNECT_DELAY_MS (10s) — negligible on this low-frequency
+ * path.
+ */
+static gboolean on_reconnect_attempt(gpointer data)
 {
     EventListener *listener = (EventListener *)data;
 
-    listener->timer_check_count++;
+    listener->reconnect_timer_id = 0;
 
-    struct stat st;
-    ino_t current_inode = 0;
-    if (stat(DISPATCHER_SOCKET_PATH, &st) == 0)
-        current_inode = st.st_ino;
+    EventReceiver *new_receiver = event_receiver_new(DISPATCHER_SOCKET_PATH);
+    if (new_receiver != NULL) {
+        listener->receiver = new_receiver;
 
-    if (current_inode != 0 && current_inode != listener->initial_sock_inode) {
-        spdlog::info("Dispatcher socket inode changed, server has restarted");
-        listener->timer_source_id = 0;
+        int sock_fd = event_receiver_get_socket(listener->receiver);
+        if (sock_fd < 0) {
+            spdlog::error("Invalid receiver socket fd after reconnect");
+            event_receiver_free(listener->receiver);
+            listener->receiver = NULL;
+            listener->reconnect_attempts++;
+            goto schedule_retry;
+        }
+
+        GSource *fd_source = g_unix_fd_source_new(sock_fd,
+            (GIOCondition)(G_IO_IN | G_IO_HUP | G_IO_ERR));
+        if (fd_source == NULL) {
+            spdlog::error("Failed to create fd watch source for receiver socket");
+            event_receiver_free(listener->receiver);
+            listener->receiver = NULL;
+            listener->reconnect_attempts++;
+            goto schedule_retry;
+        }
+        g_source_set_priority(fd_source, G_PRIORITY_DEFAULT);
+        g_source_set_callback(fd_source,
+            (GSourceFunc)(void (*)(void))on_fd_readable, listener, NULL);
+        listener->fd_source_id = g_source_attach(fd_source, listener->context);
+        g_source_unref(fd_source);
+        if (listener->fd_source_id == 0) {
+            spdlog::error("Failed to attach fd watch to listener context");
+            event_receiver_free(listener->receiver);
+            listener->receiver = NULL;
+            listener->reconnect_attempts++;
+            goto schedule_retry;
+        }
+
+        spdlog::info("Reconnected to dispatcher: {}", DISPATCHER_SOCKET_PATH);
+        listener->reconnect_attempts = 0;
+        return G_SOURCE_REMOVE;
+    }
+
+    listener->reconnect_attempts++;
+    spdlog::warn("Reconnect attempt {}/{} failed",
+                 listener->reconnect_attempts, MAX_RECONNECT_ATTEMPTS);
+
+schedule_retry:
+    if (listener->reconnect_attempts >= MAX_RECONNECT_ATTEMPTS) {
+        spdlog::error("Giving up after {} reconnect attempts, requesting quit",
+                      MAX_RECONNECT_ATTEMPTS);
         notify_quit(listener);
         return G_SOURCE_REMOVE;
     }
 
-    if (listener->timer_check_count >= MAX_RESTART_CHECKS) {
-        spdlog::info("Dispatcher did not restart after {} checks, requesting quit",
-                     MAX_RESTART_CHECKS);
-        listener->timer_source_id = 0;
+    GSource *timer_source = g_timeout_source_new(RECONNECT_DELAY_MS);
+    if (timer_source == NULL) {
+        spdlog::warn("Failed to create reconnect timer, quitting immediately");
         notify_quit(listener);
         return G_SOURCE_REMOVE;
     }
+    g_source_set_callback(timer_source, on_reconnect_attempt, listener, NULL);
+    listener->reconnect_timer_id = g_source_attach(timer_source, listener->context);
+    g_source_unref(timer_source);
 
-    return G_SOURCE_CONTINUE;
+    if (listener->reconnect_timer_id == 0) {
+        spdlog::warn("Failed to attach reconnect timer, quitting immediately");
+        notify_quit(listener);
+    }
+
+    return G_SOURCE_REMOVE;
 }
 
-static void start_restart_check(EventListener *listener)
+static void start_reconnect(EventListener *listener)
 {
-    struct stat st;
-    listener->initial_sock_inode = 0;
-    if (stat(DISPATCHER_SOCKET_PATH, &st) == 0)
-        listener->initial_sock_inode = st.st_ino;
+    /* The old fd source has already returned G_SOURCE_REMOVE, so it is
+     * destroyed by the main loop.  Free the stale receiver and schedule a
+     * delayed reconnect to avoid hammering the dispatcher during an event
+     * burst. */
+    if (listener->receiver != NULL) {
+        event_receiver_free(listener->receiver);
+        listener->receiver = NULL;
+    }
 
-    listener->timer_check_count = 0;
+    listener->reconnect_attempts = 0;
 
-    GSource *timer_source = g_timeout_source_new(RESTART_CHECK_INTERVAL_MS);
+    GSource *timer_source = g_timeout_source_new(RECONNECT_DELAY_MS);
     if (timer_source == NULL) {
-        spdlog::warn("Failed to create restart check timer, quitting immediately");
+        spdlog::warn("Failed to create reconnect timer, quitting immediately");
         notify_quit(listener);
         return;
     }
-    g_source_set_callback(timer_source, on_restart_check, listener, NULL);
-    listener->timer_source_id = g_source_attach(timer_source, listener->context);
+    g_source_set_callback(timer_source, on_reconnect_attempt, listener, NULL);
+    listener->reconnect_timer_id = g_source_attach(timer_source, listener->context);
     g_source_unref(timer_source);
 
-    if (listener->timer_source_id == 0) {
-        spdlog::warn("Failed to attach restart check timer, quitting immediately");
+    if (listener->reconnect_timer_id == 0) {
+        spdlog::warn("Failed to attach reconnect timer, quitting immediately");
         notify_quit(listener);
     } else {
-        spdlog::info("Waiting for dispatcher restart (checking every {}ms, "
-                     "up to {} times)", RESTART_CHECK_INTERVAL_MS, MAX_RESTART_CHECKS);
+        spdlog::info("Connection lost, will reconnect in {}ms",
+                     RECONNECT_DELAY_MS);
     }
 }
 
@@ -114,7 +187,7 @@ static gboolean on_fd_readable(G_GNUC_UNUSED gint fd,
     if ((condition & (G_IO_HUP | G_IO_ERR)) != 0) {
         spdlog::info("Dispatcher connection lost");
         listener->fd_source_id = 0;
-        start_restart_check(listener);
+        start_reconnect(listener);
         return G_SOURCE_REMOVE;
     }
 
@@ -149,12 +222,12 @@ static gboolean on_fd_readable(G_GNUC_UNUSED gint fd,
         case EVENT_RECEIVE_DISCONNECTED:
             spdlog::info("Dispatcher closed the connection");
             listener->fd_source_id = 0;
-            start_restart_check(listener);
+            start_reconnect(listener);
             return G_SOURCE_REMOVE;
         case EVENT_RECEIVE_ERROR:
             spdlog::warn("Failed to receive event");
             listener->fd_source_id = 0;
-            start_restart_check(listener);
+            start_reconnect(listener);
             return G_SOURCE_REMOVE;
         default:
             continue;
@@ -225,9 +298,9 @@ cleanup:
         g_source_remove(listener->fd_source_id);
         listener->fd_source_id = 0;
     }
-    if (listener->timer_source_id > 0) {
-        g_source_remove(listener->timer_source_id);
-        listener->timer_source_id = 0;
+    if (listener->reconnect_timer_id > 0) {
+        g_source_remove(listener->reconnect_timer_id);
+        listener->reconnect_timer_id = 0;
     }
     if (listener->receiver != NULL) {
         event_receiver_free(listener->receiver);
@@ -255,12 +328,11 @@ EventListener *event_listener_new(EventListenerCallback callback,
 
     EventListener *listener = g_new0(EventListener, 1);
     listener->callback = callback;
-    listener->quit_callback = quit_callback;
     listener->user_data = user_data;
+    listener->quit_callback = quit_callback;
     listener->fd_source_id = 0;
-    listener->timer_source_id = 0;
-    listener->initial_sock_inode = 0;
-    listener->timer_check_count = 0;
+    listener->reconnect_timer_id = 0;
+    listener->reconnect_attempts = 0;
     g_atomic_int_set(&listener->started, 0);
     g_mutex_init(&listener->startup_mutex);
     g_cond_init(&listener->startup_cond);

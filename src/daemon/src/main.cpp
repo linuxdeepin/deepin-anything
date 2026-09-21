@@ -22,8 +22,8 @@ static void on_event_received(gpointer user_data, fs_event *event) {
 
 static void on_quit_requested(gpointer user_data) {
     (void)user_data;
-    spdlog::info("Event listener disconnected, requesting restart");
-    set_app_restart(true);
+    spdlog::info("Event listener disconnected after exhausting reconnects, exit");
+    set_app_restart(false);
     qApp->quit();
 }
 }
