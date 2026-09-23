@@ -6,13 +6,9 @@ Build-Depends:
   cmake,
   debhelper (>= 10),
   dh-dkms | dkms,
-  qt6-base-dev | qtbase5-dev,
   pkg-config,
   libnl-genl-3-dev,
-  liblucene++-dev,
   libmount-dev,
-  libboost-filesystem-dev,
-  libspdlog-dev,
   libglib2.0-dev,
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything

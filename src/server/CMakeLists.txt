@@ -15,8 +15,8 @@ add_executable(${PROJECT_NAME}
     mount-monitor.c
     event-listener.c
     event-dispatcher.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/src/core/mount_info.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/src/utils/tools.c
+    mount_info.c
+    tools.c
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -27,7 +27,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${LIBNL_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/../kernelmod
     ${CMAKE_CURRENT_SOURCE_DIR}/../dispatcher
-    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon/include
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE

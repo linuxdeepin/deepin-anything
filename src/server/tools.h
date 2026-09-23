@@ -7,7 +7,7 @@
 #define ANYTHING_TOOLS_H_
 
 #include <stdint.h>
-#include "core/mount_info.h"
+#include "mount_info.h"
 
 #ifdef __cplusplus
 extern "C" {
