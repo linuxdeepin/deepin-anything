@@ -14,8 +14,8 @@
 
 #include "vfs_change_consts.h"
 #include "event_dispatcher.h"
-#include "core/mount_info.h"
-#include "utils/tools.h"
+#include "mount_info.h"
+#include "tools.h"
 
 #define ACT_TERMINATE 100
 #define ACT_WAKEUP    101
