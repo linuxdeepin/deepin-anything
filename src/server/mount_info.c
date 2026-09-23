@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "core/mount_info.h"
+#include "mount_info.h"
 #include <libmount/libmount.h>
 #include <sys/sysmacros.h>
 
