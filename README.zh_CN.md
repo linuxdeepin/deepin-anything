@@ -8,14 +8,20 @@ anything 的开发源自于 Windows 下的 everything，它致力于为 Linux �
 
 *当前的开发分支为**master**，编译依赖可能会在没有更新本说明的情况下发生变化，请参考`./debian/control`以获取构建依赖项列表*。
 
-- debhelper (>= 9)
+- debhelper (>= 10)
 - dkms
-- qtbase5-dev
 - pkg-config
-- libudisks2-qt5-dev
+- libnl-genl-3-dev
 - libmount-dev
 - libglib2.0-dev
-- libpcre3-dev
+- qt6-base-dev
+- liblucene++-dev
+- libdtk6core-dev
+- libdfm6-search-dev
+- libkf6idletime-dev
+- libdocparser-dev
+- libdtk6ocr-dev
+- libgtest-dev
 
 ## 安装
 

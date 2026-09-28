@@ -22,7 +22,7 @@ SPDX-FileCopyrightText = "None"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
-path = ["**Makefile", "**CMakeLists.txt"]
+path = ["**Makefile", "**CMakeLists.txt", "**.cmake"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "None"
 SPDX-License-Identifier = "CC0-1.0"
@@ -80,3 +80,21 @@ path = "assets/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "UnionTech Software Technology Co., Ltd."
 SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "3rdparty/testutils/cpp-stub/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2019 coolxv"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "3rdparty/testutils/stub-ext/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 UnionTech Software Technology Co., Ltd."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["3rdparty/testutils/dfm_asan_helper.h", "3rdparty/testutils/dfm_test_main.h"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 UnionTech Software Technology Co., Ltd."
+SPDX-License-Identifier = "GPL-3.0-or-later"

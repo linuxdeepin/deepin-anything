@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.deepin.Filemanager.TextIndex
+Exec=/usr/bin/deepin-anything-index
+SystemdService=deepin-anything-index.service

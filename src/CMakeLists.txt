@@ -14,9 +14,13 @@ message("Build type:" ${CMAKE_BUILD_TYPE})
 # add_compile_options(-fsanitize=thread -g)
 # add_link_options(-fsanitize=thread)
 
-add_compile_options(-Wall -Wextra -pedantic -Werror)
-
+# C subprojects (strict warnings; each sets its own flags)
 add_subdirectory("server")
 add_subdirectory("kernelmod")
 add_subdirectory("logger")
 add_subdirectory("dispatcher")
+
+# C++ subprojects (Qt-based; they define their own warning policy)
+add_subdirectory("common")
+add_subdirectory("extractor")
+add_subdirectory("index")
