@@ -1,0 +1,7 @@
+usr/bin/deepin-anything-index
+usr/libexec/deepin-anything-extractor
+usr/lib/*/deepin-anything/extractor/plugins/*
+usr/lib/*/libdeepin-anything-extractor.so*
+usr/lib/systemd/user/deepin-anything-index.service
+usr/share/dbus-1/services/org.deepin.Filemanager.TextIndex.service
+usr/share/deepin-anything-index/pinyin.txt

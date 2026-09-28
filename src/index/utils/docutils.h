@@ -1,0 +1,29 @@
+// SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#ifndef DOCUTILS_H
+#define DOCUTILS_H
+
+#include "index_global.h"
+
+#include <lucene++/LuceneHeaders.h>
+
+ANYTHING_INDEX_BEGIN_NAMESPACE
+
+namespace DocUtils {
+
+/**
+ * @brief Copy all fields from source document except the specified excluded fields
+ * @param sourceDoc Source document to copy from
+ * @param excludeFieldNames Field names to exclude from copying
+ * @return New document with copied fields
+ */
+Lucene::DocumentPtr copyFieldsExcept(const Lucene::DocumentPtr &sourceDoc,
+                                     const std::vector<Lucene::String> &excludeFieldNames);
+
+}   // namespace DocUtils
+
+ANYTHING_INDEX_END_NAMESPACE
+
+#endif   // DOCUTILS_H

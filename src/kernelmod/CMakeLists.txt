@@ -9,7 +9,7 @@ endif()
 
 set(package_name "deepin-anything-${PROJECT_VERSION}")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -O3")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Wextra -pedantic -Werror -O3")
 
  # Set the source files
 # set(SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*)

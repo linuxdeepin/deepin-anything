@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.10)
 
 project(deepin-anything-logger C)
 
+add_compile_options(-Wall -Wextra -pedantic -Werror)
+
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 

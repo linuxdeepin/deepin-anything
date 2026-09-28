@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.1)
 
 project(deepin-anything-server)
 
+add_compile_options(-Wall -Wextra -pedantic -Werror)
+
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GIO REQUIRED gio-2.0)
