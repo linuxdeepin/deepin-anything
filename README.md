@@ -8,14 +8,20 @@ The development of anything is derived from everything under Windows, and it is 
 
 *The current development branch is **master**, build dependencies may change without updating this description, please refer to `./debian/control` for a list of build dependencies*.
 
-- debhelper (>= 9)
+- debhelper (>= 10)
 - dkms
-- qtbase5-dev
 - pkg-config
-- libudisks2-qt5-dev
+- libnl-genl-3-dev
 - libmount-dev
 - libglib2.0-dev
-- libpcre3-dev
+- qt6-base-dev
+- liblucene++-dev
+- libdtk6core-dev
+- libdfm6-search-dev
+- libkf6idletime-dev
+- libdocparser-dev
+- libdtk6ocr-dev
+- libgtest-dev
 
 ## Installation
 

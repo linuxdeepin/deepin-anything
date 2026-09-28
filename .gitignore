@@ -13,7 +13,7 @@ deepin-anything-server
 
 debug
 release
-build*
+build*/
 
 vendor/include/*
 vendor/lib/*

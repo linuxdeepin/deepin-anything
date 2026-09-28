@@ -10,6 +10,15 @@ Build-Depends:
   libnl-genl-3-dev,
   libmount-dev,
   libglib2.0-dev,
+  qt6-base-dev,
+  liblucene++-dev (>= 3.0.8-deepin5),
+  libboost-filesystem-dev,
+  libdtk6core-dev,
+  libdfm6-search-dev,
+  libkf6idletime-dev,
+  libdocparser-dev,
+  libdtk6ocr-dev,
+  libgtest-dev
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
 
@@ -24,3 +33,13 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Deepin Anything server package
  This is the server part of Deepin Anything, which includes core functionality for the application.
+
+Package: deepin-anything-index
+Architecture: any
+Depends: deepin-anything-server,
+         ${shlibs:Depends}, ${misc:Depends}
+Replaces: dde-file-manager (<< 6.6.7)
+Description: deepin desktop-environment - anything index service
+ User-level D-Bus activated index service migrated from dde-file-manager
+ textindex, together with its private content extractor subprocess
+ deepin-anything-extractor.

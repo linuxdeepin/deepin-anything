@@ -1,0 +1,16 @@
+[Unit]
+Description=Deepin Anything Index Service
+After=dbus.service
+
+[Service]
+Type=dbus
+BusName=org.deepin.Filemanager.TextIndex
+ExecStart=/usr/bin/deepin-anything-index
+Slice=session.slice
+Restart=on-failure
+RestartSec=5s
+MemoryAccounting=yes
+MemoryHigh=900M
+MemoryMax=2G
+
+# No [Install]: the unit is pulled on demand through D-Bus activation only.
