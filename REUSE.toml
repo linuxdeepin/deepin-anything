@@ -46,25 +46,7 @@ SPDX-FileCopyrightText = "None"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
-path = "rpm/**"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "None"
-SPDX-License-Identifier = "CC0-1.0"
-
-[[annotations]]
 path = ["debian/**", "examples/**/debian/**"]
-precedence = "aggregate"
-SPDX-FileCopyrightText = "None"
-SPDX-License-Identifier = "CC0-1.0"
-
-[[annotations]]
-path = "archlinux/**"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "None"
-SPDX-License-Identifier = "CC0-1.0"
-
-[[annotations]]
-path = ["3rdparty/fsearch/thread_pool.c", "3rdparty/fsearch/thread_pool.h"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "None"
 SPDX-License-Identifier = "CC0-1.0"
