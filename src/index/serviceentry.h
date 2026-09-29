@@ -9,7 +9,7 @@ namespace anything_index {
 
 // Registers the three D-Bus service names (org.deepin.Filemanager.TextIndex /
 // OcrIndex / FileNameIndex), creates the three D-Bus objects and lowers the
-// process priority. Returns 0 on success, matching the old DSMRegister contract.
+// process priority. Returns 0 on success, -1 if any DBus registration fails.
 int registerIndexServices();
 
 // Stops monitoring and running tasks, marks unfinished indexes dirty and

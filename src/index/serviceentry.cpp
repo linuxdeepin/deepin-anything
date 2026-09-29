@@ -28,19 +28,22 @@ int registerIndexServices()
     qDBusRegisterMetaType<QHash<QString, QString>>();
 
     QDBusConnection bus = QDBusConnection::sessionBus();
-    if (!bus.registerService(Defines::kTextIndexDBusService)
-        && bus.lastError().type() != QDBusError::NoError) {
-        qWarning() << "deepin-anything-index: failed to register text index DBus service:" << bus.lastError().message();
+    if (!bus.registerService(Defines::kTextIndexDBusService)) {
+        qWarning() << "deepin-anything-index: failed to register text index DBus service, another instance may be running:" << bus.lastError().message();
+        return -1;
     }
 
-    if (!bus.registerService(Defines::kOcrIndexDBusService)
-        && bus.lastError().type() != QDBusError::NoError) {
-        qWarning() << "deepin-anything-index: failed to register OCR index DBus service:" << bus.lastError().message();
+    if (!bus.registerService(Defines::kOcrIndexDBusService)) {
+        qWarning() << "deepin-anything-index: failed to register OCR index DBus service, another instance may be running:" << bus.lastError().message();
+        bus.unregisterService(Defines::kTextIndexDBusService);
+        return -1;
     }
 
-    if (!bus.registerService(Defines::kFileNameIndexDBusService)
-        && bus.lastError().type() != QDBusError::NoError) {
-        qWarning() << "deepin-anything-index: failed to register filename index DBus service:" << bus.lastError().message();
+    if (!bus.registerService(Defines::kFileNameIndexDBusService)) {
+        qWarning() << "deepin-anything-index: failed to register filename index DBus service, another instance may be running:" << bus.lastError().message();
+        bus.unregisterService(Defines::kOcrIndexDBusService);
+        bus.unregisterService(Defines::kTextIndexDBusService);
+        return -1;
     }
 
     textIndexDBus = new TextIndexDBus();
