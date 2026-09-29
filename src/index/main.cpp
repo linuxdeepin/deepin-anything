@@ -39,7 +39,10 @@ int main(int argc, char *argv[])
     QGuiApplication::setApplicationName("deepin-anything-index");
     QGuiApplication::setApplicationVersion("1.0.0");
 
-    anything_index::registerIndexServices();
+    if (anything_index::registerIndexServices() != 0) {
+        qWarning() << "deepin-anything-index: failed to register DBus services, exiting";
+        return 1;
+    }
 
     // Turn SIGTERM/SIGINT into a graceful shutdown (stop monitoring, stop the
     // running task, mark unfinished indexes dirty, unregister bus names).

@@ -11,10 +11,28 @@
 #include <QDir>
 #include <QDBusConnection>
 #include <QDebug>
+#include <QFile>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 ANYTHING_INDEX_USE_NAMESPACE
 
 namespace {
+
+// Sentinel file used to detect abnormal service exit (SIGKILL, crash, OOM).
+// Created at startup, removed during normal cleanup(). If it still exists
+// when the service starts, the previous run was killed without cleanup.
+inline constexpr char kSentinelFileName[] = ".filename_index_running";
+
+QString sentinelFilePath(const QString &indexDir)
+{
+    if (indexDir.isEmpty()) {
+        return QString();
+    }
+
+    return indexDir + QLatin1Char('/') + QLatin1String(kSentinelFileName);
+}
 
 QStringList defaultPathsToProcess()
 {
@@ -42,6 +60,32 @@ void FileNameIndexDBusPrivate::initialize()
     // DBus "Init" method called by the daemon; now it is set at construction
     // time because the service process is always started fresh by the daemon.
     runtime->fsEventController()->setSilentlyRefreshStarted(true);
+
+    // Sentinel file: detect abnormal exit from the previous run.
+    // On normal shutdown cleanup() removes the sentinel. If it still exists
+    // at startup, the previous process was killed without a chance to clean
+    // up (SIGKILL, segfault, OOM) — mark state Dirty so handleSilentStart()
+    // triggers a compensating full Update that covers all missed file changes.
+    const QString indexDir = runtime->profile().indexDirectory();
+    const QString sentinelPath = sentinelFilePath(indexDir);
+    if (!sentinelPath.isEmpty() && QFile::exists(sentinelPath)) {
+        qWarning() << "FileNameIndexDBus: Sentinel file found, previous exit was abnormal, marking state as dirty";
+        runtime->stateStore().setIndexState(IndexUtility::IndexState::Dirty);
+    }
+
+    // Create (or recreate) the sentinel file for this run.
+    // Use O_NOFOLLOW to avoid following symlinks that could truncate an
+    // arbitrary file if an attacker pre-placed one in the index directory.
+    if (!indexDir.isEmpty()) {
+        QDir().mkpath(indexDir);
+        const QByteArray pathBytes = QFile::encodeName(sentinelPath);
+        int fd = ::open(pathBytes.constData(), O_CREAT | O_WRONLY | O_NOFOLLOW | O_TRUNC, 0644);
+        if (fd >= 0) {
+            ::close(fd);
+        } else {
+            qWarning() << "FileNameIndexDBus: Failed to create sentinel file:" << sentinelPath;
+        }
+    }
 
     // Check for dirty state at startup and set recovery pending flag
     // This must be done before any incremental task can complete and clear the Dirty state
@@ -209,6 +253,14 @@ void FileNameIndexDBus::cleanup()
     }
 
     StopCurrentTask();
+
+    // Remove sentinel file on normal exit so the next startup knows
+    // the previous shutdown was clean.
+    const QString indexDir = d->runtime->profile().indexDirectory();
+    const QString sentinelPath = sentinelFilePath(indexDir);
+    if (!sentinelPath.isEmpty() && QFile::exists(sentinelPath) && !QFile::remove(sentinelPath)) {
+        qWarning() << "FileNameIndexDBus: Failed to remove sentinel file:" << sentinelPath;
+    }
 }
 
 bool FileNameIndexDBus::IsEnabled()
