@@ -58,6 +58,15 @@ public:
     bool hasQueuedTasks() const;
     void stopCurrentTask();
 
+    // Attempt to complete all pending tasks within a bounded timeout.
+    // Uses a drain loop: wait for the running task via
+    // workerThread.quit()+wait() (no QEventLoop, no re-entrancy), then
+    // call schedule() to start the next queued task, repeating until the
+    // queue is empty or the timeout expires.  Returns true if all tasks
+    // completed and the queue is empty, false on timeout, when the backlog
+    // exceeds the flush threshold, or when no task can be started.
+    bool flushPendingTasks(int timeoutMs);
+
     std::optional<IndexTask::Type> currentTaskType() const;
     std::optional<QString> currentTaskPath() const;
     std::optional<IndexTask::Grade> currentTaskGrade() const;

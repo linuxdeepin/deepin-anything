@@ -17,6 +17,7 @@
 #include <QDateTime>
 #include <QFileInfo>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QDebug>
 
 ANYTHING_INDEX_USE_NAMESPACE
@@ -1098,6 +1099,103 @@ void TaskManager::stopCurrentTask()
     } else {
         qDebug() << "[TaskManager::stopCurrentTask] No current task to stop";
     }
+}
+
+bool TaskManager::flushPendingTasks(int timeoutMs)
+{
+    if (!hasRunningTask() && !hasQueuedTasks())
+        return true;
+
+    // Give up early when the backlog is too large — flushing would block
+    // shutdown for too long.  The threshold matches the default value of
+    // DConfig key pending_events_trigger_updating (see
+    // FilenameBacklogTracker::threshold()).
+    constexpr qint64 kFlushThreshold = 5000;
+    if (queuedIncrementalCount() > kFlushThreshold)
+        return false;
+
+    qWarning() << "[TaskManager::flushPendingTasks] Flushing pending tasks on service exit -"
+               << "running:" << hasRunningTask()
+               << "queued:" << taskQueue.size();
+
+    QElapsedTimer timer;
+    timer.start();
+
+    // Drain loop: wait for each task to finish, then start the next queued
+    // one, repeating until the queue is empty or the timeout expires.
+    //
+    // schedule() is a regular member-function call (not event-loop driven),
+    // so it works even while the main thread is not running a QEventLoop.
+    // After each wait() returns, we manually finalize the completed task
+    // (onTaskFinished was a QueuedConnection and was NOT processed while the
+    // main thread was blocked), then call schedule() to launch the next
+    // queued task.  launchTask() restarts the worker thread via
+    // workerThread.start(), so the thread lifecycle is managed correctly.
+    while (hasRunningTask() || hasQueuedTasks()) {
+        if (!hasRunningTask()) {
+            // No task running — try to start the next queued one.
+            // schedule() picks the best runnable task and calls
+            // startQueuedTask() → launchTask() which restarts the worker
+            // thread.  If no task can run (e.g., environment blocked or
+            // index not ready), stop draining and let caller mark Dirty.
+            schedule();
+            if (!hasRunningTask())
+                break;
+        }
+
+        const int remaining = static_cast<int>(timeoutMs - timer.elapsed());
+        if (remaining <= 0) {
+            qWarning() << "[TaskManager::flushPendingTasks] Timeout expired,"
+                       << "queued tasks remain:" << taskQueue.size();
+            return false;
+        }
+
+        // Let the currently running task finish naturally.  quit() posts a
+        // quit event to the worker thread's event loop — the currently
+        // executing handler (doTask → m_handler) completes first, then the
+        // loop processes the quit event and the thread exits.  wait()
+        // blocks the main thread with a plain blocking syscall (no
+        // QEventLoop), so there is zero risk of re-entrancy from socket
+        // notifiers, DBus events, or any other source.
+        workerThread.quit();
+        if (!workerThread.wait(remaining)) {
+            qWarning() << "[TaskManager::flushPendingTasks] Timed out waiting"
+                       << "for running task to finish, queued tasks remain:"
+                       << taskQueue.size();
+            return false;
+        }
+
+        // The task finished, but onTaskFinished (a QueuedConnection) was NOT
+        // processed because the main thread was blocked in wait().  Manually
+        // run the same success bookkeeping as onTaskFinished (status update +
+        // finalize), then clean up via cleanupTask() which disconnects the
+        // receiver-side startTaskInThread→start connection, posts
+        // deleteLater, nulls currentTask, and updates backlog state —
+        // preventing a stale onTaskFinished and avoiding connection leaks.
+        if (currentTask) {
+            const auto type = currentTask->taskType();
+            const bool succeeded = (currentTask->status() == IndexTask::Status::Finished);
+
+            if (succeeded) {
+                HandlerResult result;
+                result.success = true;
+                result.indexChanged = true;
+                updateIndexStatusOnSuccess(type, result);
+                finalizeIndexState(type, result);
+            }
+
+            // Disconnect sender-side signals (progressChanged, finished,
+            // paused) so the queued onTaskFinished never fires after the
+            // main thread resumes event processing.
+            currentTask->disconnect();
+            // cleanupTask() handles the receiver-side startTaskInThread→start
+            // disconnect, deleteLater, nulling currentTask, resetting
+            // m_currentIncrementalPending, and updateBacklogState().
+            cleanupTask();
+        }
+    }
+
+    return !hasQueuedTasks();
 }
 
 std::optional<IndexTask::Type> TaskManager::currentTaskType() const
