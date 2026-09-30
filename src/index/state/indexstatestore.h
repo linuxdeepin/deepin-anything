@@ -205,6 +205,30 @@ public:
     void setBacklogExceeded(bool exceeded) const;
 
     /**
+     * @brief 读取用户禁用标志
+     * @return true 表示 filename 索引已被用户停用（无维护契约）
+     *
+     * 与其它标志不同，本标志表达的是"用户意图"而非任务状态：
+     * - SetEnabled(false) 时置 true（索引冻结：监控停止、任务停止、恢复 Update 不触发）
+     * - SetEnabled(true) 时清除
+     * - 正常关机（cleanup）不经过该路径，不会误标
+     *
+     * 禁用窗口内 status.json 的其余字段描述的是一个无人维护却看似健康的索引，
+     * 数据源类判定（isFileNameIndexUsableAsDataSource）必须结合本标志才能免于被欺。
+     * 字段缺失时默认返回 false（旧版遗留文件或文件不存在）。
+     */
+    bool isDisabled() const;
+
+    /**
+     * @brief 设置用户禁用标志并持久化
+     * @param disabled 用户是否已停用 filename 索引
+     *
+     * 采用 read-modify-write 模式：先读取整个 JSON，更新字段，再写回。
+     * 不破坏文件中的其他字段。
+     */
+    void setDisabled(bool disabled) const;
+
+    /**
      * @brief 获取上次更新时间
      * @return 格式化时间字符串 "yyyy-MM-dd hh:mm:ss"，文件不存在时返回空字符串
      */

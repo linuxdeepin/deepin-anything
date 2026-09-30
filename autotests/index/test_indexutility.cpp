@@ -9,18 +9,24 @@
 
 #include <gtest/gtest.h>
 #include <QTemporaryDir>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 
 #include "index_global.h"
 #include "utils/indexutility.h"
+#include "stubext.h"
+#include <dfm-search/dsearch_global.h>
 #include <QList>
 #include <QObject>
 #include "dfm_test_main.h"
 
 using namespace ANYTHING_INDEX_NAMESPACE;
+using namespace DFMSEARCH;
 
 TEST(IndexUtilityTest, NormalizeDirectoryPathAddsTrailingSlash)
 {
@@ -118,6 +124,122 @@ TEST(IndexUtilityTest, IsDefaultIndexedDirectory)
 TEST(IndexUtilityTest, IsIndexWithAnything)
 {
     EXPECT_NO_FATAL_FAILURE({ (void)IndexUtility::isIndexWithAnything("/no/such/dir"); });
+}
+
+// ---------------------------------------------------------------------------
+// isFileNameIndexUsableAsDataSource: the watch-seeding / file-enumeration
+// predicate. Deliberately weaker than isFileNameIndexReadyForSearch — only
+// createInProgress / disabled / never-built / version-mismatch block.
+// ---------------------------------------------------------------------------
+
+class FileNameIndexUsableTest : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        ASSERT_TRUE(tmp.isValid());
+        stub.set_lamda(ADDR(DFMSEARCH::Global, fileNameIndexDirectory),
+                       [this]() -> QString {
+                           __DBG_STUB_INVOKE__
+                           return tmp.path() + "/filename-index";
+                       });
+        stub.set_lamda(ADDR(DFMSEARCH::Global, isFileNameIndexDirectoryAvailable),
+                       []() -> bool {
+                           __DBG_STUB_INVOKE__
+                           return true;
+                       });
+    }
+
+    void writeStatus(const QJsonObject &obj)
+    {
+        const QString dir = tmp.path() + "/filename-index";
+        QDir().mkpath(dir);
+        QFile f(dir + "/index_status.json");
+        ASSERT_TRUE(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write(QJsonDocument(obj).toJson());
+        f.close();
+    }
+
+    static QJsonObject readyStatus()
+    {
+        return QJsonObject {
+            { "version", Defines::kFilenameIndexVersion },
+            { "lastUpdateTime", "2026-09-30T10:00:00" },
+            { "state", "clean" }
+        };
+    }
+
+    QTemporaryDir tmp;
+    stub_ext::StubExt stub;
+};
+
+TEST_F(FileNameIndexUsableTest, MissingStatusFileBlocks)
+{
+    EXPECT_FALSE(IndexUtility::isFileNameIndexUsableAsDataSource());
+}
+
+TEST_F(FileNameIndexUsableTest, ReadyIndexPasses)
+{
+    writeStatus(readyStatus());
+    EXPECT_TRUE(IndexUtility::isFileNameIndexUsableAsDataSource());
+}
+
+TEST_F(FileNameIndexUsableTest, EmptyLastUpdateTimeBlocks)
+{
+    QJsonObject obj = readyStatus();
+    obj.remove("lastUpdateTime");
+    writeStatus(obj);
+    EXPECT_FALSE(IndexUtility::isFileNameIndexUsableAsDataSource());
+}
+
+TEST_F(FileNameIndexUsableTest, VersionMismatchBlocks)
+{
+    QJsonObject obj = readyStatus();
+    obj["version"] = Defines::kFilenameIndexVersion + 1;
+    writeStatus(obj);
+    EXPECT_FALSE(IndexUtility::isFileNameIndexUsableAsDataSource());
+}
+
+TEST_F(FileNameIndexUsableTest, CreateInProgressBlocks)
+{
+    QJsonObject obj = readyStatus();
+    obj["createInProgress"] = true;
+    writeStatus(obj);
+    EXPECT_FALSE(IndexUtility::isFileNameIndexUsableAsDataSource());
+}
+
+TEST_F(FileNameIndexUsableTest, DisabledBlocks)
+{
+    QJsonObject obj = readyStatus();
+    obj["disabled"] = true;
+    writeStatus(obj);
+    EXPECT_FALSE(IndexUtility::isFileNameIndexUsableAsDataSource());
+}
+
+TEST_F(FileNameIndexUsableTest, UpdateInProgressStillPasses)
+{
+    // Recovery/rebuild update: index substantially complete, must NOT
+    // degrade watch seeding to filesystem traversal
+    QJsonObject obj = readyStatus();
+    obj["updateInProgress"] = true;
+    writeStatus(obj);
+    EXPECT_TRUE(IndexUtility::isFileNameIndexUsableAsDataSource());
+}
+
+TEST_F(FileNameIndexUsableTest, BacklogExceededStillPasses)
+{
+    QJsonObject obj = readyStatus();
+    obj["backlogExceeded"] = true;
+    writeStatus(obj);
+    EXPECT_TRUE(IndexUtility::isFileNameIndexUsableAsDataSource());
+}
+
+TEST_F(FileNameIndexUsableTest, DirtyStateStillPasses)
+{
+    QJsonObject obj = readyStatus();
+    obj["state"] = "dirty";
+    writeStatus(obj);
+    EXPECT_TRUE(IndexUtility::isFileNameIndexUsableAsDataSource());
 }
 
 TEST(IndexUtilityTest, AnythingConfigWatcherInstance)

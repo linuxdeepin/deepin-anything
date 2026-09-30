@@ -197,6 +197,19 @@ void IndexStateStore::setBacklogExceeded(bool exceeded) const
     writeStatusJson(statusFilePath(), obj);
 }
 
+bool IndexStateStore::isDisabled() const
+{
+    const QJsonObject obj = readStatusJson(statusFilePath());
+    return obj.value(Defines::kDisabledKey).toBool(false);
+}
+
+void IndexStateStore::setDisabled(bool disabled) const
+{
+    QJsonObject obj = readStatusJson(statusFilePath());
+    obj[Defines::kDisabledKey] = disabled;
+    writeStatusJson(statusFilePath(), obj);
+}
+
 QString IndexStateStore::getLastUpdateTime() const
 {
     const QJsonObject obj = readStatusJson(statusFilePath());
