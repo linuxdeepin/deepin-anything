@@ -609,7 +609,7 @@ int VfsMonitorFileSystemWatcherPrivate::connectDispatcherSocket()
     // (default ~416 KiB ≈ ~100 packets of 4 KB) — buffer sizes alone can
     // never absorb a burst of thousands of events, which is why draining
     // happens on the dedicated reader thread instead.
-    constexpr int kReceiveBufSize = 4 << 20;
+    constexpr int kReceiveBufSize = 8 << 20;
     if (::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &kReceiveBufSize,
                      sizeof(kReceiveBufSize)) < 0) {
         qDebug() << "VfsMonitor: setsockopt(SO_RCVBUF) failed:" << std::strerror(errno);

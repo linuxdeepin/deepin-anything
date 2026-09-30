@@ -172,7 +172,7 @@ static gboolean accept_one(EventDispatcher *dispatcher)
 
     /* Enlarge send buffer so bursts of 4 KB events don't cause EAGAIN
      * (which currently results in kicking the client). */
-    int buf_size = 1 << 20;  /* 1 MiB */
+    int buf_size = 8 << 20;  /* 8 MiB */
     if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size)) < 0)
         g_debug("setsockopt(SO_SNDBUF) failed: %s", strerror(errno));
     struct ucred cred;
