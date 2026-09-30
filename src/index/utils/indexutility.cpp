@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "indexutility.h"
 #include "textindexconfig.h"
+#include "profile/indexprofile.h"
+#include "state/indexstatestore.h"
 
 #include <QFile>
 #include <QJsonObject>
@@ -24,9 +26,23 @@ ANYTHING_INDEX_BEGIN_NAMESPACE
 
 namespace IndexUtility {
 
+bool isFileNameIndexUsableAsDataSource()
+{
+    const IndexProfile profile = IndexProfile::filename();
+    if (!profile.isIndexAvailable()) {
+        return false;
+    }
+
+    const IndexStateStore store(profile);
+    return store.isCompatibleVersion()
+            && !store.getLastUpdateTime().isEmpty()
+            && !store.isCreateInProgress()
+            && !store.isDisabled();
+}
+
 bool isIndexWithAnything(const QString &path)
 {
-    if (!DFMSEARCH::Global::isFileNameIndexReadyForSearch())
+    if (!isFileNameIndexUsableAsDataSource())
         return false;
     return isDefaultIndexedDirectory(path);
 }

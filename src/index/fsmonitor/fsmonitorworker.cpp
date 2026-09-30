@@ -97,10 +97,14 @@ void FSMonitorWorker::tryFastDirectoryScan()
 
     auto scanOperation = [capturedMaxResults, capturedExclusionChecker]() -> QStringList {
         // 旧逻辑为 status == "closed"（anything-daemon 未运行）时回退遍历。
-        // 新架构中无独立进程，改为直接判断索引就绪：
-        // 索引存在且可用（无 create/updateInProgress）→ 快速扫描；否则 → 回退传统遍历。
-        if (!DFMSEARCH::Global::isFileNameIndexReadyForSearch()) {
-            qWarning() << "FSMonitorWorker: Cannot use fast directory scan, filename index not ready";
+        // watch 播种只要求索引"可作为数据源"（见
+        // IndexUtility::isFileNameIndexUsableAsDataSource）：createInProgress /
+        // disabled / 从未建成时回退遍历；恢复/重建 Update（updateInProgress）与
+        // 事件积压（backlogExceeded）期间索引仅少量滞后，放行以免误入全盘遍历。
+        // 上次 commit 之后新建的目录不在索引中，其 watch 缺口由全量任务对账，
+        // 此处接受该近似以换取启动性能。
+        if (!IndexUtility::isFileNameIndexUsableAsDataSource()) {
+            qWarning() << "FSMonitorWorker: Cannot use fast directory scan, filename index not usable as data source";
             return {};
         }
 

@@ -31,6 +31,29 @@ bool isIndexWithAnything(const QString &path);
 bool isDefaultIndexedDirectory(const QString &path);
 
 /**
+ * @brief Check whether the filename index can be trusted as a data source
+ *        (watch seeding, file enumeration)
+ *
+ * Weaker than dfm-search's Global::isFileNameIndexReadyForSearch() (which gates
+ * search degradation for external consumers): transient lag states that keep the
+ * index substantially complete are deliberately accepted to avoid falling back
+ * to full filesystem traversal. Blocks only on:
+ * - index physically unavailable / incompatible version
+ * - never fully built (empty lastUpdateTime)
+ * - createInProgress (building/resuming from scratch, content untrustworthy)
+ * - disabled (user disabled filename indexing, index frozen without maintenance)
+ *
+ * Deliberately ignored: updateInProgress (recovery/rebuild update, index only
+ * slightly stale), backlogExceeded (large event backlog, self-healing), and
+ * clean/dirty state (ordinary incremental updates keep the index usable).
+ * Directories created inside the gap window are missing from the index; callers
+ * accept this approximation (reconciled later by full tasks).
+ *
+ * @return true if the index may be used as a data source
+ */
+bool isFileNameIndexUsableAsDataSource();
+
+/**
  * @brief Check if a file size is within the allowed limit for indexing
  * @param fileInfo QFileInfo object of the file to check
  * @return true if file size is acceptable, false otherwise
