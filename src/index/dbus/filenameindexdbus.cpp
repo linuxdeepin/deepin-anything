@@ -245,9 +245,17 @@ void FileNameIndexDBus::cleanup()
 {
     d->runtime->fsEventController()->setEnabledNow(false);
 
+    // Attempt to complete pending incremental tasks before giving up.
+    // If the backlog is small enough (bounded by a hardcoded threshold),
+    // let the worker finish within a bounded timeout instead of immediately
+    // marking Dirty and forcing a full scan on next startup.
+    // Extreme cases (hundreds of thousands of pending files) exceed the
+    // threshold and skip straight to the Dirty fallback.
+    const bool flushed = d->runtime->taskManager()->flushPendingTasks(5000);
+
     const bool hasUnfinishedWork = d->runtime->taskManager()->hasRunningTask()
             || d->runtime->taskManager()->hasQueuedTasks();
-    if (hasUnfinishedWork) {
+    if (!flushed && hasUnfinishedWork) {
         qWarning() << "FileNameIndexDBus: Service cleanup with unfinished indexing work, marking state as dirty";
         d->runtime->stateStore().setIndexState(IndexUtility::IndexState::Dirty);
     }
