@@ -278,6 +278,14 @@ bool FileNameIndexDBus::IsEnabled()
 
 void FileNameIndexDBus::SetEnabled(bool enabled)
 {
+    // 持久化用户启停意图：禁用即索引失去维护契约（监控停止、任务停止、恢复
+    // Update 不触发），数据源类判定（isFileNameIndexUsableAsDataSource）据
+    // disabled 标志拒绝把冻结索引当数据源。仅在值变化时写盘；cleanup 内部的
+    // setEnabledNow(false) 属正常关机路径，不经过此处，不会误标 disabled。
+    if (d->runtime->stateStore().isDisabled() == enabled) {
+        d->runtime->stateStore().setDisabled(!enabled);
+    }
+
     d->runtime->fsEventController()->setEnabled(enabled);
 }
 

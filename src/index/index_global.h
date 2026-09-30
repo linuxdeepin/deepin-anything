@@ -93,6 +93,7 @@ inline const QString kNeedsRebuildKey = QLatin1String("needsRebuild");
 inline const QString kCreateInProgressKey = QLatin1String("createInProgress");
 inline const QString kUpdateInProgressKey = QLatin1String("updateInProgress");
 inline const QString kBacklogExceededKey = QLatin1String("backlogExceeded");
+inline const QString kDisabledKey = QLatin1String("disabled");
 
 // json - value
 inline const QString kStateClean = QLatin1String("clean");   // state

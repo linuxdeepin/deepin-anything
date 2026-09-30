@@ -284,3 +284,20 @@ TEST_F(IndexStateStoreTest, BacklogExceeded_PersistsAndClears)
     store2->setBacklogExceeded(false);
     EXPECT_FALSE(store2->isBacklogExceeded());
 }
+
+TEST_F(IndexStateStoreTest, Disabled_DefaultsFalseAndPersists)
+{
+    // Missing field (no file / legacy file) reads as enabled
+    EXPECT_FALSE(store->isDisabled());
+
+    store->setDisabled(true);
+    EXPECT_TRUE(store->isDisabled());
+    std::unique_ptr<IndexStateStore> store2(new IndexStateStore(profile));
+    EXPECT_TRUE(store2->isDisabled());
+
+    // Re-enable clears the flag, other fields survive the read-modify-write
+    store2->setIndexState(IndexUtility::IndexState::Dirty);
+    store2->setDisabled(false);
+    EXPECT_FALSE(store2->isDisabled());
+    EXPECT_EQ(store2->getIndexState(), IndexUtility::IndexState::Dirty);
+}

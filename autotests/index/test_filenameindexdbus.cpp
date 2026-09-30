@@ -103,8 +103,9 @@ protected:
                            return QStringList();
                        });
 
-        // isFileNameIndexReadyForSearch stubbed to false so FSMonitorWorker fast-scan
-        // does not attempt a real index query.
+        // Fast-scan gate (isFileNameIndexUsableAsDataSource) is blocked here
+        // because the redirected filename index dir has no index_status.json;
+        // this stub additionally guards any legacy dfm-search ready-checks.
         stub.set_lamda(ADDR(Global, isFileNameIndexReadyForSearch),
                        []() -> bool {
                            __DBG_STUB_INVOKE__
