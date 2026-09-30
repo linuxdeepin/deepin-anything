@@ -13,10 +13,10 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-/* 1 MiB receive buffer — the default (~208 KB) is too small for bursts of
+/* 8 MiB receive buffer — the default (~208 KB) is too small for bursts of
  * 4 KB dispatch_event_t messages, causing the server to see EAGAIN and kick
  * the client ("slow client ... kicking"). */
-#define RECEIVER_SOCKET_BUF_SIZE (1 << 20)
+#define RECEIVER_SOCKET_BUF_SIZE (8 << 20)
 
 struct EventReceiver {
     int sock_fd;            /* connected socket (SOCK_SEQPACKET, blocking) */
