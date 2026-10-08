@@ -178,11 +178,12 @@ public:
      * @brief 读取 updateInProgress 标记
      * @return true 表示全量对比型 UPDATE 任务（恢复/rebuild）未完成；false 表示无此类任务进行中
      *
-     * 状态机（由全量对比型 Update 任务的生命周期驱动）：
+     * 状态机（由全量对比型 Update 和目录移动 MoveFileList 任务的生命周期驱动）：
      * - UPDATE startTask 时置 true（覆盖恢复 Update / needsRebuild Update / 手动 Update）
-     * - Update 全量任务成功完成时（finalizeIndexState）置 false
+     * - MoveFileList startFileMoveTask 时置 true（目录移动期间索引路径批量更新，搜索应降级）
+     * - Update / MoveFileList 任务成功完成时（finalizeIndexState）置 false
      * - 失败/中断时不操作（保持 true），下次启动继续恢复，搜索持续降级直到恢复成功
-     * - 普通事件增量任务（UpdateFileList/MoveFileList/CreateFileList/RemoveFileList）不操作此标记
+     * - 普通事件增量任务（UpdateFileList/CreateFileList/RemoveFileList）不操作此标记
      *
      * 用途：恢复/rebuild Update 是"cleanup + 按 mtime 全量对比"的扫盘过程，期间索引滞后
      * （新文件漏报、已删文件误报），对外可见性应视为 "scanning"（搜索降级），
