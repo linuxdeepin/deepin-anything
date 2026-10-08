@@ -205,7 +205,8 @@ bool TaskManager::startTask(IndexTask::Type type, const QStringList &pathList,
     // 让外部（dfm-search isReady/状态映射）在任务启动即可见"scanning"并降级搜索。
     // 与 createInProgress 一样必须在入队检查之前完成：任务被环境阻塞入队后服务重启，
     // 队列丢失，标志仍需落盘以覆盖该窗口。
-    // 普通事件增量任务（UpdateFileList/MoveFileList 等）不走此分支，不置位。
+    // 普通事件增量任务（UpdateFileList 等）不走此分支，不置位。
+    // MoveFileList 的 updateInProgress 在 startFileMoveTask() 中单独设置。
     if (type == IndexTask::Type::Update) {
         if (m_context && m_context->stateStore()
             && !m_context->stateStore()->isUpdateInProgress()) {
@@ -448,6 +449,16 @@ bool TaskManager::startFileMoveTask(const QHash<QString, QString> &movedFiles)
     }
 
     recordIngestedFiles(movedFiles.size());
+
+    // 目录移动期间 DirectoryMoveProcessor 可能长时间运行（大目录 + CPU 受限），
+    // 此期间索引路径尚未更新完毕，设置 updateInProgress 让外部搜索降级为 realtime，
+    // 确保移动期间文件名搜索的准确性。与 startTask() 中 Update 类型的处理同理，
+    // 必须在入队检查之前完成：任务被环境阻塞入队后服务重启，标志仍需落盘。
+    if (m_context && m_context->stateStore()
+        && !m_context->stateStore()->isUpdateInProgress()) {
+        qInfo() << "[TaskManager::startFileMoveTask] Marking updateInProgress for directory move";
+        m_context->stateStore()->setUpdateInProgress(true);
+    }
 
     const QStringList compensationPaths = applyDirectoryMovePlans(movedFiles);
 
@@ -1024,13 +1035,15 @@ void TaskManager::finalizeIndexState(IndexTask::Type type, const HandlerResult &
     if (!result.success || result.interrupted)
         return;
 
-    // 全量对比型 Update 已成功完成：本次对比扫盘的"索引滞后"窗口结束。
-    // 无论队列中是否还有后续任务（后续 Update 会在 startTask 时重新置位），
+    // 全量对比型 Update 或目录移动 MoveFileList 已成功完成：
+    // 本次"索引滞后"窗口结束。无论队列中是否还有后续任务（后续 Update 会在
+    // startTask 时重新置位，后续 MoveFileList 会在 startFileMoveTask 时重新置位），
     // 都立即清除 updateInProgress，避免搜索长期降级为 Realtime。
-    if (type == IndexTask::Type::Update && m_context && m_context->stateStore()
+    if ((type == IndexTask::Type::Update || type == IndexTask::Type::MoveFileList)
+        && m_context && m_context->stateStore()
         && m_context->stateStore()->isUpdateInProgress()) {
         m_context->stateStore()->setUpdateInProgress(false);
-        qInfo() << "[TaskManager::onTaskFinished] Update task completed, updateInProgress cleared";
+        qInfo() << "[TaskManager::onTaskFinished] Task completed, updateInProgress cleared";
     }
 
     // 全量任务（Create/Update）成功即事实终结：createInProgress 的语义是
