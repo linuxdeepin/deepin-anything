@@ -94,10 +94,10 @@ public:
     // Timer callback: open a fresh dispatcher connection and hand it to the
     // reader thread; on failure grow the backoff.
     void attemptReconnect();
-    // Create the socket, connect and enlarge the receive buffer. Returns the
-    // fd on success, -1 on failure. Runs on the home thread; ownership of the
-    // returned fd is transferred to the reader thread via startReaderThread /
-    // attemptReconnect.
+    // Create a relay receiver via D-Bus GetEventChannel and extract the fd.
+    // Returns the fd on success, -1 on failure. Runs on the home thread;
+    // ownership of the fd is transferred to the reader thread via
+    // startReaderThread / attemptReconnect.
     int connectDispatcherSocket();
     // Spawn the reader thread and hand it a connected fd.
     void startReaderThread(int fd);
@@ -112,7 +112,7 @@ public:
     // The event dispatcher sends absolute paths, but they may use a different
     // mount alias than the monitored root path. This helper normalizes across
     // same-device mount aliases before applying rootPaths and excludePredicate.
-    QString resolveAndFilterFullPath(const char *absolutePath) const;
+    QString resolveAndFilterFullPath(dev_t deviceId, const char *relativePath) const;
 
     static QPair<QString, QString> splitPath(const QString &fullPath);
 
@@ -144,17 +144,13 @@ public:
     QAtomicInt overflowFlag { 0 };
     int maxQueuedEvents { kDefaultMaxQueuedEvents };
 
-    // Overridable socket path (env: DFM_VFSMONITOR_SOCKET_PATH). Defaults to
-    // kDispatcherSocketPath; used by unit tests to point at a mock dispatcher.
-    QString socketPath;
-
     QHash<uint32_t, RenameFromInfo> pendingRenames;
     QHash<dev_t, QStringList> mountPoints;
-    QVector<MountPointAlias> orderedMountPoints;
-    QVector<QPair<QString, QString>> rootAliases;
+    QHash<dev_t, QStringList> childMountPoints;
+    bool lowerFsExists { false };
 
     bool initMountPoints();
-    void rebuildRootAliases();
+    bool isLowerFsEvent(dev_t deviceId, const QString &fullPath) const;
 };
 
 ANYTHING_INDEX_END_NAMESPACE
