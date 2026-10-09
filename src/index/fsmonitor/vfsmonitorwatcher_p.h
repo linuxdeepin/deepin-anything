@@ -14,6 +14,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QVector>
+#include <QList>
 
 #include <cstdint>
 #include <sys/types.h>
@@ -36,10 +37,12 @@ struct RenameFromInfo
     bool isDirectory { false };
 };
 
-struct MountPointAlias
+// One entry of the mount table: what a device is mounted on and how.
+struct MountPointInfo
 {
-    dev_t deviceId { 0 };
+    QString root;
     QString mountPoint;
+    bool isRootEqMountPoint { false };
 };
 
 // One decoded dispatcher event parked in the userspace queue between the
@@ -145,7 +148,11 @@ public:
     int maxQueuedEvents { kDefaultMaxQueuedEvents };
 
     QHash<uint32_t, RenameFromInfo> pendingRenames;
-    QHash<dev_t, QStringList> mountPoints;
+    // Mount table <device_id, (source, mount_point, is_source_eq_mount_point)>:
+    // only entries whose mount point mutually contains any rootPaths entry.
+    QHash<dev_t, QList<MountPointInfo>> mountPoints;
+    // Child mount table <device_id, sub_mount_point>: populated only when
+    // lowerFsExists; key is the parent mount's device_id.
     QHash<dev_t, QStringList> childMountPoints;
     bool lowerFsExists { false };
 
