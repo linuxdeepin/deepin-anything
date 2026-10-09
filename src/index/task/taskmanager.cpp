@@ -598,6 +598,7 @@ void TaskManager::onTaskPaused(IndexTask::Type type, HandlerResult result)
         item.pathList = QStringList { taskPath };
     }
 
+    item.forceBypass = currentTask->forceBypass();
     taskQueue.enqueue(item);
     updateBacklogState();
 
@@ -615,14 +616,15 @@ void TaskManager::onEnvStateChanged(const EnvState &env)
     qInfo() << "[TaskManager::onEnvStateChanged] Environment changed -"
              << "battery:" << env.onBattery << "powerSave:" << env.powerSaveMode << "idle:" << env.idle;
 
-    // 1. Check if current running task needs to be paused
-    //    forceBypass only bypasses the start gate. At runtime, only
-    //    RemoveFileList/MoveFileList are exempt from env-based pausing.
+    // 1. Check if current running task needs to be paused.
+    //    forceBypass tasks (user-initiated "update anyway") bypass both
+    //    the start gate and runtime env checks, per the one-shot bypass
+    //    requirement. RemoveFileList/MoveFileList are always exempt.
     if (currentTask) {
         const auto type = currentTask->taskType();
         const bool exempt = (type == IndexTask::Type::RemoveFileList
                              || type == IndexTask::Type::MoveFileList);
-        if (!exempt && !canRun(currentTask->grade(), false, env)) {
+        if (!exempt && !canRun(currentTask->grade(), currentTask->forceBypass(), env)) {
             qInfo() << "[TaskManager::onEnvStateChanged] Current task can no longer run, pausing";
             pauseCurrentTask();
             return;   // schedule() will be called from onTaskPaused, which emits
