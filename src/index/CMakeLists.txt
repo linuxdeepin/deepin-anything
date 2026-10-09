@@ -16,8 +16,9 @@ find_package(dfm6-search REQUIRED)
 find_package(KF6IdleTime REQUIRED)
 
 pkg_check_modules(Lucene REQUIRED IMPORTED_TARGET liblucene++ liblucene++-contrib)
-pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0 gio-2.0)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
+pkg_check_modules(SYSTEMD REQUIRED IMPORTED_TARGET libsystemd)
 
 set(INDEX_SOURCES
     core/indexruntime.cpp
@@ -60,6 +61,7 @@ set(INDEX_SOURCES
     utils/systemdcpuutils.cpp
     utils/textindexconfig.cpp
     utils/threadscheduling.cpp
+    utils/trustclient.cpp
     dbus/textindexdbus.cpp
     dbus/ocrindexdbus.cpp
     dbus/filenameindexdbus.cpp
@@ -111,6 +113,7 @@ add_executable(deepin-anything-index
 target_include_directories(deepin-anything-index PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/dbus
+    ${CMAKE_SOURCE_DIR}/src/dispatcher
 )
 
 target_compile_definitions(deepin-anything-index PRIVATE
@@ -121,6 +124,7 @@ target_compile_definitions(deepin-anything-index PRIVATE
 target_link_libraries(deepin-anything-index PRIVATE
     common
     index_adaptors
+    deepin-anything-dispatcher
     deepin-anything-extractor-lib
     dfm6-search
     Dtk6::Core
@@ -132,12 +136,13 @@ target_link_libraries(deepin-anything-index PRIVATE
     PkgConfig::MOUNT
     PkgConfig::GLIB
     KF6::IdleTime
+    PkgConfig::SYSTEMD
 )
 
 # The extractor communication library lives in the standard libdir; no RPATH needed.
 target_compile_options(deepin-anything-index PRIVATE -Wall -Wextra)
 
-install(TARGETS deepin-anything-index DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS deepin-anything-index DESTINATION libexec/deepin)
 # systemd only searches /usr/lib/systemd/user for user units (no multiarch variant).
 install(FILES deepin-anything-index.service DESTINATION lib/systemd/user)
 install(FILES assets/dbus/org.deepin.Filemanager.TextIndex.service
