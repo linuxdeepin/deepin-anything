@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <QDebug>
+#include <cstdlib>
 
 // Write end of a pipe used to turn SIGTERM/SIGINT into Qt events.
 static int g_signalWriteFd = -1;
@@ -42,6 +43,24 @@ int main(int argc, char *argv[])
     if (anything_index::registerIndexServices() != 0) {
         qWarning() << "deepin-anything-index: failed to register DBus services, exiting";
         return 1;
+    }
+
+    // Safety net: ensure cleanup runs even when the process exits via C exit()
+    // rather than through the SIGTERM handler or aboutToQuit signal.  The key
+    // case is system shutdown: the X server is killed before systemd sends
+    // SIGTERM to user services, causing QGuiApplication's XCB backend to hit a
+    // fatal XIO error that calls exit(1).  Without this atexit handler the
+    // sentinel file is never removed, so every reboot falsely triggers an
+    // "abnormal exit" detection and an unnecessary full UPDATE.
+    //
+    // atexit() does NOT run on SIGKILL, SIGSEGV, or _exit(), so genuine
+    // abnormal exits are still correctly detected by the sentinel file.
+    // unregisterIndexServices() is idempotent (nulls its pointers), so calling
+    // it again after a normal SIGTERM/aboutToQuit cleanup is a harmless no-op.
+    if (std::atexit([]() {
+            anything_index::unregisterIndexServices();
+        }) != 0) {
+        qWarning() << "deepin-anything-index: failed to register atexit handler";
     }
 
     // Turn SIGTERM/SIGINT into a graceful shutdown (stop monitoring, stop the
