@@ -42,7 +42,9 @@ struct MountEntry
 {
     dev_t deviceId { 0 };
     int parentMountId { 0 };
+    QString root;
     QString mountPoint;
+    bool isRootEqMountPoint { false };
     bool isBindMount { false };
     bool isLowerFs { false };
 };
@@ -93,28 +95,7 @@ bool cStringEquals(const char *left, const char *right)
 
 bool isLowerFsType(const char *fsType)
 {
-    return cStringEquals(fsType, "overlay") || cStringEquals(fsType, "fuse.dlnfs")
-            || cStringEquals(fsType, "ulnfs");
-}
-
-bool isParentChainUnderRoot(const QHash<int, MountEntry> &byMountId, const MountEntry &entry)
-{
-    if (!entry.isBindMount && entry.mountPoint == "/")
-        return true;
-
-    int parentMountId = entry.parentMountId;
-    while (parentMountId > 0) {
-        auto parentIt = byMountId.find(parentMountId);
-        if (parentIt == byMountId.end())
-            return false;
-
-        if (parentIt->mountPoint == "/")
-            return true;
-
-        parentMountId = parentIt->parentMountId;
-    }
-
-    return false;
+    return cStringEquals(fsType, "fuse.dlnfs") || cStringEquals(fsType, "ulnfs");
 }
 
 QHash<int, MountEntry> collectMountEntries(libmnt_table *mtab)
@@ -136,6 +117,12 @@ QHash<int, MountEntry> collectMountEntries(libmnt_table *mtab)
         entry.mountPoint = QString::fromUtf8(target);
         entry.isBindMount = !cStringEquals(mnt_fs_get_root(fs), "/");
         entry.isLowerFs = isLowerFsType(mnt_fs_get_fstype(fs));
+        const char *root = mnt_fs_get_root(fs);
+        if (root) {
+            entry.root = QString::fromUtf8(root);
+            entry.isRootEqMountPoint = !entry.root.isEmpty()
+                    && entry.root == entry.mountPoint;
+        }
 
         byMountId.insert(mnt_fs_get_id(fs), entry);
     }
@@ -430,54 +417,50 @@ bool VfsMonitorFileSystemWatcherPrivate::initMountPoints()
     const QHash<int, MountEntry> byMountId = collectMountEntries(mtab);
     mnt_free_table(mtab);
 
-    QHash<int, MountEntry> rootMountTree;
+    // Mount table: iterate over all mount entries. An entry is included when
+    // its mount point and any rootPaths entry mutually contain each other
+    // (the mount point is under a root, a root is under the mount point, or
+    // they are equal). "/" trivially satisfies "contains a root".
+    QHash<int, MountEntry> mountTree;
     for (auto it = byMountId.cbegin(); it != byMountId.cend(); ++it) {
         const auto &entry = it.value();
 
-        if (!isParentChainUnderRoot(byMountId, entry))
+        const bool isCandidateMountEntry = std::any_of(rootPaths.cbegin(), rootPaths.cend(),
+                                               [&entry](const QString &root) {
+                                                   // root contains the mount point
+                                                   return isDescendantOfRoot(entry.mountPoint, root)
+                                                           || entry.mountPoint == root
+                                                           // mount point contains the root
+                                                           || isDescendantOfRoot(root, entry.mountPoint);
+                                               });
+        if (!isCandidateMountEntry)
             continue;
 
-        mountPoints[entry.deviceId].append(entry.mountPoint);
-        rootMountTree.insert(it.key(), entry);
+        MountPointInfo info;
+        info.root = entry.root;
+        info.mountPoint = entry.mountPoint;
+        info.isRootEqMountPoint = entry.isRootEqMountPoint;
+        mountPoints[entry.deviceId].append(info);
+        mountTree.insert(it.key(), entry);
         lowerFsExists = lowerFsExists || entry.isLowerFs;
     }
-
-    for (auto &points : mountPoints) {
-        std::sort(points.begin(), points.end(),
-                  [](const QString &a, const QString &b) {
-                      return a.length() > b.length();
-                  });
-    }
-
-    for (auto it = rootMountTree.cbegin(); it != rootMountTree.cend(); ++it) {
-        const auto &parent = it.value();
-        QStringList children;
-        for (const auto &entry : std::as_const(rootMountTree)) {
-            if (entry.parentMountId == it.key()) {
-                children.append(entry.mountPoint);
+    // Child mount table: only needed when a lowerfs exists. Iterate over the
+    // mount tree and, by mount_id, collect each entry's child mount points
+    // under the parent's device_id.
+    if (lowerFsExists) {
+        for (auto it = mountTree.cbegin(); it != mountTree.cend(); ++it) {
+            const auto &parent = it.value();
+            QStringList children;
+            for (const auto &entry : std::as_const(mountTree)) {
+                if (entry.parentMountId == it.key())
+                    children.append(entry.mountPoint);
             }
+
+            if (!children.isEmpty())
+                childMountPoints[parent.deviceId].append(children);
         }
-
-        if (!children.isEmpty())
-            childMountPoints[parent.deviceId].append(children);
     }
 
-    for (auto &points : childMountPoints) {
-        points.removeDuplicates();
-        std::sort(points.begin(), points.end(),
-                  [](const QString &a, const QString &b) {
-                      return a.length() > b.length();
-                  });
-    }
-
-    int totalPoints = 0;
-    for (const auto &pts : std::as_const(mountPoints)) {
-        totalPoints += pts.size();
-    }
-    qInfo() << "VfsMonitor: loaded" << mountPoints.size()
-            << "devices," << totalPoints << "mount points,"
-            << childMountPoints.size() << "devices with child mount points,"
-            << "lowerfs exists:" << lowerFsExists;
     return !mountPoints.isEmpty();
 }
 
@@ -506,39 +489,40 @@ QString VfsMonitorFileSystemWatcherPrivate::resolveAndFilterFullPath(dev_t devic
     if (it == mountPoints.end())
         return {};
 
-    const QStringList &points = it.value();
+    const QList<MountPointInfo> &points = it.value();
     const QString relPath = QString::fromUtf8(relativePath);
 
-    // Try each mount point (sorted longest first).
-    // Return the first one that falls under a monitored root path
-    // and passes the exclude predicate.
-    for (const QString &mp : points) {
-        QString fullPath = (mp == "/") ? relPath : (mp + relPath);
+    // Resolve: find a (root, mount_point, is_root_eq_mount_point) entry
+    // whose root contains the relative path, then build the event path.
+    for (const MountPointInfo &info : points) {
+        const QString &root = info.root;
+        const QString &mp = info.mountPoint;
 
-        if (isLowerFsEvent(deviceId, fullPath))
+        // The root must contain the relative path.
+        if (!mountPointStartsWith(relPath, root))
             continue;
 
-        if (std::none_of(rootPaths.cbegin(), rootPaths.cend(),
-                         [&fullPath](const QString &root) { return isDescendantOfRoot(fullPath, root); }))
+        QString fullPath;
+        if (info.isRootEqMountPoint) {
+            // Root equals mount point: the relative path is already the
+            // event path.
+            fullPath = relPath;
+        } else if (root == "/") {
+            // Root is root: prepend the mount point directly.
+            fullPath = (mp == "/") ? relPath : (mp + relPath);
+        } else {
+            // Strip the root prefix, then prepend the mount point.
+            const QString suffix = relPath.mid(root.length());
+            fullPath = (mp == "/") ? suffix : (mp + suffix);
+        }
+
+        if (isLowerFsEvent(deviceId, fullPath))
             continue;
 
         if (excludePredicate && excludePredicate(fullPath))
             continue;
 
         return fullPath;
-    }
-
-    // In overlay root environments, the root "/" filesystem has no separate mount
-    // entry in mountPoints. When all mount points fail and relPath is already
-    // an absolute path, treat it as the true absolute path and re-check.
-    if (relPath.startsWith('/')) {
-        auto found = std::find_if(rootPaths.cbegin(), rootPaths.cend(),
-                                  [&relPath, this](const QString &root) {
-                                      return isDescendantOfRoot(relPath, root)
-                                              && (!excludePredicate || !excludePredicate(relPath));
-                                  });
-        if (found != rootPaths.cend())
-            return relPath;
     }
 
     return {};
