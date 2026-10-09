@@ -4,6 +4,7 @@
 
 #include "fileprovider.h"
 #include "utils/indextraverseutils.h"
+#include "utils/networkmountdetector.h"
 #include "utils/indexutility.h"
 #include "utils/scopeguard.h"
 #include "utils/textindexconfig.h"
@@ -39,6 +40,9 @@ FileSystemProvider::FileSystemProvider(IndexProfile profile, const QString &root
 void FileSystemProvider::traverse(TaskState &state, const FileHandler &handler)
 {
     qInfo() << "[FileSystemProvider::traverse] Starting file system traversal from:" << m_rootPath;
+
+    // Refresh mount info so newly added network mounts are detected.
+    NetworkMountDetector::instance().refresh();
 
     QMap<QString, QString> bindPathTable = IndexTraverseUtils::fstabBindInfo();
     QSet<QString> visitedDirs;
@@ -214,6 +218,9 @@ MixedPathListProvider::MixedPathListProvider(IndexProfile profile, const QString
 void MixedPathListProvider::traverse(TaskState &state, const FileHandler &handler)
 {
     qInfo() << "[MixedPathListProvider::traverse] Starting traversal of" << m_pathList.size() << "mixed paths";
+
+    // Refresh mount info so newly added network mounts are detected.
+    NetworkMountDetector::instance().refresh();
 
     // Default blacklisted directories
     QStringList defaultBlacklistedDirs = TextIndexConfig::instance().folderExcludeFilters();

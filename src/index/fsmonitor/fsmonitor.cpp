@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "fsmonitor_p.h"
+#include "utils/networkmountdetector.h"
 #include "utils/textindexconfig.h"
 
 #include <dfm-search/dsearch_global.h>
@@ -87,6 +88,10 @@ FSMonitorPrivate::~FSMonitorPrivate()
 
 bool FSMonitorPrivate::init(const QStringList &rootPaths)
 {
+    // Refresh mount info so newly added network mounts are detected before
+    // setting up watches.
+    NetworkMountDetector::instance().refresh();
+
     // Initialize with root paths and create the watcher
     this->rootPaths.clear();
     for (const QString &path : rootPaths) {
@@ -314,6 +319,13 @@ bool FSMonitorPrivate::shouldExcludePath(const QString &path) const
 {
     // Skip empty paths
     if (path.isEmpty()) {
+        return true;
+    }
+
+    // 跳过网络挂载点（NFS、CIFS、curlftpfs 等），避免 inotify 监控
+    // 网络文件系统导致性能问题和不可预期的行为。
+    if (NetworkMountDetector::instance().isNetworkPath(path)) {
+        qDebug() << "FSMonitor: Excluding network mount:" << path;
         return true;
     }
 
