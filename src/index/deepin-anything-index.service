@@ -3,9 +3,8 @@ Description=Deepin Anything Index Service
 After=dbus.service
 
 [Service]
-Type=dbus
-BusName=org.deepin.Filemanager.TextIndex
-ExecStart=/usr/bin/deepin-anything-index
+Type=forking
+ExecStart=/usr/bin/deepin-security-loader --group deepin-daemon -- /usr/libexec/deepin/deepin-anything-index
 Slice=session.slice
 Restart=on-failure
 RestartSec=5s
