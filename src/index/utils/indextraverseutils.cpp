@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "indextraverseutils.h"
+#include "networkmountdetector.h"
 #include "textindexconfig.h"
 
 #include <QFileInfo>
@@ -95,6 +96,11 @@ bool shouldSkipDirectory(const QString &path)
         if (path.startsWith(excludeDir))
             return true;
     }
+
+    // 跳过网络挂载点（NFS、CIFS、curlftpfs 等），避免遍历网络文件系统
+    // 导致大量网络 I/O 和索引膨胀。
+    if (NetworkMountDetector::instance().isNetworkPath(path))
+        return true;
 
     return false;
 }

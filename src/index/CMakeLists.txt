@@ -54,6 +54,7 @@ set(INDEX_SOURCES
     utils/filehash.cpp
     utils/filetypemapper.cpp
     utils/indextraverseutils.cpp
+    utils/networkmountdetector.cpp
     utils/indexutility.cpp
     utils/pathexcludematcher.cpp
     utils/pinyinprocessor.cpp
