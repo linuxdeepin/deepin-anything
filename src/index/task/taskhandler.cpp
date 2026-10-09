@@ -107,6 +107,15 @@ std::unique_ptr<FileProvider> createAnythingFileProvider(const IndexContext &con
     qInfo() << "[TaskHandlers::createAnythingFileProvider] Successfully obtained file listings from ANYTHING for profile:"
              << context.profile().id() << "count:" << result.value().count();
     return std::make_unique<DirectFileListProvider>(result.value());
+}
+
+PathExcludeMatcher createExcludeMatcherForProfile(const IndexProfile &profile)
+{
+    const auto &filterPolicy = profile.filterPolicy();
+    if (filterPolicy.blacklistProvider) {
+        return PathExcludeMatcher(filterPolicy.blacklistProvider());
+    }
+    return PathExcludeMatcher::createForIndex();
 }   // namespace
 
 class ProgressReporter
@@ -501,7 +510,7 @@ bool cleanupIndexs(const IndexContext &context, IndexReaderPtr reader, IndexWrit
         qInfo() << "[cleanupIndexs] Found" << allDocs->totalHits << "documents to check";
 
         // Use static factory method to create configured blacklist matcher
-        PathExcludeMatcher excludeMatcher = PathExcludeMatcher::createForIndex();
+        PathExcludeMatcher excludeMatcher = createExcludeMatcherForProfile(context.profile());
         qDebug() << "[cleanupIndexs] Initialized with" << excludeMatcher.patternCount()
                   << "blacklist patterns";
 
@@ -889,7 +898,7 @@ TaskHandler TaskHandlers::CreateIndexHandler(const IndexContext &context)
             }
 
             ProgressReporter reporter(writer);
-            const PathExcludeMatcher excludeMatcher = PathExcludeMatcher::createForIndex();
+            const PathExcludeMatcher excludeMatcher = createExcludeMatcherForProfile(context.profile());
             qint64 totalCount = provider->totalCount();
             reporter.setTotal(totalCount);
             qInfo() << "[CreateIndexHandler] Starting file processing, estimated total files:" << totalCount;
@@ -984,7 +993,7 @@ TaskHandler TaskHandlers::UpdateIndexHandler(const IndexContext &context, bool s
                 return result;
             }
 
-            const PathExcludeMatcher excludeMatcher = PathExcludeMatcher::createForIndex();
+            const PathExcludeMatcher excludeMatcher = createExcludeMatcherForProfile(context.profile());
             auto provider = createFileProvider(context, path);
             if (!provider) {
                 qCritical() << "[UpdateIndexHandler] Failed to create file provider for path:" << path;
@@ -1053,7 +1062,7 @@ TaskHandler TaskHandlers::CreateResumeHandler(const IndexContext &context)
         try {
             IndexAccessor accessor(indexDir, context);
             ProgressReporter reporter(accessor.writer);
-            const PathExcludeMatcher excludeMatcher = PathExcludeMatcher::createForIndex();
+            const PathExcludeMatcher excludeMatcher = createExcludeMatcherForProfile(context.profile());
 
             qInfo() << "[CreateResumeHandler] Create in progress, skipping cleanup";
 
@@ -1193,7 +1202,7 @@ TaskHandler TaskHandlers::CreateOrUpdateFileListHandler(const IndexContext &cont
             }
 
             ProgressReporter reporter(writer);
-            const PathExcludeMatcher excludeMatcher = PathExcludeMatcher::createForIndex();
+            const PathExcludeMatcher excludeMatcher = createExcludeMatcherForProfile(context.profile());
             qint64 totalCount = provider->totalCount();
             reporter.setTotal(totalCount);
             qInfo() << "[CreateOrUpdateFileListHandler] Starting file list processing, total files:" << totalCount;
