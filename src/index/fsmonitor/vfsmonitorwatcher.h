@@ -19,8 +19,8 @@ class VfsMonitorFileSystemWatcherPrivate;
 // event dispatcher socket exposed by deepin-anything-server.
 //
 // Receives global file system events (create, delete, move, close-write)
-// forwarded by deepin-anything-server from
-// /run/deepin-anything/event-dispatcher.sock.
+// forwarded by deepin-anything-server through an event relay socket whose
+// fd is obtained via the org.deepin.Anything D-Bus GetEventChannel method.
 //
 // Usage:
 //   auto *watcher = VfsMonitorFileSystemWatcher::create(rootPaths, excludePredicate, parent);

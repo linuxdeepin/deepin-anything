@@ -15,7 +15,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(Lucene REQUIRED IMPORTED_TARGET liblucene++ liblucene++-contrib)
 pkg_check_modules(MOUNT REQUIRED mount IMPORTED_TARGET)
 pkg_check_modules(NL REQUIRED IMPORTED_TARGET libnl-3.0 libnl-genl-3.0)
-pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0 gio-2.0)
 
 file(GLOB_RECURSE TEST_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
@@ -26,13 +26,14 @@ file(GLOB_RECURSE TEST_SOURCES
 # the D-Bus adaptors are provided by the index_adaptors static library target.
 anything_add_test(ut-anything-index
     SOURCES ${TEST_SOURCES} ${ANYTHING_INDEX_SOURCES}
-    LINK_LIBRARIES common index_adaptors deepin-anything-extractor-lib dfm6-search
+    LINK_LIBRARIES common index_adaptors deepin-anything-dispatcher deepin-anything-extractor-lib dfm6-search
                    Qt6::Core Qt6::DBus Qt6::Gui Qt6::Concurrent
                    Dtk6::Core KF6::IdleTime
                    PkgConfig::Lucene PkgConfig::MOUNT PkgConfig::NL PkgConfig::GLIB
     INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/src/index
                  ${CMAKE_SOURCE_DIR}/src/index/dbus
                  ${CMAKE_SOURCE_DIR}/src/extractor/libextractor
+                 ${CMAKE_SOURCE_DIR}/src/dispatcher
 )
 
 target_compile_definitions(ut-anything-index PRIVATE

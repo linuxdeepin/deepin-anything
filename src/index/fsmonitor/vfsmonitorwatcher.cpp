@@ -2,11 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE   // recvmmsg
-#endif
-
 #include "vfsmonitorwatcher_p.h"
+#include "event_relay_receiver.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -18,21 +15,23 @@
 
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/un.h>
+#include <sys/sysmacros.h>
 #include <unistd.h>
 
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
 #include <algorithm>
-#include <vector>
 #include <QDebug>
 
 ANYTHING_INDEX_BEGIN_NAMESPACE
 
 namespace {
 
-constexpr char kDispatcherSocketPath[] = "/run/deepin-anything/event-dispatcher.sock";
+constexpr char kAnythingBusName[] = "org.deepin.Anything";
+constexpr char kAnythingObjectPath[] = "/org/deepin/Anything";
+constexpr char kAnythingInterfaceName[] = "org.deepin.Anything";
+
 constexpr size_t kDispatchMaxPathLen = 4096;
 
 // Upper bound of events turned into signals per home-thread wakeup so a huge
@@ -45,13 +44,16 @@ struct MountEntry
     int parentMountId { 0 };
     QString mountPoint;
     bool isBindMount { false };
+    bool isLowerFs { false };
 };
 
-struct DispatchEvent
+struct fs_event
 {
-    int32_t action;
-    uint32_t cookie;
-    char eventPath[kDispatchMaxPathLen];
+    guint8      act;
+    guint32     cookie;
+    guint16     major;
+    guint32     minor;
+    gchar       path[kDispatchMaxPathLen];
 };
 
 struct FileIdentity
@@ -89,13 +91,10 @@ bool cStringEquals(const char *left, const char *right)
     return left && right && qstrcmp(left, right) == 0;
 }
 
-FileIdentity identifyPath(const QString &path)
+bool isLowerFsType(const char *fsType)
 {
-    struct stat st {};
-    if (::stat(path.toUtf8().constData(), &st) != 0)
-        return {};
-
-    return { st.st_dev, st.st_ino, true };
+    return cStringEquals(fsType, "overlay") || cStringEquals(fsType, "fuse.dlnfs")
+            || cStringEquals(fsType, "ulnfs");
 }
 
 bool isParentChainUnderRoot(const QHash<int, MountEntry> &byMountId, const MountEntry &entry)
@@ -136,6 +135,7 @@ QHash<int, MountEntry> collectMountEntries(libmnt_table *mtab)
         entry.parentMountId = mnt_fs_get_parent_id(fs);
         entry.mountPoint = QString::fromUtf8(target);
         entry.isBindMount = !cStringEquals(mnt_fs_get_root(fs), "/");
+        entry.isLowerFs = isLowerFsType(mnt_fs_get_fstype(fs));
 
         byMountId.insert(mnt_fs_get_id(fs), entry);
     }
@@ -144,44 +144,31 @@ QHash<int, MountEntry> collectMountEntries(libmnt_table *mtab)
     return byMountId;
 }
 
-QString filterDirectPath(const QStringList &rootPaths,
-                         const VfsMonitorFileSystemWatcher::PathExcludePredicate &excludePredicate,
-                         const QString &fullPath)
-{
-    if (std::none_of(rootPaths.cbegin(), rootPaths.cend(),
-                     [&fullPath](const QString &root) { return isDescendantOfRoot(fullPath, root); })) {
-        return {};
-    }
-
-    if (excludePredicate && excludePredicate(fullPath))
-        return {};
-
-    return fullPath;
-}
-
 }   // anonymous namespace
 
 // ========== VfsSocketReader ==========
 
 // Lives in a dedicated QThread. Its only job is to drain the dispatcher
-// socket as fast as the kernel delivers packets and park the events in the
+// socket
+// as fast as the kernel delivers packets and park the events in the
 // userspace queue owned by VfsMonitorFileSystemWatcherPrivate.
 //
 // Why a dedicated thread: the dispatcher kicks any client whose kernel
 // receive buffer overflows (send() -> EAGAIN -> "slow client ... kicking",
-// see deepin-anything src/dispatcher/event_dispatcher.c). Kernel buffers are
-// capped by net.core.rmem_max / wmem_max (~416 KiB ≈ ~100 packets of 4 KB),
-// so no setsockopt can absorb a burst of thousands — let alone 300k files —
-// if draining depends on how fast events are processed. Mirrors the daemon's
-// own event_listener (dedicated thread + draining loop, deepin-anything
-// commit f2dd210): keep the read path tiny and buffer in userspace.
+// see deepin-anything src/dispatcher/event_relay_dispatcher.c). Kernel
+// buffers are capped by net.core.rmem_max / wmem_max (~416 KiB ≈ ~100
+// packets of 4 KB), so no setsockopt can absorb a burst of thousands — let
+// alone 300k files — if draining depends on how fast events are processed.
+// Mirrors the daemon's own event_listener (dedicated thread + draining loop,
+// deepin-anything commit f2dd210): keep the read path tiny and buffer in
+// userspace.
 //
-// Because the dispatcher closes the connection on the very first EAGAIN,
-// this hot loop must stay as cheap as physically possible:
-//   - recvmmsg() gathers up to kReceiveBatch packets per syscall instead of
-//     one recv() per packet (syscalls dominate the per-event cost);
+// Because the relay dispatcher closes the connection on the very first
+// EAGAIN, this hot loop must stay as cheap as physically possible:
+//   - recv() reads one fs_event per syscall (SOCK_SEQPACKET preserves
+//     message boundaries); the fd is non-blocking so EAGAIN stops the drain;
 //   - received slots are never re-zeroed (a 4 KiB memset per packet); each
-//     message is delimited by its actual length and NUL-terminated in place;
+//     path is NUL-terminated in place at the path field boundary;
 //   - mount/unmount notifications only set a flag — the mount-table refresh
 //     (parsing /proc/self/mountinfo plus alias stat()s) runs once after the
 //     drain loop instead of stalling it mid-burst;
@@ -193,15 +180,6 @@ public:
     explicit VfsSocketReader(VfsMonitorFileSystemWatcherPrivate *dd)
         : d(dd)
     {
-        receiveSlots.resize(kReceiveBatch);
-        msgHeaders.resize(kReceiveBatch);
-        iovs.resize(kReceiveBatch);
-        for (int i = 0; i < kReceiveBatch; ++i) {
-            iovs[i].iov_base = &receiveSlots[i];
-            iovs[i].iov_len = sizeof(DispatchEvent);
-            msgHeaders[i].msg_hdr.msg_iov = &iovs[i];
-            msgHeaders[i].msg_hdr.msg_iovlen = 1;
-        }
     }
 
     // Runs in the reader thread. Adopts a connected fd and starts watching.
@@ -245,20 +223,15 @@ private:
     // buffer re-arms the notifier.
     void drainSocket()
     {
-        constexpr size_t kMinMessageSize = offsetof(DispatchEvent, eventPath) + 1;
-        constexpr size_t kPathOffset = offsetof(DispatchEvent, eventPath);
+        constexpr size_t kPathOffset = offsetof(fs_event, path);
+        constexpr size_t kPathLen = sizeof(fs_event().path);
 
         while (socketFd >= 0) {
-            // The kernel advances iov_base/iov_len while consuming a
-            // message, so restore them before every batch.
-            for (int i = 0; i < kReceiveBatch; ++i) {
-                iovs[i].iov_base = &receiveSlots[i];
-                iovs[i].iov_len = sizeof(DispatchEvent);
-            }
-
-            const int received = ::recvmmsg(socketFd, msgHeaders.data(),
-                                            static_cast<unsigned>(msgHeaders.size()),
-                                            0, nullptr);
+            // SOCK_SEQPACKET preserves message boundaries: one recv() returns
+            // one complete fs_event. The fd is non-blocking (set by the relay
+            // dispatcher's socketpair), so EAGAIN stops the drain.
+            const ssize_t received = ::recv(socketFd, &receiveSlot,
+                                             sizeof(receiveSlot), 0);
             if (received < 0) {
                 if (errno == EINTR)
                     continue;
@@ -272,62 +245,60 @@ private:
                 return;
             }
 
-            for (int i = 0; i < received; ++i) {
-                const size_t length = msgHeaders[i].msg_len;
-
-                if (length == 0) {
-                    // SEQPACKET EOF: the dispatcher closed the connection.
-                    qWarning() << "VfsMonitor: event dispatcher connection closed";
-                    flushPendingBatch();
-                    breakConnection();
-                    return;
-                }
-
-                if (length < kMinMessageSize) {
-                    qWarning() << "VfsMonitor: received short dispatcher message:" << length;
-                    continue;
-                }
-
-                DispatchEvent &event = receiveSlots[i];
-
-                // The sender transmits offsetof(eventPath) + strlen + 1 bytes
-                // (NUL included), so terminate in place at the received
-                // length instead of clearing the whole 4 KiB slot.
-                event.eventPath[std::min<size_t>(length - kPathOffset,
-                                                 kDispatchMaxPathLen - 1)] = '\0';
-
-                const int act = event.action;
-                if (act < ACT_NEW_FILE || act > ACT_CLOSE_WRITE_FILE)
-                    continue;
-
-                if (act == ACT_MOUNT || act == ACT_UNMOUNT) {
-                    // Refreshing the mount table (mtab parse + alias stats)
-                    // inside this loop would stall the drain mid-burst long
-                    // enough for the dispatcher to overflow and kick us;
-                    // coalesce and run it once after the loop instead.
-                    mountRefreshPending = true;
-                    continue;
-                }
-
-                // RENAME_TO is always forwarded: an unresolved destination
-                // means "renamed out of the monitored roots" for the paired
-                // RENAME_FROM, and a missing pair means "created here"
-                // (kept semantics).
-                if (act == ACT_RENAME_TO_FILE || act == ACT_RENAME_TO_FOLDER) {
-                    const QString resolved = d->resolveAndFilterFullPath(event.eventPath);
-                    pendingBatch.append(QueuedFsEvent { act, event.cookie, QString(), resolved });
-                    continue;
-                }
-
-                const QString resolved = d->resolveAndFilterFullPath(event.eventPath);
-                if (resolved.isNull())
-                    continue;
-
-                pendingBatch.append(QueuedFsEvent { act, event.cookie, resolved, QString() });
+            if (received == 0) {
+                // SEQPACKET EOF: the dispatcher dispatcher closed the connection.
+                qWarning() << "VfsMonitor: event dispatcher connection closed";
+                flushPendingBatch();
+                breakConnection();
+                return;
             }
 
-            flushPendingBatch();
+            if (static_cast<size_t>(received) < kPathOffset + 1) {
+                qWarning() << "VfsMonitor: received short dispatcher message:" << received;
+                continue;
+            }
+
+            fs_event &event = receiveSlot;
+
+            // The server sends sizeof(fs_event) bytes with the path field
+            // NUL-terminated by g_strlcpy. Terminate at the path boundary
+            // defensively in case a short message left the tail uninitialised.
+            const size_t pathBytes = static_cast<size_t>(received) - kPathOffset;
+            event.path[std::min(pathBytes, kPathLen) - 1] = '\0';
+
+            dev_t deviceId = makedev(event.major, event.minor);
+
+            const int act = event.act;
+            if (act < ACT_NEW_FILE || act > ACT_CLOSE_WRITE_FILE)
+                continue;
+
+            if (act == ACT_MOUNT || act == ACT_UNMOUNT) {
+                // Refreshing the mount table (mtab parse + alias stats)
+                // inside this loop would stall the drain mid-burst long
+                // enough for the dispatcher to overflow and kick us;
+                // coalesce and run it once after the loop instead.
+                mountRefreshPending = true;
+                continue;
+            }
+
+            // RENAME_TO is always forwarded: an unresolved destination
+            // means "renamed out of the monitored roots" for the paired
+            // RENAME_FROM, and a missing pair means "created here"
+            // (kept semantics).
+            if (act == ACT_RENAME_TO_FILE || act == ACT_RENAME_TO_FOLDER) {
+                const QString resolved = d->resolveAndFilterFullPath(deviceId, event.path);
+                pendingBatch.append(QueuedFsEvent { act, event.cookie, QString(), resolved });
+                continue;
+            }
+
+            const QString resolved = d->resolveAndFilterFullPath(deviceId, event.path);
+            if (resolved.isNull())
+                continue;
+
+            pendingBatch.append(QueuedFsEvent { act, event.cookie, resolved, QString() });
         }
+
+        flushPendingBatch();
 
         if (mountRefreshPending) {
             mountRefreshPending = false;
@@ -390,14 +361,9 @@ private:
     QSocketNotifier *notifier { nullptr };
     int socketFd { -1 };
 
-    // Reused recvmmsg buffers: one syscall collects up to kReceiveBatch
-    // packets (kDispatchMaxPathLen-sized each). The iovec pointers are
-    // reset before every call because the kernel advances them while
-    // consuming a message.
-    static constexpr int kReceiveBatch = 64;
-    std::vector<DispatchEvent> receiveSlots;
-    std::vector<mmsghdr> msgHeaders;
-    std::vector<iovec> iovs;
+    // Reused receive buffer: one recv() reads one fs_event (SOCK_SEQPACKET
+    // preserves message boundaries).
+    fs_event receiveSlot {};
     // Events decoded since the last flush, parked in reader-thread-owned
     // storage so the userspace queue is filled under one lock per batch.
     QVector<QueuedFsEvent> pendingBatch;
@@ -448,12 +414,13 @@ VfsMonitorFileSystemWatcherPrivate::~VfsMonitorFileSystemWatcherPrivate()
 bool VfsMonitorFileSystemWatcherPrivate::initMountPoints()
 {
     mountPoints.clear();
-    orderedMountPoints.clear();
-    rootAliases.clear();
+    childMountPoints.clear();
+    lowerFsExists = false;
 
-    libmnt_table *mtab = mnt_new_table();
-    if (!mtab)
+    struct libmnt_table *mtab = mnt_new_table();
+    if (!mtab) {
         return false;
+    }
 
     if (mnt_table_parse_mtab(mtab, nullptr) < 0) {
         mnt_free_table(mtab);
@@ -463,116 +430,115 @@ bool VfsMonitorFileSystemWatcherPrivate::initMountPoints()
     const QHash<int, MountEntry> byMountId = collectMountEntries(mtab);
     mnt_free_table(mtab);
 
+    QHash<int, MountEntry> rootMountTree;
     for (auto it = byMountId.cbegin(); it != byMountId.cend(); ++it) {
-        const MountEntry &entry = it.value();
+        const auto &entry = it.value();
+
         if (!isParentChainUnderRoot(byMountId, entry))
             continue;
 
         mountPoints[entry.deviceId].append(entry.mountPoint);
-        orderedMountPoints.append({ entry.deviceId, entry.mountPoint });
+        rootMountTree.insert(it.key(), entry);
+        lowerFsExists = lowerFsExists || entry.isLowerFs;
     }
 
     for (auto &points : mountPoints) {
-        points.removeDuplicates();
         std::sort(points.begin(), points.end(),
-                  [](const QString &left, const QString &right) {
-                      return left.length() > right.length();
+                  [](const QString &a, const QString &b) {
+                      return a.length() > b.length();
                   });
     }
 
-    std::sort(orderedMountPoints.begin(), orderedMountPoints.end(),
-              [](const MountPointAlias &left, const MountPointAlias &right) {
-                  return left.mountPoint.length() > right.mountPoint.length();
-              });
+    for (auto it = rootMountTree.cbegin(); it != rootMountTree.cend(); ++it) {
+        const auto &parent = it.value();
+        QStringList children;
+        for (const auto &entry : std::as_const(rootMountTree)) {
+            if (entry.parentMountId == it.key()) {
+                children.append(entry.mountPoint);
+            }
+        }
 
-    rebuildRootAliases();
+        if (!children.isEmpty())
+            childMountPoints[parent.deviceId].append(children);
+    }
+
+    for (auto &points : childMountPoints) {
+        points.removeDuplicates();
+        std::sort(points.begin(), points.end(),
+                  [](const QString &a, const QString &b) {
+                      return a.length() > b.length();
+                  });
+    }
+
+    int totalPoints = 0;
+    for (const auto &pts : std::as_const(mountPoints)) {
+        totalPoints += pts.size();
+    }
+    qInfo() << "VfsMonitor: loaded" << mountPoints.size()
+            << "devices," << totalPoints << "mount points,"
+            << childMountPoints.size() << "devices with child mount points,"
+            << "lowerfs exists:" << lowerFsExists;
     return !mountPoints.isEmpty();
 }
 
-void VfsMonitorFileSystemWatcherPrivate::rebuildRootAliases()
+bool VfsMonitorFileSystemWatcherPrivate::isLowerFsEvent(dev_t deviceId, const QString &fullPath) const
 {
-    rootAliases.clear();
+    if (!lowerFsExists)
+        return false;
 
-    for (const QString &rootPath : std::as_const(rootPaths)) {
-        const FileIdentity rootIdentity = identifyPath(rootPath);
-        if (!rootIdentity.valid)
-            continue;
+    auto it = childMountPoints.find(deviceId);
+    if (it == childMountPoints.end())
+        return false;
 
-        for (const MountPointAlias &alias : std::as_const(orderedMountPoints)) {
-            if (alias.mountPoint == "/")
-                continue;
-
-            const QString aliasRoot = QDir::cleanPath(alias.mountPoint + rootPath);
-            if (aliasRoot == rootPath)
-                continue;
-
-            const FileIdentity aliasIdentity = identifyPath(aliasRoot);
-            if (!aliasIdentity.valid)
-                continue;
-
-            if (aliasIdentity.deviceId != rootIdentity.deviceId
-                || aliasIdentity.inode != rootIdentity.inode) {
-                continue;
-            }
-
-            rootAliases.append(qMakePair(aliasRoot, rootPath));
+    for (const QString &childMountPoint : it.value()) {
+        if (mountPointStartsWith(fullPath, childMountPoint)) {
+            return true;
         }
     }
 
-    std::sort(rootAliases.begin(), rootAliases.end(),
-              [](const QPair<QString, QString> &left, const QPair<QString, QString> &right) {
-                  return left.first.length() > right.first.length();
-              });
+    return false;
 }
 
-QString VfsMonitorFileSystemWatcherPrivate::resolveAndFilterFullPath(const char *absolutePath) const
+QString VfsMonitorFileSystemWatcherPrivate::resolveAndFilterFullPath(dev_t deviceId,
+                                                                     const char *relativePath) const
 {
-    if (!absolutePath || absolutePath[0] == '\0')
+    auto it = mountPoints.find(deviceId);
+    if (it == mountPoints.end())
         return {};
 
-    const QString fullPath = QDir::cleanPath(QString::fromUtf8(absolutePath));
-    if (!fullPath.startsWith('/'))
-        return {};
+    const QStringList &points = it.value();
+    const QString relPath = QString::fromUtf8(relativePath);
 
-    const QString directPath = filterDirectPath(rootPaths, excludePredicate, fullPath);
-    if (!directPath.isNull())
-        return directPath;
+    // Try each mount point (sorted longest first).
+    // Return the first one that falls under a monitored root path
+    // and passes the exclude predicate.
+    for (const QString &mp : points) {
+        QString fullPath = (mp == "/") ? relPath : (mp + relPath);
 
-    for (const auto &alias : rootAliases) {
-        if (!isDescendantOfRoot(fullPath, alias.first))
+        if (isLowerFsEvent(deviceId, fullPath))
             continue;
 
-        const QString suffix = fullPath.mid(alias.first.length());
-        const QString translatedPath = alias.second + suffix;
-        const QString filteredTranslated = filterDirectPath(rootPaths, excludePredicate, translatedPath);
-        if (!filteredTranslated.isNull())
-            return filteredTranslated;
+        if (std::none_of(rootPaths.cbegin(), rootPaths.cend(),
+                         [&fullPath](const QString &root) { return isDescendantOfRoot(fullPath, root); }))
+            continue;
+
+        if (excludePredicate && excludePredicate(fullPath))
+            continue;
+
+        return fullPath;
     }
 
-    for (const MountPointAlias &sourceAlias : orderedMountPoints) {
-        if (!mountPointStartsWith(fullPath, sourceAlias.mountPoint))
-            continue;
-
-        const auto pointsIt = mountPoints.constFind(sourceAlias.deviceId);
-        if (pointsIt == mountPoints.cend())
-            return {};
-
-        const QString suffix = (sourceAlias.mountPoint == "/")
-                ? fullPath
-                : fullPath.mid(sourceAlias.mountPoint.length());
-
-        for (const QString &candidateMountPoint : pointsIt.value()) {
-            const QString candidateFullPath = (candidateMountPoint == "/")
-                    ? suffix
-                    : candidateMountPoint + suffix;
-            const QString filteredCandidate = filterDirectPath(rootPaths, excludePredicate, candidateFullPath);
-            if (!filteredCandidate.isNull())
-                return filteredCandidate;
-        }
-
-        // The longest matching source mount point wins. If its aliases do not
-        // land inside a monitored root, do not fall back to shorter prefixes.
-        return {};
+    // In overlay root environments, the root "/" filesystem has no separate mount
+    // entry in mountPoints. When all mount points fail and relPath is already
+    // an absolute path, treat it as the true absolute path and re-check.
+    if (relPath.startsWith('/')) {
+        auto found = std::find_if(rootPaths.cbegin(), rootPaths.cend(),
+                                  [&relPath, this](const QString &root) {
+                                      return isDescendantOfRoot(relPath, root)
+                                              && (!excludePredicate || !excludePredicate(relPath));
+                                  });
+        if (found != rootPaths.cend())
+            return relPath;
     }
 
     return {};
@@ -586,29 +552,34 @@ QPair<QString, QString> VfsMonitorFileSystemWatcherPrivate::splitPath(const QStr
 
 int VfsMonitorFileSystemWatcherPrivate::connectDispatcherSocket()
 {
-    // Non-blocking fd: the reader thread drains until EAGAIN.
-    int fd = ::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_NONBLOCK, 0);
+    // Obtain the event channel fd via D-Bus fd passing from the
+    // org.deepin.Anything service's GetEventChannel method.
+    EventRelayReceiver *receiver = event_relay_receiver_new(
+        kAnythingBusName, kAnythingObjectPath, kAnythingInterfaceName);
+    if (!receiver) {
+        qWarning() << "VfsMonitor: failed to create event relay receiver";
+        return -1;
+    }
+
+    int fd = -1;
+    guint32 protocol_id = 0;
+    if (!event_relay_receiver_get_fd(receiver, &fd, &protocol_id)) {
+        qWarning() << "VfsMonitor: failed to get fd from relay receiver";
+        event_relay_receiver_free(receiver);
+        return -1;
+    }
+
+    // The receiver owns the fd and closes it on free. Dup so the reader
+    // thread owns its own fd, then free the receiver.
+    fd = ::dup(fd);
+    event_relay_receiver_free(receiver);
+
     if (fd < 0) {
-        qWarning() << "VfsMonitor: failed to create dispatcher socket:" << std::strerror(errno);
+        qWarning() << "VfsMonitor: failed to dup relay fd:" << std::strerror(errno);
         return -1;
     }
 
-    sockaddr_un address {};
-    address.sun_family = AF_UNIX;
-    const QByteArray path = socketPath.toUtf8();
-    std::strncpy(address.sun_path, path.constData(), sizeof(address.sun_path) - 1);
-
-    if (::connect(fd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
-        qWarning() << "VfsMonitor: deepin-anything event dispatcher not available:" << std::strerror(errno);
-        ::close(fd);
-        return -1;
-    }
-
-    // Enlarge the receive buffer for burst headroom (mirrors deepin-anything
-    // commit f2dd210). Note the kernel caps this at net.core.rmem_max
-    // (default ~416 KiB ≈ ~100 packets of 4 KB) — buffer sizes alone can
-    // never absorb a burst of thousands of events, which is why draining
-    // happens on the dedicated reader thread instead.
+    // Enlarge the receive buffer for burst headroom.
     constexpr int kReceiveBufSize = 8 << 20;
     if (::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &kReceiveBufSize,
                      sizeof(kReceiveBufSize)) < 0) {
@@ -635,13 +606,6 @@ bool VfsMonitorFileSystemWatcherPrivate::initDispatcher()
     if (!initMountPoints()) {
         qWarning() << "VfsMonitor: failed to initialize mount point aliases";
     }
-
-    // Resolve the dispatcher socket path. Production uses the well-known
-    // path; the DFM_VFSMONITOR_SOCKET_PATH env var lets unit tests point the
-    // watcher at a mock dispatcher they control.
-    socketPath = QString::fromUtf8(qgetenv("DFM_VFSMONITOR_SOCKET_PATH"));
-    if (socketPath.isEmpty())
-        socketPath = QString::fromUtf8(kDispatcherSocketPath);
 
     // Reconnect timer lives on the home thread (the thread that called
     // create()). It is single-shot and rearmed by attemptReconnect().

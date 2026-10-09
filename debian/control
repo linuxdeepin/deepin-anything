@@ -18,13 +18,14 @@ Build-Depends:
   libkf6idletime-dev,
   libdocparser-dev,
   libdtk6ocr-dev,
-  libgtest-dev
+  libgtest-dev,
+  libsystemd-dev
 Standards-Version: 3.9.8
 Homepage: http://github.com/linuxdeepin/deepin-anything
 
 Package: deepin-anything-dkms
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, dkms
+Depends: ${misc:Depends}, dkms
 Description: anything module
  anything kernel module package
 
@@ -36,7 +37,7 @@ Description: Deepin Anything server package
 
 Package: deepin-anything-index
 Architecture: any
-Depends: deepin-anything-server,
+Depends: deepin-anything-server, deepin-security-loader,
          ${shlibs:Depends}, ${misc:Depends}
 Replaces: dde-file-manager (<< 6.6.7)
 Description: deepin desktop-environment - anything index service
