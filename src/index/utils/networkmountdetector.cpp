@@ -41,7 +41,9 @@ const QSet<QString> &localFuseSubtypes()
         QStringLiteral("ntfs"),     QStringLiteral("exfat"),
         QStringLiteral("vfat"),     QStringLiteral("iso9660"),
         QStringLiteral("bind"),     QStringLiteral("mergerfs"),
-        QStringLiteral("unionfs"),
+        QStringLiteral("unionfs"),  QStringLiteral("gvfsd-fuse"),
+        QStringLiteral("portal"),   QStringLiteral("appimage"),
+        QStringLiteral("flatpak"),
     };
     return set;
 }
@@ -77,12 +79,23 @@ bool NetworkMountDetector::isNetworkPath(const QString &path) const
 
     QReadLocker locker(&m_lock);
 
-    // Resolve symlinks so that a symlink into a network mount is caught.
+    if (m_networkMountPoints.isEmpty())
+        return false;
+
+    // Fast path: check the raw path first (pure string comparison, no syscall).
+    // Covers the vast majority of cases — paths directly under a network mount
+    // without symlink indirection.
+    for (const QString &mountPoint : m_networkMountPoints) {
+        if (path == mountPoint || path.startsWith(mountPoint + QLatin1Char('/')))
+            return true;
+    }
+
+    // Slow path: resolve symlinks in case a symlink points into a network mount.
     // canonicalFilePath() returns empty if the target doesn't exist (e.g.
     // network mount is down); fall back to the raw path in that case.
     QString resolved = QFileInfo(path).canonicalFilePath();
-    if (resolved.isEmpty())
-        resolved = path;
+    if (resolved.isEmpty() || resolved == path)
+        return false;
 
     for (const QString &mountPoint : m_networkMountPoints) {
         if (resolved == mountPoint || resolved.startsWith(mountPoint + QLatin1Char('/')))
@@ -137,6 +150,10 @@ bool NetworkMountDetector::isNetworkFilesystem(const char *fstype, const char *s
     if (!fs.startsWith(QLatin1String("fuse")))
         return networkFsTypes().contains(fs);
 
+    // fusectl is a kernel control filesystem for FUSE → local.
+    if (fs == QLatin1String("fusectl"))
+        return false;
+
     // FUSE: known local subtype → local.
     QString subtype = fs.startsWith(QLatin1String("fuse.")) ? fs.mid(5) : QString();
     if (localFuseSubtypes().contains(subtype))
@@ -146,7 +163,7 @@ bool NetworkMountDetector::isNetworkFilesystem(const char *fstype, const char *s
     if (source && *source && QString::fromUtf8(source).contains(QLatin1String("://")))
         return true;
 
-    // Unknown FUSE: conservatively treat as network.
+    // Unknown FUSE with no URL source: conservatively treat as network.
     return true;
 }
 
