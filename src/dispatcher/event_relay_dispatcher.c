@@ -108,9 +108,14 @@ int event_relay_dispatcher_get_event_channel(EventRelayDispatcher *dispatcher)
      * SO_RCVBUFFORCE bypasses the system wmem_max limit (requires CAP_NET_ADMIN
      * or root). 8 MiB absorbs large bursts of small event packets. */
     int rcv_buf_size = 8 << 20;  /* 8 MiB */
-    if (setsockopt(fds[1], SOL_SOCKET, SO_RCVBUFFORCE, &rcv_buf_size, sizeof(rcv_buf_size)) < 0)
-        g_debug("relay: setsockopt(SO_RCVBUFFORCE) on client failed: %s",
-                 strerror(errno));
+    if (setsockopt(fds[1], SOL_SOCKET, SO_RCVBUFFORCE, &rcv_buf_size, sizeof(rcv_buf_size)) < 0) {
+        g_info("relay: setsockopt(SO_RCVBUFFORCE) on client failed: %s, falling back to SO_RCVBUF",
+               strerror(errno));
+        /* SO_RCVBUFFORCE requires CAP_NET_ADMIN; fall back to SO_RCVBUF
+         * which respects rmem_max but needs no special capability. */
+        if (setsockopt(fds[1], SOL_SOCKET, SO_RCVBUF, &rcv_buf_size, sizeof(rcv_buf_size)) < 0)
+            g_debug("relay: setsockopt(SO_RCVBUF) on client failed: %s", strerror(errno));
+    }
 
     /* Store sender end (fds[0]) in the list, return client end (fds[1]). */
     g_ptr_array_add(dispatcher->socket_list, GINT_TO_POINTER(fds[0]));
