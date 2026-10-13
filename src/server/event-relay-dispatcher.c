@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <stddef.h>
 
 #include "event_relay_dispatcher.h"
 
@@ -98,7 +99,8 @@ static gpointer relay_thread_func(gpointer data)
             continue;
         }
 
-        event_relay_dispatcher_send(d->relay, ev, sizeof(fs_event));
+        size_t send_len = offsetof(fs_event, path) + strlen(ev->path) + 1;
+        event_relay_dispatcher_send(d->relay, ev, send_len);
         g_slice_free(fs_event, ev);
     }
 
