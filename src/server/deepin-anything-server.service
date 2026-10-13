@@ -16,8 +16,10 @@ TimeoutStopSec=3
 RuntimeDirectory=deepin-anything
 ProtectProc=invisible
 SupplementaryGroups=
-CapabilityBoundingSet=CAP_SYS_MODULE CAP_SYS_ADMIN
-AmbientCapabilities=CAP_SYS_MODULE CAP_SYS_ADMIN
+# CAP_NET_ADMIN: needed by SO_RCVBUFFORCE in event relay dispatcher to enlarge
+# socket receive buffer beyond rmem_max for high-throughput event delivery.
+CapabilityBoundingSet=CAP_SYS_MODULE CAP_SYS_ADMIN CAP_NET_ADMIN
+AmbientCapabilities=CAP_SYS_MODULE CAP_SYS_ADMIN CAP_NET_ADMIN
 NoNewPrivileges=true
 OOMScoreAdjust=-500
 Nice=-5
