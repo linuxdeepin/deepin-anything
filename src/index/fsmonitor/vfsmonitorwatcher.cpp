@@ -38,6 +38,11 @@ constexpr size_t kDispatchMaxPathLen = 4096;
 // backlog cannot starve the event loop for seconds.
 constexpr int kMaxEventsPerDrain = 2048;
 
+// Batch size for recvmmsg(): how many fs_event messages to drain per syscall.
+// 64 × 4 KiB = 256 KiB of struct storage — balances syscall reduction
+// against memory footprint.
+constexpr int kRecvBatchSize = 64;
+
 struct MountEntry
 {
     dev_t deviceId { 0 };
@@ -152,8 +157,10 @@ QHash<int, MountEntry> collectMountEntries(libmnt_table *mtab)
 //
 // Because the relay dispatcher closes the connection on the very first
 // EAGAIN, this hot loop must stay as cheap as physically possible:
-//   - recv() reads one fs_event per syscall (SOCK_SEQPACKET preserves
-//     message boundaries); the fd is non-blocking so EAGAIN stops the drain;
+//   - recvmmsg() reads up to kRecvBatchSize fs_event per syscall
+//     (SOCK_SEQPACKET preserves message boundaries); the socket is
+//     non-blocking (SOCK_NONBLOCK set by the dispatcher), so EAGAIN
+//     stops the drain;
 //   - received slots are never re-zeroed (a 4 KiB memset per packet); each
 //     path is NUL-terminated in place at the path field boundary;
 //   - mount/unmount notifications only set a flag — the mount-table refresh
@@ -167,6 +174,22 @@ public:
     explicit VfsSocketReader(VfsMonitorFileSystemWatcherPrivate *dd)
         : d(dd)
     {
+        // Pre-allocate iovec/mmsghdr arrays for recvmmsg() batch receive.
+        // SOCK_SEQPACKET preserves message boundaries: each mmsghdr
+        // returns one complete fs_event. The iovec pointers are reset
+        // before every batch because the kernel advances them while
+        // consuming a message.
+        for (int i = 0; i < kRecvBatchSize; ++i) {
+            iovs[i].iov_base = &receiveSlots[i];
+            iovs[i].iov_len = sizeof(receiveSlots[i]);
+            msgHeaders[i].msg_hdr.msg_name = nullptr;
+            msgHeaders[i].msg_hdr.msg_namelen = 0;
+            msgHeaders[i].msg_hdr.msg_iov = &iovs[i];
+            msgHeaders[i].msg_hdr.msg_iovlen = 1;
+            msgHeaders[i].msg_hdr.msg_control = nullptr;
+            msgHeaders[i].msg_hdr.msg_controllen = 0;
+            msgHeaders[i].msg_hdr.msg_flags = 0;
+        }
     }
 
     // Runs in the reader thread. Adopts a connected fd and starts watching.
@@ -214,12 +237,16 @@ private:
         constexpr size_t kPathLen = sizeof(fs_event().path);
 
         while (socketFd >= 0) {
-            // SOCK_SEQPACKET preserves message boundaries: one recv() returns
-            // one complete fs_event. The fd is non-blocking (set by the relay
-            // dispatcher's socketpair), so EAGAIN stops the drain.
-            const ssize_t received = ::recv(socketFd, &receiveSlot,
-                                             sizeof(receiveSlot), 0);
-            if (received < 0) {
+            // Reset iovec pointers before each batch: the kernel may
+            // advance them while consuming messages.
+            for (int i = 0; i < kRecvBatchSize; ++i) {
+                iovs[i].iov_base = &receiveSlots[i];
+                iovs[i].iov_len = sizeof(receiveSlots[i]);
+            }
+
+            const int nrecv = ::recvmmsg(socketFd, msgHeaders, kRecvBatchSize,
+                                          0, nullptr);
+            if (nrecv < 0) {
                 if (errno == EINTR)
                     continue;
 
@@ -232,57 +259,64 @@ private:
                 return;
             }
 
-            if (received == 0) {
-                // SEQPACKET EOF: the dispatcher dispatcher closed the connection.
-                qWarning() << "VfsMonitor: event dispatcher connection closed";
-                flushPendingBatch();
-                breakConnection();
-                return;
-            }
+            if (nrecv == 0)
+                break;   // defensive: should not happen for SEQPACKET
 
-            if (static_cast<size_t>(received) < kPathOffset + 1) {
-                qWarning() << "VfsMonitor: received short dispatcher message:" << received;
-                continue;
-            }
+            for (int i = 0; i < nrecv; ++i) {
+                const ssize_t received = msgHeaders[i].msg_len;
 
-            fs_event &event = receiveSlot;
+                if (received == 0) {
+                    // SEQPACKET EOF: the dispatcher closed the connection.
+                    qWarning() << "VfsMonitor: event dispatcher connection closed";
+                    flushPendingBatch();
+                    breakConnection();
+                    return;
+                }
 
-            // The server sends sizeof(fs_event) bytes with the path field
-            // NUL-terminated by g_strlcpy. Terminate at the path boundary
-            // defensively in case a short message left the tail uninitialised.
-            const size_t pathBytes = static_cast<size_t>(received) - kPathOffset;
-            event.path[std::min(pathBytes, kPathLen) - 1] = '\0';
+                if (static_cast<size_t>(received) < kPathOffset + 1) {
+                    qWarning() << "VfsMonitor: received short dispatcher message:" << received;
+                    continue;
+                }
 
-            dev_t deviceId = makedev(event.major, event.minor);
+                fs_event &event = receiveSlots[i];
 
-            const int act = event.act;
-            if (act < ACT_NEW_FILE || act > ACT_CLOSE_WRITE_FILE)
-                continue;
+                // The server sends sizeof(fs_event) bytes with the path field
+                // NUL-terminated by g_strlcpy. Terminate at the path boundary
+                // defensively in case a short message left the tail uninitialised.
+                const size_t pathBytes = static_cast<size_t>(received) - kPathOffset;
+                event.path[std::min(pathBytes, kPathLen) - 1] = '\0';
 
-            if (act == ACT_MOUNT || act == ACT_UNMOUNT) {
-                // Refreshing the mount table (mtab parse + alias stats)
-                // inside this loop would stall the drain mid-burst long
-                // enough for the dispatcher to overflow and kick us;
-                // coalesce and run it once after the loop instead.
-                mountRefreshPending = true;
-                continue;
-            }
+                dev_t deviceId = makedev(event.major, event.minor);
 
-            // RENAME_TO is always forwarded: an unresolved destination
-            // means "renamed out of the monitored roots" for the paired
-            // RENAME_FROM, and a missing pair means "created here"
-            // (kept semantics).
-            if (act == ACT_RENAME_TO_FILE || act == ACT_RENAME_TO_FOLDER) {
+                const int act = event.act;
+                if (act < ACT_NEW_FILE || act > ACT_CLOSE_WRITE_FILE)
+                    continue;
+
+                if (act == ACT_MOUNT || act == ACT_UNMOUNT) {
+                    // Refreshing the mount table (mtab parse + alias stats)
+                    // inside this loop would stall the drain mid-burst long
+                    // enough for the dispatcher to overflow and kick us;
+                    // coalesce and run it once after the loop instead.
+                    mountRefreshPending = true;
+                    continue;
+                }
+
+                // RENAME_TO is always forwarded: an unresolved destination
+                // means "renamed out of the monitored roots" for the paired
+                // RENAME_FROM, and a missing pair means "created here"
+                // (kept semantics).
+                if (act == ACT_RENAME_TO_FILE || act == ACT_RENAME_TO_FOLDER) {
+                    const QString resolved = d->resolveAndFilterFullPath(deviceId, event.path);
+                    pendingBatch.append(QueuedFsEvent { act, event.cookie, QString(), resolved });
+                    continue;
+                }
+
                 const QString resolved = d->resolveAndFilterFullPath(deviceId, event.path);
-                pendingBatch.append(QueuedFsEvent { act, event.cookie, QString(), resolved });
-                continue;
+                if (resolved.isNull())
+                    continue;
+
+                pendingBatch.append(QueuedFsEvent { act, event.cookie, resolved, QString() });
             }
-
-            const QString resolved = d->resolveAndFilterFullPath(deviceId, event.path);
-            if (resolved.isNull())
-                continue;
-
-            pendingBatch.append(QueuedFsEvent { act, event.cookie, resolved, QString() });
         }
 
         flushPendingBatch();
@@ -348,9 +382,13 @@ private:
     QSocketNotifier *notifier { nullptr };
     int socketFd { -1 };
 
-    // Reused receive buffer: one recv() reads one fs_event (SOCK_SEQPACKET
-    // preserves message boundaries).
-    fs_event receiveSlot {};
+    // Reused receive buffers: recvmmsg() reads up to kRecvBatchSize fs_event
+    // per syscall (SOCK_SEQPACKET preserves message boundaries). The iovec
+    // and mmsghdr arrays are pre-allocated in the constructor and reset
+    // before each batch call.
+    fs_event receiveSlots[kRecvBatchSize] {};
+    struct iovec iovs[kRecvBatchSize] {};
+    struct mmsghdr msgHeaders[kRecvBatchSize] {};
     // Events decoded since the last flush, parked in reader-thread-owned
     // storage so the userspace queue is filled under one lock per batch.
     QVector<QueuedFsEvent> pendingBatch;
