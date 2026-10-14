@@ -601,12 +601,11 @@ int VfsMonitorFileSystemWatcherPrivate::connectDispatcherSocket()
         return -1;
     }
 
-    // Enlarge the receive buffer for burst headroom.
-    constexpr int kReceiveBufSize = 8 << 20;
-    if (::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &kReceiveBufSize,
-                     sizeof(kReceiveBufSize)) < 0) {
-        qDebug() << "VfsMonitor: setsockopt(SO_RCVBUF) failed:" << std::strerror(errno);
-    }
+    // The dispatcher already sets the receive buffer via SO_RCVBUFFORCE
+    // (with SO_RCVBUF fallback) on the socketpair fd before passing it
+    // through D-Bus.  Re-issuing SO_RCVBUF here would override that with
+    // a value capped by rmem_max, potentially *shrinking* the buffer on
+    // systems where rmem_max < 8 MiB.
 
     return fd;
 }
