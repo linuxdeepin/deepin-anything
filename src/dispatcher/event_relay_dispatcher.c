@@ -105,7 +105,7 @@ int event_relay_dispatcher_get_event_channel(EventRelayDispatcher *dispatcher)
     }
 
     /* Enlarge receive buffer so bursts of events don't cause packet drops.
-     * SO_RCVBUFFORCE bypasses the system wmem_max limit (requires CAP_NET_ADMIN
+     * SO_RCVBUFFORCE bypasses the system rmem_max limit (requires CAP_NET_ADMIN
      * or root). 8 MiB absorbs large bursts of small event packets. */
     int rcv_buf_size = 8 << 20;  /* 8 MiB */
     if (setsockopt(fds[1], SOL_SOCKET, SO_RCVBUFFORCE, &rcv_buf_size, sizeof(rcv_buf_size)) < 0) {
@@ -115,6 +115,19 @@ int event_relay_dispatcher_get_event_channel(EventRelayDispatcher *dispatcher)
          * which respects rmem_max but needs no special capability. */
         if (setsockopt(fds[1], SOL_SOCKET, SO_RCVBUF, &rcv_buf_size, sizeof(rcv_buf_size)) < 0)
             g_debug("relay: setsockopt(SO_RCVBUF) on client failed: %s", strerror(errno));
+    }
+
+    /* Enlarge send buffer on the sender end so bursts of events don't
+     * exhaust the kernel send queue and trigger EAGAIN/EWOULDBLOCK, which
+     * would cause the slow-client kick.  SO_SNDBUFFORCE bypasses wmem_max
+     * (requires CAP_NET_ADMIN, already granted via the systemd unit).
+     * Falls back to SO_SNDBUF which respects wmem_max. */
+    int snd_buf_size = 8 << 20;  /* 8 MiB */
+    if (setsockopt(fds[0], SOL_SOCKET, SO_SNDBUFFORCE, &snd_buf_size, sizeof(snd_buf_size)) < 0) {
+        g_info("relay: setsockopt(SO_SNDBUFFORCE) on sender failed: %s, falling back to SO_SNDBUF",
+               strerror(errno));
+        if (setsockopt(fds[0], SOL_SOCKET, SO_SNDBUF, &snd_buf_size, sizeof(snd_buf_size)) < 0)
+            g_debug("relay: setsockopt(SO_SNDBUF) on sender failed: %s", strerror(errno));
     }
 
     /* Store sender end (fds[0]) in the list, return client end (fds[1]). */
