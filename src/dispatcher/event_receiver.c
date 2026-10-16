@@ -54,6 +54,8 @@ EventReceiver *event_receiver_new(const char *address)
         goto fail;
     }
 
+    g_info("receiver connected to %s (fd=%d)", r->address, r->sock_fd);
+
     return r;
 
 fail:
@@ -66,8 +68,11 @@ void event_receiver_free(EventReceiver *receiver)
     if (receiver == NULL)
         return;
 
-    if (receiver->sock_fd >= 0)
+    if (receiver->sock_fd >= 0) {
+        g_info("receiver closing connection to %s (fd=%d)",
+               receiver->address ? receiver->address : "(null)", receiver->sock_fd);
         close(receiver->sock_fd);
+    }
 
     g_free(receiver->address);
     g_free(receiver);
@@ -94,7 +99,7 @@ static EventReceiveResult do_receive(EventReceiver *receiver,
             return EVENT_RECEIVE_INTERRUPTED;
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return EVENT_RECEIVE_WOULD_BLOCK;
-        g_debug("recv() failed: %s", strerror(errno));
+        g_info("recv() failed: %s", strerror(errno));
         return EVENT_RECEIVE_ERROR;
     }
 

@@ -109,7 +109,7 @@ EventRelayReceiver *event_relay_receiver_new(const char *bus_name,
     r->sock_fd = fd;
     r->event_protocol_id = protocol_id;
 
-    g_debug("relay: receiver created (fd=%d, protocol_id=%u)",
+    g_info("relay: receiver created (fd=%d, protocol_id=%u)",
             r->sock_fd, r->event_protocol_id);
 
     return r;
@@ -124,8 +124,10 @@ void event_relay_receiver_free(EventRelayReceiver *receiver)
     if (receiver == NULL)
         return;
 
-    if (receiver->sock_fd >= 0)
+    if (receiver->sock_fd >= 0) {
+        g_info("relay: receiver closing (fd=%d)", receiver->sock_fd);
         close(receiver->sock_fd);
+    }
 
     g_free(receiver);
 }
@@ -155,7 +157,7 @@ EventReceiveResult event_relay_receiver_receive(EventRelayReceiver *receiver,
             return EVENT_RECEIVE_INTERRUPTED;
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return EVENT_RECEIVE_WOULD_BLOCK;
-        g_debug("relay: recv() failed: %s", strerror(errno));
+        g_info("relay: recv() failed: %s", strerror(errno));
         return EVENT_RECEIVE_ERROR;
     }
 

@@ -97,10 +97,14 @@ static void remove_client_fd(EventDispatcher *dispatcher, int fd, uid_t uid)
 
     close(fd);
 
+    g_info("client fd %d removed (uid %u), remaining connections for uid: %u",
+           fd, uid, clients->len);
+
     if (clients->len == 0) {
         /* g_hash_table_remove invokes ptr_array_destroy (the value destroy
          * func) which frees the GPtrArray — do not free it manually. */
         g_hash_table_remove(dispatcher->uid_to_clients, GUINT_TO_POINTER(uid));
+        g_info("uid %u removed from uid_to_clients (no remaining connections)", uid);
     }
 }
 
@@ -127,7 +131,7 @@ static void cleanup_disconnected_clients(EventDispatcher *dispatcher)
             char buf[1];
             ssize_t ret = recv(fd, buf, 1, MSG_PEEK | MSG_DONTWAIT);
             if (ret == 0 || (ret < 0 && (errno == EPIPE || errno == ECONNRESET))) {
-                g_debug("client fd %d (uid %u) disconnected", fd, uid);
+                g_info("client fd %d (uid %u) disconnected, removing", fd, uid);
                 close(fd);
                 g_ptr_array_remove_index_fast(clients, i);
             }
@@ -135,6 +139,7 @@ static void cleanup_disconnected_clients(EventDispatcher *dispatcher)
 
         /* If no more clients for this UID, remove from hash table via iterator */
         if (clients->len == 0) {
+            g_info("uid %u has no remaining connections after cleanup", uid);
             g_hash_table_iter_remove(&iter);
         }
     }
@@ -189,7 +194,8 @@ static gboolean accept_one(EventDispatcher *dispatcher)
     if (dispatcher->max_users > 0 &&
         !g_hash_table_contains(dispatcher->uid_to_clients, GUINT_TO_POINTER(uid)) &&
         g_hash_table_size(dispatcher->uid_to_clients) >= dispatcher->max_users) {
-        g_debug("max_users limit reached, rejecting uid %u", uid);
+        g_info("max_users limit reached (%u), rejecting uid %u",
+               dispatcher->max_users, uid);
         close(fd);
         return FALSE;
     }
@@ -199,7 +205,8 @@ static gboolean accept_one(EventDispatcher *dispatcher)
                                               GUINT_TO_POINTER(uid));
     if (dispatcher->max_connections_per_user > 0 && clients != NULL &&
         clients->len >= dispatcher->max_connections_per_user) {
-        g_debug("max_connections_per_user limit reached for uid %u", uid);
+        g_info("max_connections_per_user limit reached (%u) for uid %u (current: %u)",
+               dispatcher->max_connections_per_user, uid, clients->len);
         close(fd);
         return FALSE;
     }
@@ -211,7 +218,7 @@ static gboolean accept_one(EventDispatcher *dispatcher)
     if (clients == NULL) {
         prefixes = dispatcher->get_user_subscribed(uid, dispatcher->user_data);
         if (prefixes == NULL) {
-            g_debug("uid %u has no subscriptions, rejecting", uid);
+            g_info("uid %u has no subscriptions, rejecting connection", uid);
             close(fd);
             return FALSE;
         }
@@ -233,7 +240,8 @@ static gboolean accept_one(EventDispatcher *dispatcher)
         g_strfreev(prefixes);
     }
 
-    g_debug("accepted client fd %d, uid %u", fd, uid);
+    g_info("accepted client fd %d (uid %u), total connections for uid: %u",
+           fd, uid, clients->len);
     return TRUE;
 }
 
@@ -314,6 +322,9 @@ EventDispatcher *event_dispatcher_new(const char *address,
         goto fail;
     }
 
+    g_info("dispatcher created (address=%s, listen_fd=%d, max_users=%u, max_connections_per_user=%u)",
+           d->address, d->listen_fd, d->max_users, d->max_connections_per_user);
+
     return d;
 
 fail:
@@ -325,6 +336,9 @@ void event_dispatcher_free(EventDispatcher *dispatcher)
 {
     if (dispatcher == NULL)
         return;
+
+    g_info("dispatcher freeing (address=%s)",
+           dispatcher->address ? dispatcher->address : "(null)");
 
     if (dispatcher->listen_fd >= 0) {
         close(dispatcher->listen_fd);
@@ -405,10 +419,10 @@ gboolean event_dispatcher_send(EventDispatcher *dispatcher,
                 ssize_t ret = send(fd, event, send_size, MSG_NOSIGNAL);
                 if (ret < 0) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        g_debug("slow client fd %d (uid %u), kicking", fd, uid);
+                        g_info("slow client fd %d (uid %u), kicking", fd, uid);
                         remove_client_fd(dispatcher, fd, uid);
                     } else if (errno == EPIPE || errno == ECONNRESET) {
-                        g_debug("broken connection fd %d (uid %u)", fd, uid);
+                        g_info("broken connection fd %d (uid %u), removing", fd, uid);
                         remove_client_fd(dispatcher, fd, uid);
                     } else {
                         g_warning("send() to fd %d failed: %s",
