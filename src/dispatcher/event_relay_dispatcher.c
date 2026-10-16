@@ -54,7 +54,8 @@ static void prune_disconnected_channels(EventRelayDispatcher *dispatcher)
         char dummy;
         ssize_t ret = recv(fd, &dummy, 1, MSG_PEEK | MSG_DONTWAIT);
         if (ret == 0) {
-            g_debug("relay: pruning disconnected sender fd %d", fd);
+            g_message("relay: pruning disconnected sender fd %d, total after: %u",
+                      fd, dispatcher->socket_list->len - 1);
             g_ptr_array_remove_index_fast(dispatcher->socket_list, i);
         }
     }
@@ -93,14 +94,14 @@ int event_relay_dispatcher_get_event_channel(EventRelayDispatcher *dispatcher)
     /* Check channel limit. */
     if (dispatcher->max_event_channel > 0 &&
         dispatcher->socket_list->len >= dispatcher->max_event_channel) {
-        g_debug("relay: max_event_channel limit (%u) reached",
-                dispatcher->max_event_channel);
+        g_message("relay: max_event_channel limit (%u) reached",
+                  dispatcher->max_event_channel);
         return -1;
     }
 
     int fds[2];
     if (socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, fds) < 0) {
-        g_warning("relay: socketpair() failed: %s", strerror(errno));
+        g_critical("relay: socketpair() failed: %s", strerror(errno));
         return -1;
     }
 
@@ -109,12 +110,12 @@ int event_relay_dispatcher_get_event_channel(EventRelayDispatcher *dispatcher)
      * or root). 8 MiB absorbs large bursts of small event packets. */
     int rcv_buf_size = 8 << 20;  /* 8 MiB */
     if (setsockopt(fds[1], SOL_SOCKET, SO_RCVBUFFORCE, &rcv_buf_size, sizeof(rcv_buf_size)) < 0) {
-        g_info("relay: setsockopt(SO_RCVBUFFORCE) on client failed: %s, falling back to SO_RCVBUF",
-               strerror(errno));
+        g_warning("relay: setsockopt(SO_RCVBUFFORCE) on client failed: %s, falling back to SO_RCVBUF",
+                  strerror(errno));
         /* SO_RCVBUFFORCE requires CAP_NET_ADMIN; fall back to SO_RCVBUF
          * which respects rmem_max but needs no special capability. */
         if (setsockopt(fds[1], SOL_SOCKET, SO_RCVBUF, &rcv_buf_size, sizeof(rcv_buf_size)) < 0)
-            g_debug("relay: setsockopt(SO_RCVBUF) on client failed: %s", strerror(errno));
+            g_warning("relay: setsockopt(SO_RCVBUF) on client failed: %s", strerror(errno));
     }
 
     /* Enlarge send buffer on the sender end so bursts of events don't
@@ -124,17 +125,17 @@ int event_relay_dispatcher_get_event_channel(EventRelayDispatcher *dispatcher)
      * Falls back to SO_SNDBUF which respects wmem_max. */
     int snd_buf_size = 8 << 20;  /* 8 MiB */
     if (setsockopt(fds[0], SOL_SOCKET, SO_SNDBUFFORCE, &snd_buf_size, sizeof(snd_buf_size)) < 0) {
-        g_info("relay: setsockopt(SO_SNDBUFFORCE) on sender failed: %s, falling back to SO_SNDBUF",
-               strerror(errno));
+        g_warning("relay: setsockopt(SO_SNDBUFFORCE) on sender failed: %s, falling back to SO_SNDBUF",
+                  strerror(errno));
         if (setsockopt(fds[0], SOL_SOCKET, SO_SNDBUF, &snd_buf_size, sizeof(snd_buf_size)) < 0)
-            g_debug("relay: setsockopt(SO_SNDBUF) on sender failed: %s", strerror(errno));
+            g_warning("relay: setsockopt(SO_SNDBUF) on sender failed: %s", strerror(errno));
     }
 
     /* Store sender end (fds[0]) in the list, return client end (fds[1]). */
     g_ptr_array_add(dispatcher->socket_list, GINT_TO_POINTER(fds[0]));
 
-    g_debug("relay: created event channel (sender fd=%d, client fd=%d, total=%u)",
-            fds[0], fds[1], dispatcher->socket_list->len);
+    g_message("relay: created event channel (sender fd=%d, client fd=%d, total=%u)",
+              fds[0], fds[1], dispatcher->socket_list->len);
 
     return fds[1];
 }
@@ -159,15 +160,15 @@ gboolean event_relay_dispatcher_send(EventRelayDispatcher *dispatcher,
 
         if (ret < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                g_debug("relay: slow client fd %d, kicking", fd);
+                g_message("relay: slow client fd %d, kicking", fd);
                 /* Remove from array first so the destroy notify owns the
                  * close — no double-close, no fd-reuse hazard. */
                 g_ptr_array_remove_index_fast(dispatcher->socket_list, i);
             } else if (errno == EPIPE || errno == ECONNRESET) {
-                g_debug("relay: broken connection fd %d", fd);
+                g_message("relay: broken connection fd %d, removing", fd);
                 g_ptr_array_remove_index_fast(dispatcher->socket_list, i);
             } else {
-                g_warning("relay: send() to fd %d failed: %s",
+                g_critical("relay: send() to fd %d failed: %s",
                           fd, strerror(errno));
                 ok = FALSE;
                 /* Continue to remaining channels — broadcast semantics

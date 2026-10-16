@@ -74,7 +74,8 @@ static void handle_set_allow_caller(AnythingDBusService *service,
      * idempotent — if the key already exists the new key copy is freed. */
     g_hash_table_insert(service->allow_callers, g_strdup(unique_name), NULL);
 
-    g_message("SetAllowCaller: registered %s", unique_name);
+    g_message("SetAllowCaller: registered %s (total allow_callers: %u)",
+              unique_name, g_hash_table_size(service->allow_callers));
 
     /* g_variant_new("()") is floating; return_value takes ownership. */
     g_dbus_method_invocation_return_value(invocation, g_variant_new("()"));
@@ -389,6 +390,7 @@ AnythingDBusService *anything_dbus_service_new(ServerEventRelayDispatcher *dispa
     service->allow_callers = g_hash_table_new_full(g_str_hash, g_str_equal,
                                                     g_free, NULL);
     service->list_names_cancellable = g_cancellable_new();
+
     return service;
 }
 

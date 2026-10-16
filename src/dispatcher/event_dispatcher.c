@@ -97,10 +97,14 @@ static void remove_client_fd(EventDispatcher *dispatcher, int fd, uid_t uid)
 
     close(fd);
 
+    g_message("client fd %d removed (uid %u), remaining connections for uid: %u",
+              fd, uid, clients->len);
+
     if (clients->len == 0) {
         /* g_hash_table_remove invokes ptr_array_destroy (the value destroy
          * func) which frees the GPtrArray — do not free it manually. */
         g_hash_table_remove(dispatcher->uid_to_clients, GUINT_TO_POINTER(uid));
+        g_message("uid %u removed from uid_to_clients (no remaining connections)", uid);
     }
 }
 
@@ -127,7 +131,7 @@ static void cleanup_disconnected_clients(EventDispatcher *dispatcher)
             char buf[1];
             ssize_t ret = recv(fd, buf, 1, MSG_PEEK | MSG_DONTWAIT);
             if (ret == 0 || (ret < 0 && (errno == EPIPE || errno == ECONNRESET))) {
-                g_debug("client fd %d (uid %u) disconnected", fd, uid);
+                g_message("client fd %d (uid %u) disconnected, removing", fd, uid);
                 close(fd);
                 g_ptr_array_remove_index_fast(clients, i);
             }
@@ -135,6 +139,7 @@ static void cleanup_disconnected_clients(EventDispatcher *dispatcher)
 
         /* If no more clients for this UID, remove from hash table via iterator */
         if (clients->len == 0) {
+            g_message("uid %u has no remaining connections after cleanup", uid);
             g_hash_table_iter_remove(&iter);
         }
     }
@@ -166,7 +171,7 @@ static gboolean accept_one(EventDispatcher *dispatcher)
     if (fd < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return FALSE;
-        g_warning("accept4 failed: %s", strerror(errno));
+        g_critical("accept4 failed: %s", strerror(errno));
         return FALSE;
     }
 
@@ -174,11 +179,11 @@ static gboolean accept_one(EventDispatcher *dispatcher)
      * (which currently results in kicking the client). */
     int buf_size = 8 << 20;  /* 8 MiB */
     if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size)) < 0)
-        g_debug("setsockopt(SO_SNDBUF) failed: %s", strerror(errno));
+        g_warning("setsockopt(SO_SNDBUF) failed: %s", strerror(errno));
     struct ucred cred;
     socklen_t cred_len = sizeof(cred);
     if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len) < 0) {
-        g_warning("getsockopt(SO_PEERCRED) failed: %s", strerror(errno));
+        g_critical("getsockopt(SO_PEERCRED) failed: %s", strerror(errno));
         close(fd);
         return FALSE;
     }
@@ -189,7 +194,8 @@ static gboolean accept_one(EventDispatcher *dispatcher)
     if (dispatcher->max_users > 0 &&
         !g_hash_table_contains(dispatcher->uid_to_clients, GUINT_TO_POINTER(uid)) &&
         g_hash_table_size(dispatcher->uid_to_clients) >= dispatcher->max_users) {
-        g_debug("max_users limit reached, rejecting uid %u", uid);
+        g_message("max_users limit reached (%u), rejecting uid %u",
+                  dispatcher->max_users, uid);
         close(fd);
         return FALSE;
     }
@@ -199,7 +205,8 @@ static gboolean accept_one(EventDispatcher *dispatcher)
                                               GUINT_TO_POINTER(uid));
     if (dispatcher->max_connections_per_user > 0 && clients != NULL &&
         clients->len >= dispatcher->max_connections_per_user) {
-        g_debug("max_connections_per_user limit reached for uid %u", uid);
+        g_message("max_connections_per_user limit reached (%u) for uid %u (current: %u)",
+                  dispatcher->max_connections_per_user, uid, clients->len);
         close(fd);
         return FALSE;
     }
@@ -211,7 +218,7 @@ static gboolean accept_one(EventDispatcher *dispatcher)
     if (clients == NULL) {
         prefixes = dispatcher->get_user_subscribed(uid, dispatcher->user_data);
         if (prefixes == NULL) {
-            g_debug("uid %u has no subscriptions, rejecting", uid);
+            g_message("uid %u has no subscriptions, rejecting connection", uid);
             close(fd);
             return FALSE;
         }
@@ -233,7 +240,8 @@ static gboolean accept_one(EventDispatcher *dispatcher)
         g_strfreev(prefixes);
     }
 
-    g_debug("accepted client fd %d, uid %u", fd, uid);
+    g_message("accepted client fd %d (uid %u), total connections for uid: %u",
+              fd, uid, clients->len);
     return TRUE;
 }
 
@@ -314,6 +322,9 @@ EventDispatcher *event_dispatcher_new(const char *address,
         goto fail;
     }
 
+    g_message("dispatcher created (address=%s, listen_fd=%d, max_users=%u, max_connections_per_user=%u)",
+              d->address, d->listen_fd, d->max_users, d->max_connections_per_user);
+
     return d;
 
 fail:
@@ -372,7 +383,7 @@ gboolean event_dispatcher_send(EventDispatcher *dispatcher,
     /* Reject if event_path is not null-terminated within bounds (overrun) */
     size_t path_len = strnlen(event->event_path, DISPATCH_MAX_PATH_LEN);
     if (path_len == DISPATCH_MAX_PATH_LEN) {
-        g_warning("event_path not null-terminated, dropping event");
+        g_critical("event_path not null-terminated, dropping event");
         return FALSE;
     }
 
@@ -405,14 +416,14 @@ gboolean event_dispatcher_send(EventDispatcher *dispatcher,
                 ssize_t ret = send(fd, event, send_size, MSG_NOSIGNAL);
                 if (ret < 0) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        g_debug("slow client fd %d (uid %u), kicking", fd, uid);
+                        g_message("slow client fd %d (uid %u), kicking", fd, uid);
                         remove_client_fd(dispatcher, fd, uid);
                     } else if (errno == EPIPE || errno == ECONNRESET) {
-                        g_debug("broken connection fd %d (uid %u)", fd, uid);
+                        g_message("broken connection fd %d (uid %u), removing", fd, uid);
                         remove_client_fd(dispatcher, fd, uid);
                     } else {
-                        g_warning("send() to fd %d failed: %s",
-                                  fd, strerror(errno));
+                        g_critical("send() to fd %d failed: %s",
+                                   fd, strerror(errno));
                     }
                 }
             }

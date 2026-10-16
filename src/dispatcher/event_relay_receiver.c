@@ -41,8 +41,8 @@ EventRelayReceiver *event_relay_receiver_new(const char *bus_name,
     /* Connect to the system bus (server is a root system service). */
     GDBusConnection *connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
     if (connection == NULL) {
-        g_warning("relay: failed to connect to system bus: %s",
-                  error ? error->message : "unknown error");
+        g_critical("relay: failed to connect to system bus: %s",
+                   error ? error->message : "unknown error");
         g_clear_error(&error);
         goto fail;
     }
@@ -68,8 +68,8 @@ EventRelayReceiver *event_relay_receiver_new(const char *bus_name,
     g_object_unref(connection);
 
     if (result == NULL) {
-        g_warning("relay: GetEventChannel call failed: %s",
-                  error ? error->message : "unknown error");
+        g_critical("relay: GetEventChannel call failed: %s",
+                   error ? error->message : "unknown error");
         g_clear_error(&error);
         goto fail;
     }
@@ -83,14 +83,14 @@ EventRelayReceiver *event_relay_receiver_new(const char *bus_name,
     g_variant_unref(result);
 
     if (fd_list == NULL || g_unix_fd_list_get_length(fd_list) < 1) {
-        g_warning("relay: GetEventChannel returned no file descriptor");
+        g_critical("relay: GetEventChannel returned no file descriptor");
         g_clear_object(&fd_list);
         goto fail;
     }
 
     if (fd_handle >= (guint32)g_unix_fd_list_get_length(fd_list)) {
-        g_warning("relay: GetEventChannel fd handle %u out of range (len=%d)",
-                  fd_handle, g_unix_fd_list_get_length(fd_list));
+        g_critical("relay: GetEventChannel fd handle %u out of range (len=%d)",
+                   fd_handle, g_unix_fd_list_get_length(fd_list));
         g_clear_object(&fd_list);
         goto fail;
     }
@@ -100,8 +100,8 @@ EventRelayReceiver *event_relay_receiver_new(const char *bus_name,
     g_object_unref(fd_list);
 
     if (fd < 0) {
-        g_warning("relay: GetEventChannel returned invalid fd: %s",
-                  error ? error->message : "unknown error");
+        g_critical("relay: GetEventChannel returned invalid fd: %s",
+                   error ? error->message : "unknown error");
         g_clear_error(&error);
         goto fail;
     }
@@ -109,8 +109,8 @@ EventRelayReceiver *event_relay_receiver_new(const char *bus_name,
     r->sock_fd = fd;
     r->event_protocol_id = protocol_id;
 
-    g_debug("relay: receiver created (fd=%d, protocol_id=%u)",
-            r->sock_fd, r->event_protocol_id);
+    g_message("relay: receiver created (fd=%d, protocol_id=%u)",
+              r->sock_fd, r->event_protocol_id);
 
     return r;
 
@@ -155,7 +155,7 @@ EventReceiveResult event_relay_receiver_receive(EventRelayReceiver *receiver,
             return EVENT_RECEIVE_INTERRUPTED;
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return EVENT_RECEIVE_WOULD_BLOCK;
-        g_debug("relay: recv() failed: %s", strerror(errno));
+        g_critical("relay: recv() failed: %s", strerror(errno));
         return EVENT_RECEIVE_ERROR;
     }
 
