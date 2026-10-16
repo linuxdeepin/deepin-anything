@@ -1,11 +1,33 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-set -e
+# On upgrade from a pre-d9e97df version:
+# 1. Stop and disable the legacy deepin-anything-server.service (renamed
+#    to deepin-anything-daemon.service); without this the old service
+#    keeps running (Restart=always) and holds the org.deepin.Anything
+#    D-Bus name, blocking the new daemon.
+# 2. Clean up obsolete index cache from pre-2022 versions.
 
-if [ -d "/var/cache/deepin/deepin-anything" ]; then
-    echo "Deleting the index files of the lower versions..."
-    rm -rf /var/cache/deepin/deepin-anything || true
-    echo "Deleted."
+if [ "$1" = "configure" ]; then
+    # Clean up obsolete index cache from pre-2022 versions.
+    if [ -d /var/cache/deepin/deepin-anything ]; then
+        echo "Deleting the index files of the lower versions..."
+        rm -rf /var/cache/deepin/deepin-anything || true
+        echo "Deleted."
+    fi
+
+    # Stop and disable the legacy service.
+    OLD_SERVICE=deepin-anything-server.service
+    if systemctl is-active --quiet "$OLD_SERVICE" 2>/dev/null; then
+        systemctl stop "$OLD_SERVICE" || true
+    fi
+    if systemctl is-enabled --quiet "$OLD_SERVICE" 2>/dev/null; then
+        systemctl disable "$OLD_SERVICE" || true
+    fi
+    # Remove the orphaned unit file left by the old package version.
+    rm -f /usr/lib/systemd/system/"$OLD_SERVICE" || true
+    rm -f /etc/systemd/system/multi-user.target.wants/"$OLD_SERVICE" || true
+    systemctl daemon-reload || true
 fi
 
 #DEBHELPER#

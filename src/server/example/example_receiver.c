@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-/* Receiver-side example for deepin-anything-server.
+/* Receiver-side example for deepin-anything-daemon.
  *
  * Connects to the server's event-dispatcher Unix Domain Socket and prints
  * VFS file events as they arrive. It demonstrates the real-world
@@ -153,7 +153,7 @@ static gpointer worker_thread_func(gpointer data)
     w->receiver = event_receiver_new(w->socket_path);
     if (w->receiver == NULL) {
         g_critical("Failed to connect to dispatcher at %s", w->socket_path);
-        g_message("Is deepin-anything-server running and reachable?");
+        g_message("Is deepin-anything-daemon running and reachable?");
         goto cleanup;
     }
     g_atomic_int_set(&w->connected, 1);
@@ -217,7 +217,7 @@ static gboolean on_termination_signal(gpointer data)
 static void print_help(const char *prog)
 {
     g_print("Usage: %s [OPTIONS]\n\n", prog);
-    g_print("Connect to deepin-anything-server and print VFS file events.\n\n");
+    g_print("Connect to deepin-anything-daemon and print VFS file events.\n\n");
     g_print("Options:\n");
     g_print("  --socket=PATH   Event dispatcher socket path\n");
     g_print("                  (default: %s)\n", DEFAULT_SOCKET_PATH);

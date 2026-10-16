@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 
-project(deepin-anything-server)
+project(deepin-anything-daemon)
 
 add_compile_options(-Wall -Wextra -pedantic -Werror)
 
@@ -44,8 +44,7 @@ target_link_options(${PROJECT_NAME} PRIVATE -pie)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION libexec)
 install(FILES org.deepin.Anything.conf DESTINATION share/dbus-1/system.d)
-# installed by debhelper
-# install(FILES deepin-anything-server.service DESTINATION lib/systemd/system)
+install(FILES deepin-anything-daemon.service DESTINATION lib/systemd/system)
 
 # Build tests if enabled
 option(ENABLE_TESTING "Enable testing" OFF)

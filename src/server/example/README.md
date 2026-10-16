@@ -1,7 +1,7 @@
 # Server 接收端示例（example_receiver）
 
 本示例是一个**真实可用的接收端（客户端）程序**，演示下游组件如何连接到正在运行的
-`deepin-anything-server`，并消费其通过 Unix Domain Socket 分发出来的 VFS 文件事件。
+`deepin-anything-daemon`，并消费其通过 Unix Domain Socket 分发出来的 VFS 文件事件。
 
 它刻意贴近生产级集成方式，而不是最小化的 API demo。
 
@@ -60,7 +60,7 @@ cmake --build build --target example_receiver
 
 ## 运行
 
-1. 确保 `deepin-anything-server` 已运行（其 socket 默认位于
+1. 确保 `deepin-anything-daemon` 已运行（其 socket 默认位于
    `/run/deepin-anything/event-dispatcher.sock`，且 server 默认按 UID 订阅
    `$HOME/` 前缀，见 `src/server/event-dispatcher.c`）。
 2. 运行示例：
@@ -99,7 +99,7 @@ cmake --build build --target example_receiver
 
 ```
 ** (process:xxxxx): 17:00:00.000: CRITICAL: Failed to connect to dispatcher at /run/deepin-anything/event-dispatcher.sock
-** (process:xxxxx): 17:00:00.000: MESSAGE: Is deepin-anything-server running and reachable?
+** (process:xxxxx): 17:00:00.000: MESSAGE: Is deepin-anything-daemon running and reachable?
 ```
 
 ## 扩展点
