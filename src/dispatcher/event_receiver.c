@@ -54,6 +54,8 @@ EventReceiver *event_receiver_new(const char *address)
         goto fail;
     }
 
+    g_message("receiver connected to %s (fd=%d)", r->address, r->sock_fd);
+
     return r;
 
 fail:
