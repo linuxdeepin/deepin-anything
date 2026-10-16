@@ -16,10 +16,10 @@ ANYTHING_INDEX_BEGIN_NAMESPACE
 class VfsMonitorFileSystemWatcherPrivate;
 
 // VfsMonitorFileSystemWatcher: File system watcher using deepin-anything
-// event dispatcher socket exposed by deepin-anything-server.
+// event dispatcher socket exposed by deepin-anything-daemon.
 //
 // Receives global file system events (create, delete, move, close-write)
-// forwarded by deepin-anything-server through an event relay socket whose
+// forwarded by deepin-anything-daemon through an event relay socket whose
 // fd is obtained via the org.deepin.Anything D-Bus GetEventChannel method.
 //
 // Usage:

@@ -90,9 +90,9 @@ int main(G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
         goto quit;
     }
 
-    g_message("deepin-anything-server started");
+    g_message("deepin-anything-daemon started");
     g_main_loop_run(loop);
-    g_message("deepin-anything-server stopping");
+    g_message("deepin-anything-daemon stopping");
 
 quit:
     if (listener) {
@@ -114,6 +114,6 @@ quit:
         g_main_loop_unref(loop);
     }
 
-    g_message("deepin-anything-server shutdown complete");
+    g_message("deepin-anything-daemon shutdown complete");
     return ret;
 }

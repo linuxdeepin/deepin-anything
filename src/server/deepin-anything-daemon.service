@@ -1,5 +1,5 @@
 [Unit]
-Description=Deepin anything server service
+Description=Deepin anything daemon service
 After=udisks2.service
 
 [Service]
@@ -7,7 +7,7 @@ Type=dbus
 BusName=org.deepin.Anything
 User=root
 Group=root
-ExecStart=/usr/libexec/deepin-anything-server
+ExecStart=/usr/libexec/deepin-anything-daemon
 ExecStartPre=modprobe vfs_monitor
 ExecStopPost=rmmod vfs_monitor
 Restart=always
