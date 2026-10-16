@@ -185,6 +185,8 @@ void server_event_relay_dispatcher_free(ServerEventRelayDispatcher *d)
     if (!d)
         return;
 
+    g_info("relay: freeing server event relay dispatcher");
+
     server_event_relay_dispatcher_stop(d);
 
     /* Drain leftover events. */
@@ -235,7 +237,7 @@ gboolean server_event_relay_dispatcher_get_event_channel(ServerEventRelayDispatc
     g_return_val_if_fail(d != NULL, FALSE);
 
     if (!d->thread || !d->request_queue) {
-        g_debug("relay: get_event_channel called but worker not running");
+        g_info("relay: get_event_channel called but worker not running");
         return FALSE;
     }
 
@@ -244,6 +246,8 @@ gboolean server_event_relay_dispatcher_get_event_channel(ServerEventRelayDispatc
     req->user_data = user_data;
 
     g_async_queue_push(d->request_queue, req);
+
+    g_info("relay: event channel request enqueued");
 
     /* Wake the worker so it drains the request promptly. */
     fs_event *wakeup = g_slice_new0(fs_event);

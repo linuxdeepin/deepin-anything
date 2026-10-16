@@ -54,7 +54,8 @@ static void prune_disconnected_channels(EventRelayDispatcher *dispatcher)
         char dummy;
         ssize_t ret = recv(fd, &dummy, 1, MSG_PEEK | MSG_DONTWAIT);
         if (ret == 0) {
-            g_debug("relay: pruning disconnected sender fd %d", fd);
+            g_info("relay: pruning disconnected sender fd %d, total after: %u",
+            fd, dispatcher->socket_list->len - 1);
             g_ptr_array_remove_index_fast(dispatcher->socket_list, i);
         }
     }
@@ -75,6 +76,9 @@ void event_relay_dispatcher_free(EventRelayDispatcher *dispatcher)
     if (dispatcher == NULL)
         return;
 
+    g_info("relay: freeing dispatcher (active channels: %u)",
+           dispatcher->socket_list ? dispatcher->socket_list->len : 0);
+
     /* Closes every fd via the close_fd destroy notify. */
     if (dispatcher->socket_list != NULL)
         g_ptr_array_free(dispatcher->socket_list, TRUE);
@@ -93,7 +97,7 @@ int event_relay_dispatcher_get_event_channel(EventRelayDispatcher *dispatcher)
     /* Check channel limit. */
     if (dispatcher->max_event_channel > 0 &&
         dispatcher->socket_list->len >= dispatcher->max_event_channel) {
-        g_debug("relay: max_event_channel limit (%u) reached",
+        g_info("relay: max_event_channel limit (%u) reached",
                 dispatcher->max_event_channel);
         return -1;
     }
@@ -133,7 +137,7 @@ int event_relay_dispatcher_get_event_channel(EventRelayDispatcher *dispatcher)
     /* Store sender end (fds[0]) in the list, return client end (fds[1]). */
     g_ptr_array_add(dispatcher->socket_list, GINT_TO_POINTER(fds[0]));
 
-    g_debug("relay: created event channel (sender fd=%d, client fd=%d, total=%u)",
+    g_info("relay: created event channel (sender fd=%d, client fd=%d, total=%u)",
             fds[0], fds[1], dispatcher->socket_list->len);
 
     return fds[1];
@@ -159,12 +163,12 @@ gboolean event_relay_dispatcher_send(EventRelayDispatcher *dispatcher,
 
         if (ret < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                g_debug("relay: slow client fd %d, kicking", fd);
+                g_info("relay: slow client fd %d, kicking", fd);
                 /* Remove from array first so the destroy notify owns the
                  * close — no double-close, no fd-reuse hazard. */
                 g_ptr_array_remove_index_fast(dispatcher->socket_list, i);
             } else if (errno == EPIPE || errno == ECONNRESET) {
-                g_debug("relay: broken connection fd %d", fd);
+                g_info("relay: broken connection fd %d, removing", fd);
                 g_ptr_array_remove_index_fast(dispatcher->socket_list, i);
             } else {
                 g_warning("relay: send() to fd %d failed: %s",
