@@ -1,3 +1,33 @@
+deepin-anything (7.1.1) unstable; urgency=medium
+
+  * refactor: remove daemon and searcher projects for index merge
+  * feat(dispatcher): add event relay dispatcher and receiver modules
+  * feat(server): add D-Bus service and event relay dispatcher
+  * feat(index): integrate trust client and D-Bus event relay
+  * fix(index): rework mount point resolution for correct path mapping
+  * fix: send fs_event by actual path length in relay thread
+  * feat(fsmonitor): use recvmmsg for batch event receiving
+  * fix(relay): add SO_RCVBUF fallback and grant CAP_NET_ADMIN for socket buffer
+  * fix(index): remove redundant setsockopt that shrinks receive buffer
+  * fix(relay): enlarge sender send buffer to prevent slow-client kicks
+  * feat: rename server binary and service to daemon
+  * fix: install dconfig meta file
+  * feat: remove Arch Linux and RPM packaging files
+  * feat: migrate textindex service into deepin-anything
+  * feat: refine filename index data source validation
+  * fix: detect abnormal exit via sentinel for filename index
+  * fix: flush pending filename index tasks on service exit to avoid full rescan
+  * fix: enlarge socket buffers to prevent EAGAIN disconnection
+  * fix: mark updateInProgress during directory move for search fallback
+  * fix: preserve forceBypass in runtime env check for index tasks
+  * fix: register atexit handler to clean up sentinel file on XIO error
+  * fix: use per-profile blacklist in task handlers
+  * feat: skip network mount points during indexing
+  * fix: correct FUSE classification and optimize isNetworkPath
+  * fix: destroy DOcr engine on quit to avoid SIGSEGV
+
+ -- Zhang Sheng <zhangsheng@uniontech.com>  Wed, 21 Oct 2026 14:27:53 +0800
+
 deepin-anything (7.1.0) unstable; urgency=medium
 
   * fix(event-listener): attach fd/timer sources to thread-local context
