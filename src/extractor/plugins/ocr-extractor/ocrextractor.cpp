@@ -8,6 +8,7 @@
 
 #include <DOcr>
 
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QImage>
 #include <QStringList>
@@ -209,6 +210,15 @@ Dtk::Ocr::DOcr *sharedOcrEngine()
             delete engine;
             return nullptr;
         }
+
+        // Destroy the engine when the application is about to quit so that
+        // DOcr's internal worker threads are stopped and their event queues
+        // drained before the process exits. Without this, posted events in
+        // the worker threads' event queues may target already-deleted QObjects,
+        // causing a SIGSEGV during process shutdown.
+        QObject::connect(qApp, &QCoreApplication::aboutToQuit, qApp, [engine]() {
+            delete engine;
+        });
 
         return engine;
     }();
