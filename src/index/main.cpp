@@ -12,6 +12,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <malloc.h>
 #include <QDebug>
 #include <cstdlib>
 #include <systemd/sd-journal.h>
@@ -79,6 +80,20 @@ static void journalMessageHandler(QtMsgType type, const QMessageLogContext &cont
 
 int main(int argc, char *argv[])
 {
+    // Pin glibc allocator behavior before any thread exists. Incremental
+    // index tasks allocate and free large transients in bursts (whole-file
+    // wchar copies, Lucene analyzer/posting buffers). Under glibc defaults
+    // those pages stay resident: freed mmap'd blocks silently raise the
+    // dynamic mmap threshold (up to 32MB, so later bursts grow the brk heap
+    // instead), and the per-task worker QThreads each hold their own arena
+    // at its high-water mark. Result: idle RSS lingers around the last
+    // burst's peak. Fixed values (setting M_MMAP_THRESHOLD explicitly also
+    // disables the dynamic adjustment) keep big blocks on mmap where free
+    // returns pages to the OS immediately.
+    mallopt(M_ARENA_MAX, 2);
+    mallopt(M_MMAP_THRESHOLD, 2 * 1024 * 1024);
+    mallopt(M_TRIM_THRESHOLD, 256 * 1024);
+
     qInstallMessageHandler(journalMessageHandler);
 
     // IdleMonitor relies on KIdleTime, whose poller plugins are tied to a QPA
