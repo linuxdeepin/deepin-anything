@@ -20,6 +20,9 @@
 #include <QElapsedTimer>
 #include <QDebug>
 
+#include <malloc.h>
+#include <unistd.h>
+
 ANYTHING_INDEX_USE_NAMESPACE
 
 namespace {
@@ -40,6 +43,45 @@ void registerMetaTypes()
 // 突发静默期：距最近一次事件摄入超过该时长即认为上一轮突发已结束，
 // burst 累计清零。须大于 collector 的 1s 收集窗口，容忍波间抖动。
 constexpr qint64 kBurstQuietMs = 5000;
+
+// 堆回收阈值：只按"可回收空闲堆量"判断，不用固定静默期。本服务面对持续
+// 增量事件（实测 30 分钟内约 240 次任务结束）与长事务（commit/merge 期间
+// 没有进度信号）时，按"任务结束后 30 秒无新任务"起算的静默窗口几乎不出现，
+// trim 会被无限顺延。改为任务边界处看 fordblks：阈值以下不做无谓 madvise，
+// 以上则立即归还，覆盖高频小任务与突发大任务两种形态。
+constexpr std::size_t kTrimFreeThresholdBytes = 32 * 1024 * 1024;
+// 最小间隔：避免连续重任务在边界上反复 trim（每次都会丢弃温热页）
+constexpr qint64 kTrimMinIntervalMs = 10000;
+
+// 当前进程 RSS（kB）。仅用于 trim 前后的可观测性日志。
+qint64 selfRssKb()
+{
+    QFile statm(QStringLiteral("/proc/self/statm"));
+    if (!statm.open(QIODevice::ReadOnly))
+        return -1;
+    const QList<QByteArray> fields = statm.readAll().simplified().split(' ');
+    if (fields.size() < 2)
+        return -1;
+    const qint64 pages = fields.at(1).toLongLong();
+    return pages * (sysconf(_SC_PAGESIZE) / 1024);
+}
+
+struct HeapStats
+{
+    std::size_t freeBytes { 0 };
+    std::size_t usedBytes { 0 };
+};
+
+// 进程所有 arena 的堆统计（mallinfo2 为 glibc 2.33+ 提供的非截断版本）
+HeapStats heapStats()
+{
+#if defined(__GLIBC__) && __GLIBC_PREREQ(2, 33)
+    const struct mallinfo2 info = mallinfo2();
+#else
+    const struct mallinfo info = mallinfo();
+#endif
+    return { static_cast<std::size_t>(info.fordblks), static_cast<std::size_t>(info.uordblks) };
+}
 
 TaskQueueItem createCompensationTaskItem(const QStringList &paths)
 {
@@ -609,6 +651,7 @@ void TaskManager::onTaskPaused(IndexTask::Type type, HandlerResult result)
 
     // Try to schedule the next runnable task
     schedule();
+    maybeTrimHeap();
 }
 
 void TaskManager::onEnvStateChanged(const EnvState &env)
@@ -961,6 +1004,7 @@ void TaskManager::onTaskFinished(IndexTask::Type type, HandlerResult result)
     emit indexStatusChanged(currentIndexStatus(), gradeToString(IndexTask::Grade::None));
 
     schedule();
+    maybeTrimHeap();
 }
 
 bool TaskManager::handleCorruptedIndex(IndexTask::Type type, const HandlerResult &result, const QString &taskPath)
@@ -1248,6 +1292,35 @@ void TaskManager::cleanupTask()
 bool TaskManager::isFullScanTask(IndexTask::Type type) const
 {
     return type == IndexTask::Type::Create || type == IndexTask::Type::Update;
+}
+
+void TaskManager::maybeTrimHeap()
+{
+    // 任务边界处的条件式回收：无任务在跑、且可回收空闲堆达到阈值时归还 OS。
+    // 静默期口径在高频增量事件 + 长事务的环境下会被无限顺延（见常量注释），
+    // 因此这里不等待"安静的 30 秒"，而是在每个任务结束时直接判断堆状态。
+    if (hasRunningTask())
+        return;
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (m_lastTrimMsecs > 0 && now - m_lastTrimMsecs < kTrimMinIntervalMs)
+        return;
+
+    const HeapStats stats = heapStats();
+    const qint64 rssBefore = selfRssKb();
+    // 每次任务边界记录堆状态：用于区分"空闲堆滞留"（trim 可回收）与
+    // "活对象占用"（trim 无效），是现场判断 RSS 归因最直接的一条线索。
+    qDebug() << "[TaskManager] Post-task heap check - free:" << static_cast<qint64>(stats.freeBytes / 1024)
+             << "kB, in-use:" << static_cast<qint64>(stats.usedBytes / 1024)
+             << "kB, RSS:" << rssBefore << "kB";
+    if (stats.freeBytes < kTrimFreeThresholdBytes)
+        return;
+
+    malloc_trim(0);
+    m_lastTrimMsecs = now;
+
+    qDebug() << "[TaskManager] Heap trim - free before:" << static_cast<qint64>(stats.freeBytes / 1024)
+             << "kB, RSS:" << rssBefore << "->" << selfRssKb() << "kB";
 }
 
 qint64 TaskManager::queuedIncrementalCount() const

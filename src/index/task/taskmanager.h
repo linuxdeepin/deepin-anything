@@ -110,6 +110,8 @@ private:
     qint64 queuedIncrementalCount() const;
     void updateBacklogState();
     void recordIngestedFiles(qint64 count);
+    // 任务边界处的条件式堆回收（见实现处注释）
+    void maybeTrimHeap();
 
     // Task grading
     IndexTask::Grade gradeFileListTask(const QStringList &fileList) const;
@@ -147,6 +149,9 @@ private:
     qint64 m_burstFiles { 0 };
     qint64 m_lastIngestMsecs { 0 };
     QTimer *m_burstRecheckTimer { nullptr };
+
+    // 上次堆回收时刻（毫秒），用于限制 trim 频率
+    qint64 m_lastTrimMsecs { 0 };
 };
 
 ANYTHING_INDEX_END_NAMESPACE
