@@ -560,6 +560,27 @@ QString VfsMonitorFileSystemWatcherPrivate::resolveAndFilterFullPath(dev_t devic
         if (excludePredicate && excludePredicate(fullPath))
             continue;
 
+        // The dispatcher broadcasts every event on a device, so paths that
+        // share a device with a monitored root but sit outside it are still
+        // resolved and enqueued. A split-disk install makes this common:
+        // "/", "/ostree" and similar siblings all live on the same device as
+        // each other, so an ostree checkout burst lands in the queue even
+        // though /ostree is blacklisted. The per-runtime blacklist cannot help
+        // here because it only runs after dequeue, by which point a burst may
+        // already have overflowed the queue and dropped real root events —
+        // which in turn triggers a compensating full-index UPDATE. Same-device
+        // aliases cannot be told apart later, so the membership test has to
+        // happen before enqueue.
+        if (!rootPaths.isEmpty()) {
+            const bool inMonitoredRoot = std::any_of(rootPaths.cbegin(), rootPaths.cend(),
+                                                     [&fullPath](const QString &monitoredRoot) {
+                                                         return fullPath == monitoredRoot
+                                                                 || isDescendantOfRoot(fullPath, monitoredRoot);
+                                                     });
+            if (!inMonitoredRoot)
+                continue;
+        }
+
         return fullPath;
     }
 
