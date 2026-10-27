@@ -465,6 +465,7 @@ void removeFile(const IndexContext &context, const QString &path, const IndexWri
         TermPtr term = newLucene<Term>(context.profile().pathField(), path.toStdWString());
         writer->deleteDocuments(term);
         if (reporter) {
+            reporter->markIndexChanged();
             reporter->increment();
         }
     } catch (const LuceneException &e) {
