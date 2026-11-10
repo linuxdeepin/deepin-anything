@@ -17,6 +17,9 @@
 #include <cstdlib>
 #include <systemd/sd-journal.h>
 
+#include <QDBusConnection>
+#include <QDBusServiceWatcher>
+
 // Write end of a pipe used to turn SIGTERM/SIGINT into Qt events.
 static int g_signalWriteFd = -1;
 
@@ -128,6 +131,27 @@ int main(int argc, char *argv[])
         qWarning() << "deepin-anything-index: failed to register DBus services, exiting";
         return 1;
     }
+
+    // Bind the index lifecycle to the daemon: watch the daemon's D-Bus name
+    // (org.deepin.Anything) on the system bus for unregistration.  When the
+    // daemon stops or crashes its bus name is released — at that point we
+    // unregister our own session-bus names and exit so that dde-file-manager's
+    // existing QDBusServiceWatcher detects the index name unregistration and
+    // switches the UI to an error state.  When the daemon restarts the index
+    // is D-Bus-activated again and re-establishes the VFS monitor connection.
+    auto *daemonWatcher = new QDBusServiceWatcher(
+        QStringLiteral("org.deepin.Anything"),
+        QDBusConnection::systemBus(),
+        QDBusServiceWatcher::WatchForUnregistration,
+        &app);
+    QObject::connect(daemonWatcher, &QDBusServiceWatcher::serviceUnregistered,
+                     &app, []() {
+        qWarning() << "deepin-anything-index: daemon (org.deepin.Anything) "
+                      "disappeared on system bus, exiting to maintain "
+                      "lifecycle binding";
+        anything_index::unregisterIndexServices();
+        QCoreApplication::exit(0);
+    });
 
     // Safety net: ensure cleanup runs even when the process exits via C exit()
     // rather than through the SIGTERM handler or aboutToQuit signal.  The key
