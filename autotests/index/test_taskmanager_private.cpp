@@ -190,3 +190,19 @@ TEST_F(TaskManagerPrivateTest, FinalizeIndexState)
         mgr->finalizeIndexState(IndexTask::Type::Create, result);
     });
 }
+
+// ---- onEnabledChanged: disabling clears the task queue ----
+TEST_F(TaskManagerPrivateTest, OnEnabledChanged_DisableClearsQueue)
+{
+    // Enqueue a compensation task so the queue is non-empty.
+    EXPECT_TRUE(mgr->enqueueCompensationTask({ "/tmp/onenabled_test.txt" }));
+    EXPECT_TRUE(mgr->hasQueuedTasks());
+
+    // Simulate the enabledChanged(false) signal — onEnabledChanged is a
+    // public slot connected to FSEventController::enabledChanged in
+    // IndexRuntime ctor. Calling it directly avoids the need for
+    // setupFSEventCollector() (which initializes timers) in the test fixture.
+    mgr->onEnabledChanged(false);
+
+    EXPECT_FALSE(mgr->hasQueuedTasks());
+}

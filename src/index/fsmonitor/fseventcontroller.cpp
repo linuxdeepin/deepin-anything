@@ -182,6 +182,8 @@ void FSEventController::setEnabled(bool enabled)
         // 停止监控将清除所有的监控目录，重建需要极大的开销，因此延迟清理资源
         m_stopTimer->start(TextIndexConfig::instance().inotifyResourceCleanupDelayMs());
     }
+
+    emit enabledChanged(m_enabled);
 }
 
 void FSEventController::setEnabledNow(bool enabled)
