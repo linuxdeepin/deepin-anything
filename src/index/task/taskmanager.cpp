@@ -1160,6 +1160,15 @@ void TaskManager::stopCurrentTask()
     }
 }
 
+void TaskManager::onEnabledChanged(bool enabled)
+{
+    if (!enabled && !taskQueue.isEmpty()) {
+        qInfo() << "[TaskManager::onEnabledChanged] Index disabled, clearing"
+                 << taskQueue.size() << "queued tasks";
+        taskQueue.clear();
+    }
+}
+
 bool TaskManager::flushPendingTasks(int timeoutMs)
 {
     if (!hasRunningTask() && !hasQueuedTasks())

@@ -80,6 +80,9 @@ public:
     void setRecoveryPending(bool pending);
     bool isRecoveryPending() const;
 
+public Q_SLOTS:
+    void onEnabledChanged(bool enabled);
+
 Q_SIGNALS:
     void taskFinished(const QString &type, const QString &path, bool success);
     void taskProgressChanged(const QString &type, const QString &path, qint64 count, qint64 total);

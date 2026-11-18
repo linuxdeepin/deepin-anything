@@ -17,6 +17,14 @@ IndexRuntime::IndexRuntime(IndexProfile profile, QObject *parent)
     if (m_profile.type() == IndexProfile::Type::Filename)
         m_backlogTracker = std::make_unique<FilenameBacklogTracker>(&m_stateStore);
     m_taskManager = new TaskManager(&m_context, m_backlogTracker.get(), this);
+
+    // When the index is disabled (user toggles off the switch), clear the
+    // task queue so pending tasks do not continue consuming CPU/memory.
+    // The file-manager layer already calls StopCurrentTask to halt the
+    // running task; here we only clear the queue to avoid duplicate stops.
+    connect(m_fsEventController, &FSEventController::enabledChanged,
+            m_taskManager, &TaskManager::onEnabledChanged);
+
     EnvDetector::instance().setDataPath(m_profile.indexDirectory());
     EnvDetector::instance().start();
 }

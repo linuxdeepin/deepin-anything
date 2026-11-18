@@ -55,6 +55,10 @@ Q_SIGNALS:
     // runtimes should schedule a full Create/Update task to re-sync.
     void requestEventsRecovery();
 
+    // Emitted when setEnabled() changes the enabled state.
+    // Runtimes connect this to TaskManager to clear queued tasks on disable.
+    void enabledChanged(bool enabled);
+
 private:
     IndexProfile m_profile;
     bool m_enabled { false };
