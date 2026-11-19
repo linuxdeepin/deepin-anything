@@ -147,7 +147,10 @@ target_compile_options(deepin-anything-index PRIVATE -Wall -Wextra)
 install(TARGETS deepin-anything-index DESTINATION libexec/deepin)
 # systemd only searches /usr/lib/systemd/user for user units (no multiarch variant).
 install(FILES deepin-anything-index.service DESTINATION lib/systemd/user)
-install(FILES assets/dbus/org.deepin.Filemanager.TextIndex.service
+install(FILES
+        assets/dbus/org.deepin.Filemanager.TextIndex.service
+        assets/dbus/org.deepin.Filemanager.FileNameIndex.service
+        assets/dbus/org.deepin.Filemanager.OcrIndex.service
     DESTINATION ${CMAKE_INSTALL_FULL_DATADIR}/dbus-1/services)
 # The three interface XMLs in assets/dbus/ are the canonical source for
 # qt6_add_dbus_adaptor codegen only — they are NOT installed from this
