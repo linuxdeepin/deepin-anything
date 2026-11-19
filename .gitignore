@@ -103,3 +103,4 @@ debian/deepin-anything-server.debhelper.log
 src/kernelmod/.Module.symvers.cmd
 src/kernelmod/.modules.order.cmd
 src/kernelmod/.vfs_monitor.mod.cmd
+.pms/

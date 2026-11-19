@@ -67,6 +67,7 @@ set(INDEX_SOURCES
     dbus/ocrindexdbus.cpp
     dbus/filenameindexdbus.cpp
     serviceentry.cpp
+    idleexitmanager.cpp
 )
 list(TRANSFORM INDEX_SOURCES PREPEND ${CMAKE_CURRENT_SOURCE_DIR}/)
 file(GLOB_RECURSE INDEX_HEADERS CONFIGURE_DEPENDS "*.h")
