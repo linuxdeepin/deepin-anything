@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.deepin.Filemanager.OcrIndex
+Exec=/usr/bin/deepin-anything-index
+SystemdService=deepin-anything-index.service

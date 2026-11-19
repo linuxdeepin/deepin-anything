@@ -5,3 +5,5 @@ usr/lib/*/libdeepin-anything-extractor.so*
 usr/lib/systemd/user/deepin-anything-index.service
 usr/share/dbus-1/services/org.deepin.Filemanager.TextIndex.service
 usr/share/deepin-anything-index/pinyin.txt
+usr/share/dbus-1/services/org.deepin.Filemanager.FileNameIndex.service
+usr/share/dbus-1/services/org.deepin.Filemanager.OcrIndex.service
