@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "serviceentry.h"
+#include "idleexitmanager.h"
 #include "utils/trustclient.h"
 
 #include <QGuiApplication>
@@ -131,6 +132,14 @@ int main(int argc, char *argv[])
         qWarning() << "deepin-anything-index: failed to register DBus services, exiting";
         return 1;
     }
+
+    // Exit the process after a configurable idle timeout (dconfig key
+    // idle_exit_timeout_minutes, default 10 min).  The service
+    // is D-Bus-activated, so the next request to any index service name
+    // restarts it automatically.  dde-file-manager's keepBackendAlive polls
+    // IsEnabled every 5 minutes while indexes are enabled, which resets the
+    // idle timer and keeps the service alive.
+    anything_index::startIdleExitManager();
 
     // Bind the index lifecycle to the daemon: watch the daemon's D-Bus name
     // (org.deepin.Anything) on the system bus for unregistration.  When the
