@@ -1,3 +1,17 @@
+deepin-anything (7.1.2) unstable; urgency=medium
+
+  * perf(index): bound incremental-task RSS with allocator pinning and boundary trim
+  * fix(index): drop same-device paths outside monitored roots before enqueue
+  * fix: clear task queue when index is disabled
+  * fix: auto-exit index service after idle timeout
+  * fix: add missing D-Bus activation files for FileNameIndex and OcrIndex
+  * feat: support custom process name for extractor workers
+  * fix: mark index changed in removeFile
+  * fix: bind index lifecycle to daemon via D-Bus name watcher
+  * fix(kernelmod): handle path-type fsnotify events and filter pseudo fds
+
+ -- Zhang Sheng <zhangsheng@uniontech.com>  Tue, 24 Nov 2026 19:09:01 +0800
+
 deepin-anything (7.1.1) unstable; urgency=medium
 
   * refactor: remove daemon and searcher projects for index merge
