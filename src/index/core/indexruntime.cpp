@@ -11,6 +11,7 @@ IndexRuntime::IndexRuntime(IndexProfile profile, QObject *parent)
     : QObject(parent),
       m_profile(std::move(profile)),
       m_stateStore(m_profile),
+      m_processExtractor(m_profile.workerName()),
       m_context(m_profile, &m_stateStore, selectExtractor(), selectDocumentBuilder()),
       m_fsEventController(new FSEventController(m_profile, this))
 {
