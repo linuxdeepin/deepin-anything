@@ -8,6 +8,7 @@
 #include "indexextractor.h"
 
 #include <QScopedPointer>
+#include <QString>
 
 ANYTHING_INDEX_BEGIN_NAMESPACE
 
@@ -16,7 +17,7 @@ class ProcessExtractorPrivate;
 class ProcessExtractor : public IndexExtractor
 {
 public:
-    ProcessExtractor();
+    explicit ProcessExtractor(const QString &processName = QString());
     ~ProcessExtractor() override;
 
     Q_DISABLE_COPY_MOVE(ProcessExtractor)

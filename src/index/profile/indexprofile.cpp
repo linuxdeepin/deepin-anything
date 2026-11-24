@@ -28,6 +28,11 @@ const QString &IndexProfile::id() const
     return m_identity.id;
 }
 
+const QString &IndexProfile::workerName() const
+{
+    return m_identity.workerName;
+}
+
 QString IndexProfile::indexDirectory() const
 {
     return m_providers.indexDirectory ? m_providers.indexDirectory() : QString();
@@ -256,7 +261,8 @@ IndexProfile IndexProfile::content()
 
     return IndexProfile {
         Identity { Type::Content, QStringLiteral("content"),
-                   QStringLiteral("index_status.json"), Defines::kTextVersionKey, Defines::kTextIndexVersion },
+                   QStringLiteral("index_status.json"), Defines::kTextVersionKey, Defines::kTextIndexVersion,
+                   QStringLiteral("anything/text") },
         std::move(providers)
     };
 }
@@ -297,7 +303,8 @@ IndexProfile IndexProfile::ocr()
 
     return IndexProfile {
         Identity { Type::Ocr, QStringLiteral("ocr"),
-                   QStringLiteral("index_status.json"), Defines::kOcrVersionKey, Defines::kOcrIndexVersion },
+                   QStringLiteral("index_status.json"), Defines::kOcrVersionKey, Defines::kOcrIndexVersion,
+                   QStringLiteral("anything/ocr") },
         std::move(providers),
         RuntimePolicy{},
         FilterPolicy{},
@@ -370,8 +377,10 @@ IndexProfile IndexProfile::filename()
     };
 
     return IndexProfile {
+        // filename 索引不装配 extractor，无子进程可命名
         Identity { Type::Filename, QStringLiteral("filename"),
-                   QStringLiteral("index_status.json"), Defines::kFilenameVersionKey, Defines::kFilenameIndexVersion },
+                   QStringLiteral("index_status.json"), Defines::kFilenameVersionKey, Defines::kFilenameIndexVersion,
+                   QString() },
         std::move(providers),
         std::move(runtimePolicy),
         std::move(filterPolicy),

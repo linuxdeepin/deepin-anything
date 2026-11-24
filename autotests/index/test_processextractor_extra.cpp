@@ -40,7 +40,7 @@ protected:
 
         // Stub ControllerPipe::start to always fail so the extractor
         // subprocess never actually launches during tests.
-        stub.set_lamda(VADDR(ControllerPipe, start), [](ControllerPipe *, const QString &, const QString &) -> bool {
+        stub.set_lamda(VADDR(ControllerPipe, start), [](ControllerPipe *, const QString &, const QString &, const QStringList &) -> bool {
             return false;
         });
     }

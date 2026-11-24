@@ -37,9 +37,11 @@ public:
      * @brief Start the extractor subprocess
      * @param extractorPath Path to the extractor executable
      * @param pluginPath Optional path to plugin directory
+     * @param extraArguments Optional additional command line arguments
      * @return true if started successfully
      */
-    bool start(const QString &extractorPath, const QString &pluginPath = QString());
+    bool start(const QString &extractorPath, const QString &pluginPath = QString(),
+               const QStringList &extraArguments = QStringList());
 
     /**
      * @brief Stop the extractor subprocess

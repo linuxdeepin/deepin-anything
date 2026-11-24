@@ -7,6 +7,7 @@
 #include <controllerpipe.h>
 
 #include <QEventLoop>
+#include <QStringList>
 #include <QThread>
 #include <QTimer>
 #include <QDebug>
@@ -37,12 +38,37 @@ QString extractorToolPath()
     return QString::fromLatin1(ANYTHING_EXTRACTOR_TOOL);
 }
 
+// The index service runs one extractor subprocess per content-extraction
+// profile, and all of them would otherwise share the binary's default process
+// name. The profile owns the name to display; forward it verbatim and let the
+// child apply it. TASK_COMM_LEN caps comm at 15 bytes, so anything longer is
+// dropped here rather than silently truncated by the kernel into a name that
+// no longer identifies the role.
+constexpr int kMaxCommLength = 15;
+
+QStringList processNameArguments(const QString &processName)
+{
+    if (processName.isEmpty()) {
+        return {};
+    }
+
+    const QByteArray utf8 = processName.toUtf8();
+    if (utf8.size() > kMaxCommLength) {
+        qWarning() << "ProcessExtractor: process name exceeds" << kMaxCommLength
+                   << "bytes, keeping default name:" << processName;
+        return {};
+    }
+
+    return { QStringLiteral("--process-name"), processName };
+}
+
 class ProcessExtractorProxy : public QObject
 {
 public:
-    explicit ProcessExtractorProxy(QString extractorPath, QObject *parent = nullptr)
+    explicit ProcessExtractorProxy(QString extractorPath, QString processName = QString(), QObject *parent = nullptr)
         : QObject(parent),
           m_extractorPath(std::move(extractorPath)),
+          m_processName(std::move(processName)),
           m_pipe(new EXTRACTOR_NAMESPACE::ControllerPipe(this))
     {
         m_requestTimeoutTimer.setSingleShot(true);
@@ -206,7 +232,7 @@ private:
             return false;
         }
 
-        if (!m_pipe->start(m_extractorPath)) {
+        if (!m_pipe->start(m_extractorPath, QString(), processNameArguments(m_processName))) {
             qCritical() << "ProcessExtractorProxy: failed to start extractor process";
             return false;
         }
@@ -254,6 +280,7 @@ private:
 
 private:
     const QString m_extractorPath;
+    const QString m_processName;
     EXTRACTOR_NAMESPACE::ControllerPipe *m_pipe { nullptr };
     ActiveExtraction *m_activeExtraction { nullptr };
     QTimer m_requestTimeoutTimer;
@@ -266,8 +293,8 @@ private:
 class ProcessExtractorPrivate
 {
 public:
-    ProcessExtractorPrivate()
-        : proxy(new ProcessExtractorProxy(extractorToolPath()))
+    explicit ProcessExtractorPrivate(const QString &processName)
+        : proxy(new ProcessExtractorProxy(extractorToolPath(), processName))
     {
     }
 
@@ -296,8 +323,8 @@ IndexExtractionResult invokeProxyExtract(ProcessExtractorProxy *proxy, const QSt
     return result;
 }
 
-ProcessExtractor::ProcessExtractor()
-    : d(new ProcessExtractorPrivate())
+ProcessExtractor::ProcessExtractor(const QString &processName)
+    : d(new ProcessExtractorPrivate(processName))
 {
 }
 

@@ -37,7 +37,8 @@ ControllerPipe::~ControllerPipe()
     stop();
 }
 
-bool ControllerPipe::start(const QString &extractorPath, const QString &pluginPath)
+bool ControllerPipe::start(const QString &extractorPath, const QString &pluginPath,
+                           const QStringList &extraArguments)
 {
     if (isRunning()) {
         qWarning() << "ControllerPipe::start: Process already running";
@@ -98,6 +99,7 @@ bool ControllerPipe::start(const QString &extractorPath, const QString &pluginPa
     if (!pluginPath.isEmpty()) {
         arguments << "--plugin-path" << pluginPath;
     }
+    arguments << extraArguments;
 
     // Start the process
     qInfo() << "ControllerPipe: Starting extractor:" << extractorPath

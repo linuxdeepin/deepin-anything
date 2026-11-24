@@ -107,6 +107,9 @@ public:
         QString statusFileName { QStringLiteral("index_status.json") };
         QString versionKey;
         int runtimeVersion { -1 };
+        // 该 profile 的 extractor 子进程在 ps/top 中显示的短名，写入
+        // /proc/<pid>/comm。comm 上限 15 字节；为空则沿用二进制默认名。
+        QString workerName;
     };
 
     /// 数据与行为的外部提供者（函数式注入）
@@ -141,6 +144,7 @@ public:
 
     Type type() const;
     const QString &id() const;
+    const QString &workerName() const;
     QString indexDirectory() const;
     QString statusFilePath() const;
     const QString &versionKey() const;
