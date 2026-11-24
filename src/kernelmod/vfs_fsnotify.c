@@ -1,5 +1,4 @@
-// Copyright (C) 2021 UOS Technology Co., Ltd.
-// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2022 - 2026 UnionTech Software Technology Co., Ltd.
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -203,10 +202,22 @@ static inline void fsnotify_event_handler(struct inode *to_tell, __u32 mask, con
     }
 }
 
+static void fsnotify_parent_broadcast_listener(const struct path *path,
+        struct dentry *dentry, __u32 mask, struct inode *p_inode);
 static void fsnotify_broadcast_listener(struct inode *to_tell, __u32 mask, const void *data, int data_is,
     filename_type *file_name, u32 cookie)
 {
-    if (!to_tell || FSNOTIFY_EVENT_INODE != data_is || !filename_str(file_name)
+    const struct path *path;
+
+    if (FSNOTIFY_EVENT_PATH == data_is) {
+        path = data;
+        if (!path || !path->dentry)
+            return;
+        fsnotify_parent_broadcast_listener(path, path->dentry, mask, to_tell);
+        return;
+    }
+
+    if (!to_tell || (FSNOTIFY_EVENT_INODE != data_is && FSNOTIFY_EVENT_DENTRY != data_is) || !filename_str(file_name)
         || IS_INVALID_DEVICE(to_tell->i_sb->s_dev) || !(mask & TARGET_EVENT))
         return;
 
