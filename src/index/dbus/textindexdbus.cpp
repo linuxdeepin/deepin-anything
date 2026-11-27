@@ -120,7 +120,7 @@ void TextIndexDBusPrivate::handleSilentStart()
         // 1. 首先检查索引数据库是否存在
         if (!q->IndexDatabaseExists()) {
             qInfo() << "TextIndexDBus: Index database does not exist, starting create task for:" << pathsToProcess;
-            runtime->taskManager()->startTask(IndexTask::Type::Create, pathsToProcess);
+            runtime->taskManager()->startTask(IndexTask::Type::Create, pathsToProcess, IndexTask::Grade::None, true);
             return;
         }
 

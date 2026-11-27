@@ -126,7 +126,7 @@ void OcrIndexDBusPrivate::handleSilentStart()
 
         if (!q->IndexDatabaseExists()) {
             qInfo() << "OcrIndexDBus: Index database does not exist, starting create task for:" << pathsToProcess;
-            runtime->taskManager()->startTask(IndexTask::Type::Create, pathsToProcess);
+            runtime->taskManager()->startTask(IndexTask::Type::Create, pathsToProcess, IndexTask::Grade::None, true);
             return;
         }
 
